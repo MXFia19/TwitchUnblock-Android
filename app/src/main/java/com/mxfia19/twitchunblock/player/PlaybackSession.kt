@@ -19,6 +19,7 @@ import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.Master
 import com.mxfia19.twitchunblock.core.NetworkStatus
 import com.mxfia19.twitchunblock.core.Quality
+import com.mxfia19.twitchunblock.core.Usage
 import com.mxfia19.twitchunblock.core.VodApi
 import com.mxfia19.twitchunblock.download.Downloads
 import kotlinx.coroutines.CoroutineScope
@@ -163,9 +164,11 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
                 startedAt = r.info.startedAt
                 source = r.source
                 if (r.info.error != null) {
+                    if (r.info.error != "offline" && r.info.error != "not_found") Usage.count("live_fail")
                     state = State.Error(errorKey(r.info.error))
                     return
                 }
+                Usage.count("live_" + (r.source ?: "unknown"))
                 isClip = false
                 start(r.master, startMs = -1)
                 tickJob = scope.launch { refreshStats(req.login) }
@@ -184,9 +187,11 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
                 }
                 val (m, error) = VodApi.getVod(req.id)
                 if (error != null) {
+                    Usage.count("vod_fail")
                     state = State.Error(errorKey(error))
                     return
                 }
+                Usage.count("vod")
                 VodApi.meta(req.id)?.let { meta ->
                     if (title.isEmpty()) title = meta.title
                     thumbnail = meta.thumbnail
@@ -320,6 +325,7 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
             }
             return
         }
+        if (!isClip) Usage.count(if (isLive) "live_play_fail" else "vod_play_fail")
         state = State.Error(if (isOffline) "err_vod_unavailable" else "err_playback")
     }
 

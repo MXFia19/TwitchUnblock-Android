@@ -90,6 +90,7 @@ fun TvApp() {
     val following = remember { FollowingModel(scope) }
     var tab by remember { mutableStateOf(0) }
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
+    com.mxfia19.twitchunblock.ui.UpdatePrompt()
     Box(Modifier.fillMaxSize().background(TU.bg)) {
         when (val s = nav.stack.last()) {
             TvScreen.Tabs -> Column(Modifier.fillMaxSize()) {
@@ -156,6 +157,7 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav) {
         search.loadTop()
     }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        item { Box(Modifier.padding(horizontal = 40.dp)) { Column { com.mxfia19.twitchunblock.ui.NewsCards() } } }
         if (home.followed.isNotEmpty()) {
             item { RowTitle(AppState.t("home_followed")) }
             item {

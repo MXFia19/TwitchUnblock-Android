@@ -29,6 +29,15 @@ class TvActivity : ComponentActivity() {
         setContent { TUTheme { TvApp() } }
     }
 
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch {
+            com.mxfia19.twitchunblock.core.Updates.check()
+            com.mxfia19.twitchunblock.core.News.refresh()
+            com.mxfia19.twitchunblock.core.Usage.ping(this@TvActivity)
+        }
+    }
+
     override fun dispatchKeyEvent(event: KeyEvent): Boolean {
         val menu = TvKeys.onPlayerMenu
         if (menu != null && !TvKeys.menuOpen && event.action == KeyEvent.ACTION_DOWN) {

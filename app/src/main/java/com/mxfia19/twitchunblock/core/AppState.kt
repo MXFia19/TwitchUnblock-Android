@@ -18,6 +18,15 @@ import java.util.Locale
 object AppState {
     private lateinit var sp: SharedPreferences
 
+    /** Préférences de l'app, pour les services qui gardent leurs propres clés. */
+    val prefs: SharedPreferences get() = sp
+
+    /** Identifiant aléatoire de l'installation (comptage, sondages, réactions). */
+    val installId: String
+        get() = sp.getString("install_id", null) ?: java.util.UUID.randomUUID().toString().also {
+            sp.edit().putString("install_id", it).apply()
+        }
+
     var lang by mutableStateOf(Lang.EN)
         private set
     /** Qualité préférée (Quality.PREFS). */

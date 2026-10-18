@@ -121,6 +121,7 @@ fun HomeScreen(model: HomeModel, nav: Navigator) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        item(span = { GridItemSpan(maxLineSpan) }) { NewsCards() }
         if (model.followed.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(AppState.t("home_followed"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,

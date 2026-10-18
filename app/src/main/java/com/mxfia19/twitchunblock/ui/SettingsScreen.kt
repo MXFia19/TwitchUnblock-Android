@@ -102,6 +102,7 @@ fun SettingsScreen(nav: Navigator) {
                 Toggle(AppState.t("background_play"), AppState.t("background_play_sub"), AppState.backgroundPlay) { AppState.updateBackgroundPlay(it) }
                 Toggle(AppState.t("auto_pip"), AppState.t("auto_pip_sub"), AppState.autoPip) { AppState.updateAutoPip(it) }
             }
+            NotificationSettings()
             Group(AppState.t("expert_worker")) {
                 WorkerField()
             }
@@ -110,6 +111,7 @@ fun SettingsScreen(nav: Navigator) {
                      color = TU.text, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                 LinkRow(AppState.t("open_github")) { uri.openUri("https://github.com/${Config.REPO}/releases") }
                 LinkRow("Discord") { uri.openUri(Config.DISCORD_URL) }
+                LinkRow(AppState.t("feedback")) { nav.push(Screen.Feedback) }
                 LinkRow(AppState.t("logs")) { nav.push(Screen.Logs) }
             }
         }

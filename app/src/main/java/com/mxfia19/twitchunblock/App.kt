@@ -12,6 +12,10 @@ import com.mxfia19.twitchunblock.core.I18n
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.NetworkStatus
 import com.mxfia19.twitchunblock.download.Downloads
+import com.mxfia19.twitchunblock.core.Usage
+import com.mxfia19.twitchunblock.feedback.Feedback
+import com.mxfia19.twitchunblock.notify.LiveNotifier
+import com.mxfia19.twitchunblock.notify.Ntfy
 
 class App : Application(), ImageLoaderFactory {
     override fun onCreate() {
@@ -20,6 +24,10 @@ class App : Application(), ImageLoaderFactory {
         I18n.load(this)
         Downloads.init(this)
         AppState.init(this)
+        Usage.init()
+        Ntfy.init()
+        Feedback.init()
+        LiveNotifier.init(this)
         NetworkStatus.start(this)
         Logger.info("APP", "Lancement", "${BuildConfig.VERSION_NAME} (${BuildConfig.CHANNEL}) · Android ${Build.VERSION.RELEASE}")
     }

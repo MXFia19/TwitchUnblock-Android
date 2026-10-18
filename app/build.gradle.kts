@@ -32,6 +32,9 @@ android {
         // Schéma des liens de l'app (notifications) : TU Test a le sien.
         manifestPlaceholders["appScheme"] = if (isTest) "twitchunblock-test" else "twitchunblock"
         buildConfigField("String", "CHANNEL", "\"$channel\"")
+        buildConfigField("String", "APP_SCHEME", if (isTest) "\"twitchunblock-test\"" else "\"twitchunblock\"")
+        // Jeton du comptage (/stats), posé par la CI depuis le secret PING_KEY.
+        buildConfigField("String", "PING_KEY", "\"${System.getenv("PING_KEY") ?: ""}\"")
     }
 
     signingConfigs {
@@ -97,4 +100,5 @@ dependencies {
     implementation("io.coil-kt:coil-gif:2.7.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     implementation("com.google.zxing:core:3.5.3")
+    implementation("androidx.work:work-runtime-ktx:2.9.1")
 }

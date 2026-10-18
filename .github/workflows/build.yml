@@ -81,6 +81,8 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          # Jeton du comptage (/stats), le même que l'app iPhone ; vide : non compté.
+          PING_KEY: ${{ secrets.PING_KEY }}
         run: >
           gradle :app:assembleRelease --stacktrace
           -Pchannel=${{ steps.vars.outputs.channel }}

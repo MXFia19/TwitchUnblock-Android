@@ -21,6 +21,11 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Auth
+import com.mxfia19.twitchunblock.core.News
+import com.mxfia19.twitchunblock.core.Updates
+import com.mxfia19.twitchunblock.core.Usage
+import com.mxfia19.twitchunblock.feedback.Feedback
+import com.mxfia19.twitchunblock.notify.Ntfy
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.player.PlayerHolder
 import com.mxfia19.twitchunblock.tv.TvActivity
@@ -56,6 +61,19 @@ class MainActivity : ComponentActivity() {
                 val nav = remember { navigator }
                 PhoneApp(nav)
             }
+        }
+    }
+
+    /** À chaque retour dans l'app : mise à jour, comptage, annonce,
+     *  réponses aux signalements, abonnement ntfy. */
+    override fun onStart() {
+        super.onStart()
+        lifecycleScope.launch {
+            Updates.check()
+            News.refresh()
+            Feedback.refresh()
+            if (Ntfy.enabled) Ntfy.sync()
+            Usage.ping(this@MainActivity)
         }
     }
 

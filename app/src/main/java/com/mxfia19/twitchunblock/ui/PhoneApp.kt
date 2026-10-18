@@ -14,7 +14,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.foundation.background
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.draw.clip
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
@@ -48,6 +51,8 @@ sealed class Screen {
     object Settings : Screen()
     object Login : Screen()
     object Logs : Screen()
+    object Feedback : Screen()
+    data class FeedbackThread(val id: String) : Screen()
     data class Channel(val login: String) : Screen()
     data class CategoryPage(val category: Category) : Screen()
     data class Player(val request: PlayRequest) : Screen()
@@ -96,6 +101,7 @@ fun PhoneApp(nav: Navigator) {
     val screen = nav.current
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
 
+    UpdatePrompt()
     if (screen is Screen.Player) {
         PlayerScreen(screen.request, nav)
         return
@@ -128,6 +134,8 @@ fun PhoneApp(nav: Navigator) {
                 Screen.Settings -> SettingsScreen(nav)
                 Screen.Login -> LoginScreen(nav)
                 Screen.Logs -> LogsScreen(nav)
+                Screen.Feedback -> FeedbackScreen(nav)
+                is Screen.FeedbackThread -> FeedbackThreadScreen(screen.id, nav)
                 is Screen.Channel -> ChannelScreen(screen.login, nav)
                 is Screen.CategoryPage -> CategoryScreen(screen.category, nav)
                 is Screen.Player, is Screen.MultiLive -> {}
@@ -165,6 +173,16 @@ private fun TopBar(screen: Screen, nav: Navigator) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(title, color = TU.text, fontSize = 24.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+        // Signaler un bug ou proposer une idée ; pastille : réponse non lue.
+        Box {
+            IconButton(onClick = { nav.push(Screen.Feedback) }) {
+                Icon(Icons.Filled.Create, contentDescription = AppState.t("feedback"), tint = TU.text)
+            }
+            if (com.mxfia19.twitchunblock.feedback.Feedback.unreadCount > 0) {
+                Box(Modifier.align(Alignment.TopEnd).padding(8.dp).size(9.dp)
+                    .clip(androidx.compose.foundation.shape.CircleShape).background(TU.live))
+            }
+        }
         val user = AppState.user
         if (user != null) {
             Avatar(user.avatar, 32.dp, Modifier.clickable { nav.push(Screen.Settings) })
