@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.foundation.background
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Search
@@ -37,17 +39,20 @@ import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Category
 import com.mxfia19.twitchunblock.player.PlayRequest
 
-/** Écrans du téléphone. Les trois onglets, puis les pages empilées. */
+/** Écrans du téléphone. Les quatre onglets, puis les pages empilées. */
 sealed class Screen {
     object Home : Screen()
     object Search : Screen()
     object Following : Screen()
+    object Library : Screen()
     object Settings : Screen()
     object Login : Screen()
     object Logs : Screen()
     data class Channel(val login: String) : Screen()
     data class CategoryPage(val category: Category) : Screen()
     data class Player(val request: PlayRequest) : Screen()
+    /** Multi-live, avec une première chaîne (ou vide). */
+    data class MultiLive(val first: String?) : Screen()
 }
 
 class Navigator {
@@ -71,8 +76,14 @@ class Navigator {
 
     /** Une lecture remplace celle en cours (un seul lecteur à la fois). */
     fun play(request: PlayRequest) {
-        stack.removeAll { it is Screen.Player }
+        stack.removeAll { it is Screen.Player || it is Screen.MultiLive }
         stack.add(Screen.Player(request))
+    }
+
+    /** Multi-live à la place de la lecture en cours. */
+    fun multi(first: String?) {
+        stack.removeAll { it is Screen.Player || it is Screen.MultiLive }
+        stack.add(Screen.MultiLive(first))
     }
 }
 
@@ -89,7 +100,11 @@ fun PhoneApp(nav: Navigator) {
         PlayerScreen(screen.request, nav)
         return
     }
-    val isTab = screen is Screen.Home || screen is Screen.Search || screen is Screen.Following
+    if (screen is Screen.MultiLive) {
+        Box(Modifier.fillMaxSize().background(TU.bg).statusBarsPadding()) { MultiLiveScreen(screen.first, nav) }
+        return
+    }
+    val isTab = screen is Screen.Home || screen is Screen.Search || screen is Screen.Following || screen is Screen.Library
     Scaffold(
         containerColor = TU.bg,
         topBar = { if (isTab) TopBar(screen, nav) },
@@ -99,6 +114,7 @@ fun PhoneApp(nav: Navigator) {
                     TabItem(Screen.Home, Icons.Filled.Home, "tab_home", screen, nav)
                     TabItem(Screen.Search, Icons.Filled.Search, "tv_search", screen, nav)
                     TabItem(Screen.Following, Icons.Filled.Favorite, "tv_following", screen, nav)
+                    TabItem(Screen.Library, Icons.AutoMirrored.Filled.List, "dl_section", screen, nav)
                 }
             }
         },
@@ -108,12 +124,13 @@ fun PhoneApp(nav: Navigator) {
                 Screen.Home -> HomeScreen(home, nav)
                 Screen.Search -> SearchScreen(search, nav)
                 Screen.Following -> FollowingScreen(following, nav)
+                Screen.Library -> LibraryScreen(nav)
                 Screen.Settings -> SettingsScreen(nav)
                 Screen.Login -> LoginScreen(nav)
                 Screen.Logs -> LogsScreen(nav)
                 is Screen.Channel -> ChannelScreen(screen.login, nav)
                 is Screen.CategoryPage -> CategoryScreen(screen.category, nav)
-                is Screen.Player -> {}
+                is Screen.Player, is Screen.MultiLive -> {}
             }
         }
     }
@@ -140,6 +157,7 @@ private fun TopBar(screen: Screen, nav: Navigator) {
     val title = when (screen) {
         Screen.Search -> AppState.t("tv_search")
         Screen.Following -> AppState.t("tv_following")
+        Screen.Library -> AppState.t("dl_section")
         else -> AppState.t("tab_home")
     }
     Row(

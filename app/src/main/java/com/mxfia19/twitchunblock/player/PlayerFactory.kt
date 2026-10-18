@@ -11,35 +11,50 @@ import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.TransferListener
+import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.mxfia19.twitchunblock.core.Config
+import com.mxfia19.twitchunblock.download.Downloads
 import java.io.ByteArrayOutputStream
 
 object PlayerFactory {
-    /** Lecteur : navigateur de bureau comme User-Agent, playlists réécrites
-     *  (passages coupés des VODs), focus audio et pause au débranchement. */
+    /** Réseau du lecteur et des téléchargements : navigateur de bureau comme
+     *  User-Agent, playlists réécrites (passages coupés des VODs). */
     @OptIn(UnstableApi::class)
-    fun build(context: Context): ExoPlayer {
+    fun upstream(context: Context): DataSource.Factory {
         val http = DefaultHttpDataSource.Factory()
             .setUserAgent(Config.USER_AGENT)
             .setAllowCrossProtocolRedirects(true)
             .setConnectTimeoutMs(10_000)
             .setReadTimeoutMs(20_000)
-        val upstream = DefaultDataSource.Factory(context, http)
+        return RewritingFactory(DefaultDataSource.Factory(context, http))
+    }
+
+    /** Lecteur : lit d'abord les VODs téléchargées (cache des téléchargements,
+     *  sans y écrire), focus audio, pause au débranchement du casque, et
+     *  processeur et Wi-Fi éveillés pendant la lecture (écran éteint). */
+    @OptIn(UnstableApi::class)
+    fun build(context: Context): ExoPlayer {
+        val source = CacheDataSource.Factory()
+            .setCache(Downloads.cache)
+            .setUpstreamDataSourceFactory(upstream(context))
+            .setCacheWriteDataSinkFactory(null)
+            .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         return ExoPlayer.Builder(context)
-            .setMediaSourceFactory(DefaultMediaSourceFactory(RewritingFactory(upstream)))
+            .setMediaSourceFactory(DefaultMediaSourceFactory(source))
             .setAudioAttributes(
                 AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
                 true,
             )
             .setHandleAudioBecomingNoisy(true)
+            .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
     }
 }
 
 @OptIn(UnstableApi::class)
-private class RewritingFactory(private val upstream: DataSource.Factory) : DataSource.Factory {
+class RewritingFactory(private val upstream: DataSource.Factory) : DataSource.Factory {
     override fun createDataSource(): DataSource = PlaylistRewritingDataSource(upstream.createDataSource())
 }
 

@@ -16,6 +16,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
@@ -54,10 +56,11 @@ import kotlinx.coroutines.delay
  *  et chat par ↑ ou la touche Menu. */
 @OptIn(UnstableApi::class)
 @Composable
-fun TvPlayer(request: PlayRequest, onClose: () -> Unit) {
+fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val session = remember { PlaybackSession(context, scope) }
+    // Pas de session média ni d'image dans l'image sur la TV.
+    val session = remember { PlaybackSession(context, scope, main = false) }
     var menu by remember { mutableStateOf(false) }
     var refocus by remember { mutableStateOf(0) }
     var hint by remember { mutableStateOf(true) }
@@ -88,6 +91,7 @@ fun TvPlayer(request: PlayRequest, onClose: () -> Unit) {
         chat?.start(session.channelId)
         onDispose { chat?.stop() }
     }
+    val vodChat = com.mxfia19.twitchunblock.ui.rememberVodChat(session, AppState.showChat)
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         Row(Modifier.fillMaxSize()) {
@@ -117,6 +121,8 @@ fun TvPlayer(request: PlayRequest, onClose: () -> Unit) {
             )
             if (chat != null && AppState.showChat) {
                 TvChat(chat, Modifier.width(360.dp).fillMaxHeight())
+            } else if (vodChat != null) {
+                com.mxfia19.twitchunblock.ui.VodChatList(vodChat, Modifier.width(360.dp).fillMaxHeight(), emoteSize = 26, fontSize = 16)
             }
         }
         PlayerOverlay(session, Modifier.align(Alignment.Center))
@@ -132,7 +138,8 @@ fun TvPlayer(request: PlayRequest, onClose: () -> Unit) {
             }
         }
         if (menu) {
-            TvPlayerMenu(session, hasChat = chat != null, modifier = Modifier.align(Alignment.CenterEnd)) {
+            TvPlayerMenu(session, hasChat = chat != null || session.vodId != null, modifier = Modifier.align(Alignment.CenterEnd),
+                         onMulti = { login -> menu = false; onMulti(login) }) {
                 menu = false
                 refocus++
             }
@@ -152,13 +159,40 @@ private fun TvChat(chat: ChatClient, modifier: Modifier) {
 }
 
 @Composable
-private fun TvPlayerMenu(session: PlaybackSession, hasChat: Boolean, modifier: Modifier, onDone: () -> Unit) {
+private fun TvPlayerMenu(session: PlaybackSession, hasChat: Boolean, modifier: Modifier, onMulti: (String) -> Unit,
+                         onDone: () -> Unit) {
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    var sleep by remember { mutableStateOf(false) }
+    LaunchedEffect(sleep) { runCatching { first.requestFocus() } }
     Column(
-        modifier.padding(24.dp).width(320.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xF0181818)).padding(16.dp),
+        modifier.padding(24.dp).width(320.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xF0181818)).padding(16.dp)
+            .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
+        if (sleep) {
+            Text(AppState.t("sleep_timer"), color = TU.muted, fontSize = 14.sp)
+            com.mxfia19.twitchunblock.ui.sleepChoices.forEachIndexed { i, m ->
+                TvButton(com.mxfia19.twitchunblock.ui.sleepLabel(m),
+                         modifier = (if (i == 0) Modifier.focusRequester(first) else Modifier).fillMaxWidth()) {
+                    session.setSleepTimer(m)
+                    onDone()
+                }
+            }
+            if (session.sleepAt != null) {
+                TvButton(AppState.t("sleep_cancel"), modifier = Modifier.fillMaxWidth()) {
+                    session.setSleepTimer(null)
+                    onDone()
+                }
+            }
+        } else {
+            MainMenu(session, hasChat, first, onMulti, onDone) { sleep = true }
+        }
+    }
+}
+
+@Composable
+private fun MainMenu(session: PlaybackSession, hasChat: Boolean, first: FocusRequester, onMulti: (String) -> Unit,
+                     onDone: () -> Unit, onSleep: () -> Unit) {
         Text(AppState.t("quality"), color = TU.muted, fontSize = 14.sp)
         session.qualities.forEachIndexed { i, q ->
             TvButton(Quality.label(q, AppState.lang) + if (q == session.quality) "  ✓" else "",
@@ -174,6 +208,12 @@ private fun TvPlayerMenu(session: PlaybackSession, hasChat: Boolean, modifier: M
                 onDone()
             }
         }
+        TvButton(AppState.t("sleep_timer") + (session.sleepAt?.let { "  ✓" } ?: ""), modifier = Modifier.fillMaxWidth()) {
+            onSleep()
+        }
+        val login = session.channelLogin
+        if (session.isLive && login != null) {
+            TvButton(AppState.t("multi_add"), modifier = Modifier.fillMaxWidth()) { onMulti(login) }
+        }
         session.source?.let { Text(AppState.t("live_source") + " : " + sourceName(it), color = TU.muted, fontSize = 13.sp) }
-    }
 }

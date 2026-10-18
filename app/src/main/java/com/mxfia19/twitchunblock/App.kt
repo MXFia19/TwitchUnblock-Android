@@ -11,12 +11,14 @@ import com.mxfia19.twitchunblock.core.Http
 import com.mxfia19.twitchunblock.core.I18n
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.NetworkStatus
+import com.mxfia19.twitchunblock.download.Downloads
 
 class App : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         instance = this
         I18n.load(this)
+        Downloads.init(this)
         AppState.init(this)
         NetworkStatus.start(this)
         Logger.info("APP", "Lancement", "${BuildConfig.VERSION_NAME} (${BuildConfig.CHANNEL}) · Android ${Build.VERSION.RELEASE}")

@@ -30,5 +30,10 @@
   "top_categories": { "fr": "Catégories du moment", "en": "Top categories", "es": "Categorías populares", "ru": "Популярные категории" },
   "tv_player_hint": { "fr": "↑ ou Menu : qualité et chat", "en": "↑ or Menu: quality and chat", "es": "↑ o Menú: calidad y chat", "ru": "↑ или Меню: качество и чат" },
   "watch_clip": { "fr": "Regarder le clip", "en": "Watch the clip", "es": "Ver el clip", "ru": "Смотреть клип" },
-  "watch_vod": { "fr": "Regarder la VOD", "en": "Watch VOD", "es": "Ver el VOD", "ru": "Смотреть VOD" }
+  "watch_vod": { "fr": "Regarder la VOD", "en": "Watch VOD", "es": "Ver el VOD", "ru": "Смотреть VOD" },
+  "background_play": { "fr": "Lecture en arrière-plan", "en": "Background playback", "es": "Reproducción en segundo plano", "ru": "Воспроизведение в фоне" },
+  "background_play_sub": { "fr": "Le son continue quand tu quittes l'app ou éteins l'écran, avec les commandes dans la notification.", "en": "Sound keeps playing when you leave the app or turn the screen off, with controls in the notification.", "es": "El sonido sigue cuando sales de la app o apagas la pantalla, con los controles en la notificación.", "ru": "Звук продолжается, когда вы выходите из приложения или выключаете экран; управление — в уведомлении." },
+  "auto_pip": { "fr": "Image dans l'image", "en": "Picture-in-picture", "es": "Imagen en imagen", "ru": "Картинка в картинке" },
+  "auto_pip_sub": { "fr": "En quittant l'app pendant une lecture, la vidéo continue dans une petite fenêtre.", "en": "When you leave the app during playback, the video keeps going in a small window.", "es": "Al salir de la app durante una reproducción, el vídeo sigue en una ventana pequeña.", "ru": "Если выйти из приложения во время просмотра, видео продолжится в маленьком окне." },
+  "dl_empty": { "fr": "Aucune VOD téléchargée. Dans le lecteur d'une VOD, ⋮ → Télécharger, pour la regarder hors ligne avec son chat.", "en": "No downloaded VODs. In a VOD's player, ⋮ → Download, to watch it offline with its chat.", "es": "No hay VODs descargados. En el reproductor de un VOD, ⋮ → Descargar, para verlo sin conexión con su chat.", "ru": "Нет загруженных VOD. В плеере VOD: ⋮ → Загрузить, чтобы смотреть офлайн вместе с чатом." }
 }

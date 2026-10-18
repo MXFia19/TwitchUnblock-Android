@@ -99,6 +99,8 @@ fun SettingsScreen(nav: Navigator) {
                 }, AppState.liveSource) { AppState.updateLiveSource(it) }
                 Toggle(AppState.t("low_latency"), AppState.t("low_latency_sub"), AppState.lowLatency) { AppState.updateLowLatency(it) }
                 Toggle(AppState.t("tv_chat_show"), null, AppState.showChat) { AppState.updateShowChat(it) }
+                Toggle(AppState.t("background_play"), AppState.t("background_play_sub"), AppState.backgroundPlay) { AppState.updateBackgroundPlay(it) }
+                Toggle(AppState.t("auto_pip"), AppState.t("auto_pip_sub"), AppState.autoPip) { AppState.updateAutoPip(it) }
             }
             Group(AppState.t("expert_worker")) {
                 WorkerField()

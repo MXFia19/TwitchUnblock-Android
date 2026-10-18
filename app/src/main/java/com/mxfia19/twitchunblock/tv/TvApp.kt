@@ -67,12 +67,13 @@ sealed class TvScreen {
     data class Channel(val login: String) : TvScreen()
     data class CategoryPage(val category: Category) : TvScreen()
     data class Player(val request: PlayRequest) : TvScreen()
+    data class MultiLive(val first: String?) : TvScreen()
 }
 
 class TvNav {
     val stack = mutableStateListOf<TvScreen>(TvScreen.Tabs)
     fun push(s: TvScreen) {
-        if (s is TvScreen.Player) stack.removeAll { it is TvScreen.Player }
+        if (s is TvScreen.Player || s is TvScreen.MultiLive) stack.removeAll { it is TvScreen.Player || it is TvScreen.MultiLive }
         stack.add(s)
     }
     fun pop() {
@@ -102,7 +103,8 @@ fun TvApp() {
             }
             is TvScreen.Channel -> TvChannel(s.login, nav)
             is TvScreen.CategoryPage -> TvCategory(s.category, nav)
-            is TvScreen.Player -> TvPlayer(s.request) { nav.pop() }
+            is TvScreen.Player -> TvPlayer(s.request, onMulti = { nav.push(TvScreen.MultiLive(it)) }) { nav.pop() }
+            is TvScreen.MultiLive -> TvMultiLive(s.first) { nav.pop() }
         }
     }
 }

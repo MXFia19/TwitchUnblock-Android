@@ -132,6 +132,9 @@ fun HomeScreen(model: HomeModel, nav: Navigator) {
             Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(AppState.t("top_streams"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                      modifier = Modifier.weight(1f))
+                androidx.compose.material3.TextButton(onClick = { nav.multi(null) }) {
+                    Text(AppState.t("multi_title"), color = TU.primary, fontSize = 14.sp)
+                }
                 IconButton(onClick = { model.load(force = true) }) {
                     Icon(Icons.Filled.Refresh, contentDescription = AppState.t("drops_refresh"), tint = TU.muted)
                 }

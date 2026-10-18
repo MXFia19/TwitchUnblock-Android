@@ -1,11 +1,13 @@
 package com.mxfia19.twitchunblock.player
 
 import android.content.Context
+import android.net.Uri
 import android.util.Base64
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.PlaybackException
 import androidx.media3.common.Player
@@ -18,6 +20,7 @@ import com.mxfia19.twitchunblock.core.Master
 import com.mxfia19.twitchunblock.core.NetworkStatus
 import com.mxfia19.twitchunblock.core.Quality
 import com.mxfia19.twitchunblock.core.VodApi
+import com.mxfia19.twitchunblock.download.Downloads
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -29,14 +32,18 @@ sealed class PlayRequest {
     data class Live(val login: String) : PlayRequest()
     data class Vod(val id: String, val title: String = "", val channel: String? = null, val startMs: Long = -1) : PlayRequest()
     data class Clip(val slug: String) : PlayRequest()
+    /** VOD téléchargée, lue hors ligne. */
+    data class Download(val vodId: String) : PlayRequest()
 }
 
 /**
  * Une lecture (téléphone et TV) : résolution des sources, choix de la
  * qualité (Auto = liste maîtresse, ExoPlayer suit le débit), reprise après
- * une erreur, position des VODs gardée. `scope` : fil principal.
+ * une erreur, position des VODs gardée, minuterie. `main` : la lecture
+ * principale du téléphone (notification, écran verrouillé, image dans
+ * l'image) ; pas les tuiles du multi-live ni la TV. `scope` : fil principal.
  */
-class PlaybackSession(context: Context, private val scope: CoroutineScope) {
+class PlaybackSession(private val context: Context, private val scope: CoroutineScope, private val main: Boolean = true) {
     sealed class State {
         /** `step` : source en cours d'essai (« as », « al », « eu », « twitch », « worker »). */
         data class Loading(val step: String? = null) : State()
@@ -73,11 +80,26 @@ class PlaybackSession(context: Context, private val scope: CoroutineScope) {
         private set
     var quality by mutableStateOf<String?>(null)
         private set
+    var isPlaying by mutableStateOf(false)
+        private set
+    /** Minuterie : heure de la pause (ms), null sans minuterie. */
+    var sleepAt by mutableStateOf<Long?>(null)
+        private set
+    /** Miniature de la VOD (téléchargement). */
+    var thumbnail by mutableStateOf("")
+        private set
+    var lengthSeconds by mutableStateOf(0)
+        private set
+
+    /** Multi-live : toujours la qualité Auto, plafonnée à cette hauteur. */
+    var forceAuto = false
+    private var maxHeight: Int? = null
 
     private var master = Master()
     private var isClip = false
     private var job: Job? = null
     private var tickJob: Job? = null
+    private var sleepJob: Job? = null
     private var errors = 0
 
     init {
@@ -89,10 +111,28 @@ class PlaybackSession(context: Context, private val scope: CoroutineScope) {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState == Player.STATE_READY) errors = 0
             }
+
+            override fun onIsPlayingChanged(playing: Boolean) {
+                isPlaying = playing
+            }
         })
+        if (main) PlayerHolder.attach(context, this)
     }
 
     val isLive: Boolean get() = request is PlayRequest.Live
+
+    /** Identifiant de la VOD lue (chat rejoué, téléchargement). */
+    val vodId: String?
+        get() = when (val r = request) {
+            is PlayRequest.Vod -> r.id
+            is PlayRequest.Download -> r.vodId
+            else -> null
+        }
+
+    val isOffline: Boolean get() = request is PlayRequest.Download
+
+    /** Liens des qualités (téléchargement d'une VOD). */
+    val links: Map<String, String> get() = master.links
 
     fun open(req: PlayRequest) {
         saveProgress()
@@ -136,16 +176,42 @@ class PlaybackSession(context: Context, private val scope: CoroutineScope) {
                 channelName = req.channel
                 game = ""
                 source = null
+                // Téléchargée : lue sur le téléphone, sans chercher de source.
+                val saved = Downloads.find(req.id)
+                if (saved != null && saved.completed) {
+                    open(PlayRequest.Download(req.id))
+                    return
+                }
                 val (m, error) = VodApi.getVod(req.id)
                 if (error != null) {
                     state = State.Error(errorKey(error))
                     return
                 }
-                if (title.isEmpty()) VodApi.meta(req.id)?.let { title = it.title }
+                VodApi.meta(req.id)?.let { meta ->
+                    if (title.isEmpty()) title = meta.title
+                    thumbnail = meta.thumbnail
+                    lengthSeconds = meta.lengthSeconds
+                }
                 isClip = false
                 val resume = if (req.startMs >= 0) req.startMs else AppState.vodPosition(req.id)
                 start(m, resume)
                 tickJob = scope.launch { trackProgress(req.id) }
+            }
+            is PlayRequest.Download -> {
+                val item = Downloads.find(req.vodId)
+                if (item == null) {
+                    state = State.Error("err_vod_unavailable")
+                    return
+                }
+                title = item.title
+                channelLogin = item.channel.takeIf { it.isNotEmpty() }
+                channelName = channelLogin
+                thumbnail = item.thumbnail
+                lengthSeconds = item.lengthSeconds
+                source = null
+                isClip = false
+                start(Master(mapOf(item.quality.ifEmpty { "Source" } to item.uri)), AppState.vodPosition(req.vodId))
+                tickJob = scope.launch { trackProgress(req.vodId) }
             }
             is PlayRequest.Clip -> {
                 val c = BrowseApi.clip(req.slug)
@@ -167,8 +233,8 @@ class PlaybackSession(context: Context, private val scope: CoroutineScope) {
         val keys = m.links.keys.toMutableList()
         if (m.text != null) keys += Quality.AUTO
         qualities = Quality.sort(keys, m.variants)
-        val key = Quality.launchKey(keys, AppState.qualityPref, AppState.cellularQuality,
-                                    NetworkStatus.isCellular, m.variants)
+        val key = if (forceAuto && m.text != null) Quality.AUTO
+                  else Quality.launchKey(keys, AppState.qualityPref, AppState.cellularQuality, NetworkStatus.isCellular, m.variants)
         Logger.info("PLAYER", "Qualité au lancement", key + if (NetworkStatus.isCellular) " (données mobiles)" else "")
         play(key, startMs)
         state = State.Ready
@@ -176,15 +242,22 @@ class PlaybackSession(context: Context, private val scope: CoroutineScope) {
 
     private fun play(key: String, startMs: Long) {
         quality = key
+        val metadata = MediaMetadata.Builder()
+            .setTitle(title.ifEmpty { channelName ?: "TwitchUnblock" })
+            .setArtist(channelName)
+            .apply { avatar?.let { setArtworkUri(Uri.parse(it)) } }
+            .build()
         val item = if (Quality.isAuto(key) && master.text != null) {
             val data = Base64.encodeToString(master.text!!.toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
             MediaItem.Builder().setUri("data:application/vnd.apple.mpegurl;base64,$data")
-                .setMimeType(MimeTypes.APPLICATION_M3U8).build()
+                .setMimeType(MimeTypes.APPLICATION_M3U8).setMediaMetadata(metadata).build()
         } else {
             val url = master.links[key] ?: master.links.values.firstOrNull() ?: return
             MediaItem.Builder().setUri(url)
-                .setMimeType(if (isClip) MimeTypes.VIDEO_MP4 else MimeTypes.APPLICATION_M3U8).build()
+                .setMimeType(if (isClip) MimeTypes.VIDEO_MP4 else MimeTypes.APPLICATION_M3U8)
+                .setMediaMetadata(metadata).build()
         }
+        applyMaxHeight()
         if (startMs > 0) player.setMediaItem(item, startMs) else player.setMediaItem(item)
         player.prepare()
         player.playWhenReady = true
@@ -196,8 +269,42 @@ class PlaybackSession(context: Context, private val scope: CoroutineScope) {
         val pos = if (isLive) -1L else player.currentPosition
         play(key, pos)
         val pref = Quality.preferenceFor(key, master.links.keys, master.variants)
-        if (pref != null && !NetworkStatus.isCellular) AppState.updateQualityPref(pref)
+        if (pref != null && !NetworkStatus.isCellular && main) AppState.updateQualityPref(pref)
         Logger.info("PLAYER", "Qualité choisie", key)
+    }
+
+    /** Multi-live : hauteur maximale en qualité Auto (null : sans plafond). */
+    fun setMaxHeight(height: Int?) {
+        maxHeight = height
+        applyMaxHeight()
+    }
+
+    private fun applyMaxHeight() {
+        val h = maxHeight
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            .setMaxVideoSize(if (h != null) h * 16 / 9 + 1 else Int.MAX_VALUE, h ?: Int.MAX_VALUE)
+            .build()
+    }
+
+    fun setVolume(volume: Float) {
+        player.volume = volume
+    }
+
+    /** Minuterie : pause dans `minutes` minutes (null : annulée). */
+    fun setSleepTimer(minutes: Int?) {
+        sleepJob?.cancel()
+        if (minutes == null) {
+            sleepAt = null
+            return
+        }
+        val at = System.currentTimeMillis() + minutes * 60_000L
+        sleepAt = at
+        sleepJob = scope.launch {
+            delay(minutes * 60_000L)
+            player.pause()
+            sleepAt = null
+            Logger.info("PLAYER", "Minuterie : lecture mise en pause", "$minutes min")
+        }
     }
 
     private fun onError(error: PlaybackException) {
@@ -213,7 +320,7 @@ class PlaybackSession(context: Context, private val scope: CoroutineScope) {
             }
             return
         }
-        state = State.Error("err_playback")
+        state = State.Error(if (isOffline) "err_vod_unavailable" else "err_playback")
     }
 
     private suspend fun refreshStats(login: String) {
@@ -234,9 +341,9 @@ class PlaybackSession(context: Context, private val scope: CoroutineScope) {
     }
 
     private fun saveProgress() {
-        val req = request
-        if (req is PlayRequest.Vod && state is State.Ready) {
-            AppState.saveVodPosition(req.id, player.currentPosition, player.duration)
+        val id = vodId
+        if (id != null && state is State.Ready) {
+            AppState.saveVodPosition(id, player.currentPosition, player.duration)
         }
     }
 
@@ -244,6 +351,8 @@ class PlaybackSession(context: Context, private val scope: CoroutineScope) {
         saveProgress()
         job?.cancel()
         tickJob?.cancel()
+        sleepJob?.cancel()
+        if (main) PlayerHolder.detach(this)
         player.release()
     }
 

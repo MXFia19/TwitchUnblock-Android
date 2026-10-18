@@ -36,6 +36,12 @@ object AppState {
     /** Worker personnel (sans « / » final), essayé en premier pour la lecture. */
     var customWorker by mutableStateOf<String?>(null)
         private set
+    /** Le son continue quand on quitte l'app ou éteint l'écran (téléphone). */
+    var backgroundPlay by mutableStateOf(true)
+        private set
+    /** Image dans l'image en quittant l'app pendant une lecture. */
+    var autoPip by mutableStateOf(true)
+        private set
 
     var token by mutableStateOf<String?>(null)
         private set
@@ -53,6 +59,8 @@ object AppState {
         liveSource = sp.getString("live_source", null)?.takeIf { it in Config.LIVE_SOURCE_CHOICES } ?: "auto"
         lowLatency = sp.getBoolean("low_latency", true)
         showChat = sp.getBoolean("show_chat", true)
+        backgroundPlay = sp.getBoolean("background_play", true)
+        autoPip = sp.getBoolean("auto_pip", true)
         customWorker = sp.getString("custom_worker", null)?.takeIf { it.isNotBlank() }
         token = sp.getString("token", null)
         user = parseJson(sp.getString("user", null))?.let {
@@ -72,6 +80,8 @@ object AppState {
     fun updateLiveSource(s: String) { liveSource = s; sp.edit().putString("live_source", s).apply() }
     fun updateLowLatency(on: Boolean) { lowLatency = on; sp.edit().putBoolean("low_latency", on).apply() }
     fun updateShowChat(on: Boolean) { showChat = on; sp.edit().putBoolean("show_chat", on).apply() }
+    fun updateBackgroundPlay(on: Boolean) { backgroundPlay = on; sp.edit().putBoolean("background_play", on).apply() }
+    fun updateAutoPip(on: Boolean) { autoPip = on; sp.edit().putBoolean("auto_pip", on).apply() }
     fun updateCustomWorker(url: String?) {
         customWorker = url
         sp.edit().putString("custom_worker", url).apply()
