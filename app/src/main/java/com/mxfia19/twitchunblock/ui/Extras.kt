@@ -210,7 +210,7 @@ fun NotificationSettings() {
         }
     }
     Group(AppState.t("privacy")) {
-        Toggle(AppState.t("share_usage"), AppState.t("share_usage_sub"), Usage.enabled) { Usage.setEnabled(it) }
+        Toggle(AppState.t("share_usage"), AppState.t("share_usage_sub"), Usage.enabled) { Usage.updateEnabled(it) }
         var checked by remember { mutableStateOf(false) }
         TextButton(onClick = { scope.launch { Updates.check(force = true); checked = true } }, enabled = !Updates.checking,
                    modifier = Modifier.padding(start = 4.dp)) {

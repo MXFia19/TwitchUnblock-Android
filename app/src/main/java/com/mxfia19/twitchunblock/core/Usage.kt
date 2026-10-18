@@ -27,7 +27,7 @@ object Usage {
         enabled = AppState.prefs.getBoolean(ENABLED, true)
     }
 
-    fun setEnabled(on: Boolean) {
+    fun updateEnabled(on: Boolean) {
         enabled = on
         AppState.prefs.edit().putBoolean(ENABLED, on).apply()
     }
