@@ -77,7 +77,7 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
                 if (onFullscreen != null) setFullscreenButtonClickListener { onFullscreen() }
                 if (focusOnStart) {
                     isFocusable = true
-                    requestFocus()
+                    post { requestFocus() }
                 }
             }
         },

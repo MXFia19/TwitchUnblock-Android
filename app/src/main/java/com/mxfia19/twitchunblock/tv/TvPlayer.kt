@@ -102,12 +102,16 @@ fun TvPlayer(request: PlayRequest, onClose: () -> Unit) {
                             TvKeys.controllerVisible = visibility == android.view.View.VISIBLE
                         })
                         isFocusable = true
-                        requestFocus()
+                        isFocusableInTouchMode = true
+                        // Après l'attache à la fenêtre : demandé dans factory,
+                        // le focus restait ailleurs et la télécommande ne
+                        // pilotait pas les commandes du lecteur.
+                        post { requestFocus() }
                     }
                 },
                 update = { view ->
                     if (view.player !== session.player) view.player = session.player
-                    if (!menu && refocus > 0) view.requestFocus()
+                    if (!menu && refocus > 0) view.post { view.requestFocus() }
                 },
                 modifier = Modifier.weight(1f).fillMaxHeight(),
             )
