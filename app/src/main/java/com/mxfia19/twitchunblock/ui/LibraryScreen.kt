@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,7 +43,11 @@ import androidx.media3.exoplayer.offline.Download
 import coil.compose.AsyncImage
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Format
+import com.mxfia19.twitchunblock.core.History
+import com.mxfia19.twitchunblock.core.HistoryItem
 import com.mxfia19.twitchunblock.download.Downloads
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.material.icons.filled.Close
 import com.mxfia19.twitchunblock.player.PlayRequest
 
 /** Taille lisible (« 1,2 Go », « 350 Mo »). */
@@ -59,14 +64,31 @@ fun LibraryScreen(nav: Navigator) {
     val context = LocalContext.current
     var confirm by remember { mutableStateOf<String?>(null) }
     val items = Downloads.items
-    if (items.isEmpty()) {
-        MessageBox(AppState.t("dl_empty"))
-        return
-    }
+    val history = History.vods
     LazyColumn(Modifier.fillMaxSize()) {
-        item {
-            Text(sizeText(Downloads.usedBytes()), color = TU.muted, fontSize = 13.sp,
-                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        // Dernières VODs lancées (synchronisées avec le compte), avec la reprise.
+        if (history.isNotEmpty()) {
+            item {
+                Row(Modifier.fillMaxWidth().padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SectionTitle(AppState.t("history_vods_title"), Modifier.weight(1f))
+                    TextButton(onClick = { History.clear("vod") }) { Text(AppState.t("clear"), color = TU.muted) }
+                }
+            }
+            item {
+                LazyRow(contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
+                        horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(10.dp)) {
+                    items(history, key = { "h-" + it.term }) { h -> HistoryVodCard(h, nav) }
+                }
+            }
+        }
+        item { SectionTitle(AppState.t("dl_section")) }
+        if (items.isEmpty()) {
+            item { MessageBox(AppState.t("dl_empty")) }
+        } else {
+            item {
+                Text(sizeText(Downloads.usedBytes()), color = TU.muted, fontSize = 13.sp,
+                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+            }
         }
         items(items, key = { it.vodId }) { d ->
             Row(
@@ -124,6 +146,27 @@ fun LibraryScreen(nav: Navigator) {
             containerColor = TU.surface,
             titleContentColor = TU.text,
         )
+    }
+}
+
+/** VOD de l'historique : miniature, titre, chaîne, reprise. */
+@Composable
+private fun HistoryVodCard(h: HistoryItem, nav: Navigator) {
+    val resume = AppState.vodPosition(h.term)
+    Column(Modifier.width(200.dp).focusCard({ nav.play(PlayRequest.Vod(h.term, h.display, h.streamer)) })) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(TU.surfaceHi)) {
+            if (h.thumb != null) {
+                AsyncImage(model = h.thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
+            }
+            if (resume > 0) Pill("▶ " + Format.clock(resume / 1000), Modifier.align(Alignment.BottomStart).padding(4.dp))
+            IconButton(onClick = { History.remove(h.term) }, modifier = Modifier.align(Alignment.TopEnd).size(28.dp)) {
+                Icon(Icons.Filled.Close, contentDescription = AppState.t("delete_vod"), tint = androidx.compose.ui.graphics.Color.White,
+                     modifier = Modifier.size(16.dp))
+            }
+        }
+        Text(h.display, color = TU.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
+             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(top = 4.dp))
+        h.streamer?.let { Text(it, color = TU.muted, fontSize = 12.sp, maxLines = 1) }
     }
 }
 

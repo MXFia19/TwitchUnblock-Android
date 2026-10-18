@@ -46,7 +46,18 @@ import com.mxfia19.twitchunblock.core.Clip
 import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.LiveInfo
 import com.mxfia19.twitchunblock.core.Vod
+import com.mxfia19.twitchunblock.core.Hidden
+import com.mxfia19.twitchunblock.core.RecoverableStream
+import com.mxfia19.twitchunblock.core.VodApi
 import com.mxfia19.twitchunblock.player.PlayRequest
+import com.mxfia19.twitchunblock.web.TwitchFollow
+import com.mxfia19.twitchunblock.web.WebSession
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.TextButton
+import androidx.compose.foundation.layout.Box
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -69,6 +80,25 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
     var period by mutableStateOf("LAST_WEEK")
         private set
     private var clipsLoadedFor: String? = null
+    /** Diffusions passées retrouvables (VODs retirées) ; null : pas encore lues. */
+    var recovered by mutableStateOf<List<RecoverableStream>?>(null)
+        private set
+    var recoverLoading by mutableStateOf(false)
+        private set
+    var recoverFailed by mutableStateOf(false)
+        private set
+
+    fun loadRecovered() {
+        if (recovered != null || recoverLoading) return
+        recoverLoading = true
+        recoverFailed = false
+        scope.launch {
+            val list = VodApi.recoverList(login)
+            recoverFailed = list == null
+            recovered = list
+            recoverLoading = false
+        }
+    }
 
     fun load() {
         if (info != null) return
@@ -119,16 +149,74 @@ fun ChannelScreen(login: String, nav: Navigator) {
     val model = remember(login) { ChannelModel(login, scope) }
     var tab by remember { mutableStateOf(0) }
     LaunchedEffect(login) { model.load() }
-    LaunchedEffect(tab) { if (tab == 1) model.loadClips() }
+    LaunchedEffect(tab) {
+        if (tab == 1) model.loadClips()
+        if (tab == 2) model.loadRecovered()
+    }
+    // Session web : le cœur suit la chaîne sur le compte Twitch ; sinon sur l'appareil.
+    var twitchFollow by remember(login) { mutableStateOf<Boolean?>(null) }
+    var twitchId by remember(login) { mutableStateOf<String?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var confirmUnfollow by remember { mutableStateOf(false) }
+    var menu by remember { mutableStateOf(false) }
+    LaunchedEffect(login, WebSession.token) {
+        twitchFollow = null
+        twitchId = null
+        if (WebSession.active) {
+            TwitchFollow.status(login)?.let { (following, id) ->
+                twitchFollow = following
+                twitchId = id
+            }
+        }
+    }
+    val sendFollow: (Boolean) -> Unit = { want ->
+        val id = twitchId
+        if (id != null && !busy) {
+            busy = true
+            scope.launch {
+                if (TwitchFollow.set(id, want) == null) twitchFollow = want
+                busy = false
+            }
+        }
+    }
     val info = model.info
     Column(Modifier.fillMaxSize()) {
         PageHeader(login, nav) {
-            val followed = AppState.isFollowedLocally(login)
-            IconButton(onClick = { AppState.toggleLocalFollow(login) }) {
+            val usesTwitch = twitchFollow != null
+            val followed = if (usesTwitch) twitchFollow == true else AppState.isFollowedLocally(login)
+            IconButton(onClick = {
+                when {
+                    !usesTwitch -> AppState.toggleLocalFollow(login)
+                    followed -> { confirmUnfollow = true }
+                    else -> sendFollow(true)
+                }
+            }, enabled = !busy) {
                 Icon(if (followed) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                      contentDescription = AppState.t(if (followed) "unfollow" else "follow"),
                      tint = if (followed) TU.primary else TU.text)
             }
+            Box {
+                IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = null, tint = TU.text) }
+                DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    val hidden = Hidden.hidesChannel(login)
+                    DropdownMenuItem(text = { Text(AppState.t(if (hidden) "remove" else "hide_channel") + if (hidden) " · " + AppState.t("hidden_badge") else "") },
+                                     onClick = {
+                                         menu = false
+                                         if (hidden) Hidden.unhideChannel(login) else Hidden.hideChannel(login, login)
+                                     })
+                }
+            }
+        }
+        if (confirmUnfollow) {
+            AlertDialog(
+                onDismissRequest = { confirmUnfollow = false },
+                title = { Text(AppState.t("unfollow_confirm").replace("{c}", login)) },
+                confirmButton = {
+                    TextButton(onClick = { confirmUnfollow = false; sendFollow(false) }) { Text(AppState.t("unfollow"), color = TU.danger) }
+                },
+                dismissButton = { TextButton(onClick = { confirmUnfollow = false }) { Text(AppState.t("sleep_cancel"), color = TU.text) } },
+                containerColor = TU.surface, titleContentColor = TU.text,
+            )
         }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(260.dp),
@@ -142,9 +230,23 @@ fun ChannelScreen(login: String, nav: Navigator) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TabChip(AppState.t("tv_videos"), tab == 0) { tab = 0 }
                     TabChip(AppState.t("clips"), tab == 1) { tab = 1 }
+                    TabChip(AppState.t("recover_tab"), tab == 2) { tab = 2 }
                 }
             }
-            if (tab == 0) {
+            if (tab == 2) {
+                item(span = FullSpan) { Text(AppState.t("recover_sub"), color = TU.muted, fontSize = 13.sp) }
+                val list = model.recovered
+                when {
+                    model.recoverLoading -> item(span = FullSpan) { LoadingBox() }
+                    model.recoverFailed || list == null -> item(span = FullSpan) {
+                        MessageBox(AppState.t("recover_unavailable"), action = AppState.t("retry")) { model.loadRecovered() }
+                    }
+                    list.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("recover_empty")) }
+                    else -> items(list, key = { "r-" + it.streamId }, span = { GridItemSpan(maxLineSpan) }) { st ->
+                        RecoverRow(st) { nav.play(PlayRequest.Recovered(st)) }
+                    }
+                }
+            } else if (tab == 0) {
                 items(model.videos, key = { "v-" + it.id }) { v ->
                     VodCard(v) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
                 }
@@ -168,6 +270,21 @@ fun ChannelScreen(login: String, nav: Navigator) {
                     model.clipsNext != null -> item(span = FullSpan) { MoreButton(false) { model.loadClips() } }
                 }
             }
+        }
+    }
+}
+
+/** Diffusion passée retrouvable : titre, jeu, date, durée. */
+@Composable
+private fun RecoverRow(s: RecoverableStream, onClick: () -> Unit) {
+    Row(Modifier.fillMaxWidth().focusCard(onClick).background(TU.surface).padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.PlayArrow, contentDescription = null, tint = TU.primary)
+        Spacer(Modifier.width(10.dp))
+        Column(Modifier.weight(1f)) {
+            Text(s.title.ifEmpty { AppState.t("recover_title") }, color = TU.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2)
+            Text(listOf(s.game, Format.shortDate(s.epoch * 1000), if (s.duration > 0) Format.duration(s.duration) else "",
+                        if (s.maxViews > 0) "● " + Format.viewers(s.maxViews) else "").filter { it.isNotEmpty() }.joinToString(" · "),
+                 color = TU.muted, fontSize = 12.sp, maxLines = 1)
         }
     }
 }

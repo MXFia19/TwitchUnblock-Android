@@ -74,7 +74,9 @@ fun CategoryScreen(category: Category, nav: Navigator) {
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            items(model.streams, key = { it.login }) { s -> StreamCard(s) { nav.play(PlayRequest.Live(s.login)) } }
+            items(model.streams.filter { !com.mxfia19.twitchunblock.core.Hidden.hidesChannel(it.login) }, key = { it.login }) { s ->
+                HideableStreamCard(s, withCategory = false) { nav.play(PlayRequest.Live(s.login)) }
+            }
             when {
                 model.loading -> item(span = FullSpan) { LoadingBox() }
                 model.failed -> item(span = FullSpan) {

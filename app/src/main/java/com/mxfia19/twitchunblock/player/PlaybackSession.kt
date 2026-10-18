@@ -31,10 +31,14 @@ import kotlinx.coroutines.launch
 /** Ce qu'on demande à lire. */
 sealed class PlayRequest {
     data class Live(val login: String) : PlayRequest()
-    data class Vod(val id: String, val title: String = "", val channel: String? = null, val startMs: Long = -1) : PlayRequest()
+    /** `rewind` : enregistrement du direct en cours, lu près de sa fin (rembobiner). */
+    data class Vod(val id: String, val title: String = "", val channel: String? = null, val startMs: Long = -1,
+                   val rewind: Boolean = false) : PlayRequest()
     data class Clip(val slug: String) : PlayRequest()
     /** VOD téléchargée, lue hors ligne. */
     data class Download(val vodId: String) : PlayRequest()
+    /** Diffusion passée retrouvée (VOD retirée ou non listée). */
+    data class Recovered(val stream: com.mxfia19.twitchunblock.core.RecoverableStream) : PlayRequest()
 }
 
 /**
@@ -91,6 +95,15 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
         private set
     var lengthSeconds by mutableStateOf(0)
         private set
+    /** Enregistrement du direct en cours (rembobiner), null sans. */
+    var dvrVideoId by mutableStateOf<String?>(null)
+        private set
+    /** Chapitres de la VOD lue. */
+    var chapters by mutableStateOf<List<com.mxfia19.twitchunblock.core.VodChapter>>(emptyList())
+        private set
+    /** Abonné à la chaîne (jeton du compte), null : inconnu. */
+    var subscriber by mutableStateOf<Boolean?>(null)
+        private set
 
     /** Multi-live : toujours la qualité Auto, plafonnée à cette hauteur. */
     var forceAuto = false
@@ -142,8 +155,16 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
         request = req
         state = State.Loading()
         errors = 0
+        chapters = emptyList()
+        if (req !is PlayRequest.Live) dvrVideoId = null
         player.stop()
+        if (main && req !is PlayRequest.Live) com.mxfia19.twitchunblock.drops.DropsHeartbeat.stop()
         job = scope.launch { resolve(req) }
+    }
+
+    /** Position (ms) : chapitres. */
+    fun seekTo(ms: Long) {
+        player.seekTo(maxOf(0L, ms))
     }
 
     fun retry() {
@@ -169,9 +190,16 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
                     return
                 }
                 Usage.count("live_" + (r.source ?: "unknown"))
+                dvrVideoId = r.dvrVideoId
+                subscriber = r.subscriber
                 isClip = false
                 start(r.master, startMs = -1)
                 tickJob = scope.launch { refreshStats(req.login) }
+                if (main) {
+                    com.mxfia19.twitchunblock.core.History.addChannel(r.info.login, r.info.avatar)
+                    // Drops : le flux du compte compte déjà ; sinon ses segments sont demandés à part.
+                    com.mxfia19.twitchunblock.drops.DropsHeartbeat.start(r.info.login, pollSegments = r.source != "account")
+                }
             }
             is PlayRequest.Vod -> {
                 title = req.title
@@ -198,9 +226,32 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
                     lengthSeconds = meta.lengthSeconds
                 }
                 isClip = false
-                val resume = if (req.startMs >= 0) req.startMs else AppState.vodPosition(req.id)
+                val resume = when {
+                    req.rewind -> -1L
+                    req.startMs >= 0 -> req.startMs
+                    else -> AppState.vodPosition(req.id)
+                }
                 start(m, resume)
                 tickJob = scope.launch { trackProgress(req.id) }
+                if (main) com.mxfia19.twitchunblock.core.History.addVod(req.id, title, thumbnail, channelLogin)
+                if (req.rewind) {
+                    // Près de la fin de l'enregistrement : là où en est le direct.
+                    scope.launch {
+                        repeat(50) {
+                            val d = player.duration
+                            if (d > 0) {
+                                player.seekTo(maxOf(0L, d - 90_000L))
+                                return@launch
+                            }
+                            delay(300)
+                        }
+                    }
+                }
+                val vodId = req.id
+                scope.launch {
+                    val list = VodApi.chapters(vodId)
+                    if (vodId == this@PlaybackSession.vodId) chapters = list
+                }
             }
             is PlayRequest.Download -> {
                 val item = Downloads.find(req.vodId)
@@ -217,6 +268,21 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
                 isClip = false
                 start(Master(mapOf(item.quality.ifEmpty { "Source" } to item.uri)), AppState.vodPosition(req.vodId))
                 tickJob = scope.launch { trackProgress(req.vodId) }
+            }
+            is PlayRequest.Recovered -> {
+                val st = req.stream
+                title = st.title
+                channelLogin = st.login
+                channelName = st.login
+                game = st.game
+                source = null
+                val m = VodApi.recoverResolve(st)
+                if (m == null) {
+                    state = State.Error("err_vod_unavailable")
+                    return
+                }
+                isClip = false
+                start(m, startMs = 0)
             }
             is PlayRequest.Clip -> {
                 val c = BrowseApi.clip(req.slug)
@@ -358,7 +424,11 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
         job?.cancel()
         tickJob?.cancel()
         sleepJob?.cancel()
-        if (main) PlayerHolder.detach(this)
+        if (main) {
+            PlayerHolder.detach(this)
+            com.mxfia19.twitchunblock.drops.DropsHeartbeat.stop()
+            com.mxfia19.twitchunblock.core.CloudSync.scheduleSoon()
+        }
         player.release()
     }
 

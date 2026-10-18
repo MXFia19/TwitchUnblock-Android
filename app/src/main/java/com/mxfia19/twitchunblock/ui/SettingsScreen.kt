@@ -56,6 +56,18 @@ import com.mxfia19.twitchunblock.core.Config
 import com.mxfia19.twitchunblock.core.Lang
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.Quality
+import com.mxfia19.twitchunblock.core.Backup
+import com.mxfia19.twitchunblock.core.CloudSync
+import com.mxfia19.twitchunblock.core.Features
+import com.mxfia19.twitchunblock.core.Hidden
+import com.mxfia19.twitchunblock.core.TopLanguage
+import com.mxfia19.twitchunblock.core.WordsPref
+import com.mxfia19.twitchunblock.web.WebSession
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
+import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -63,6 +75,31 @@ import java.util.Locale
 @Composable
 fun SettingsScreen(nav: Navigator) {
     val uri = LocalUriHandler.current
+    val context = LocalContext.current
+    var backupMessage by remember { mutableStateOf<String?>(null) }
+    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { target ->
+        if (target == null) return@rememberLauncherForActivityResult
+        backupMessage = try {
+            context.contentResolver.openOutputStream(target)?.use { it.write(Backup.export().toByteArray(Charsets.UTF_8)) }
+            AppState.t("export_done")
+        } catch (e: Exception) {
+            Logger.warn("BACKUP", "Export impossible", e.message)
+            AppState.t("err_network")
+        }
+    }
+    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { source ->
+        if (source == null) return@rememberLauncherForActivityResult
+        val text = try {
+            context.contentResolver.openInputStream(source)?.use { it.readBytes().toString(Charsets.UTF_8) }
+        } catch (e: Exception) {
+            null
+        }
+        val result = text?.let { Backup.import(it) }
+        backupMessage = if (result == null) AppState.t("import_bad") else {
+            AppState.t("import_done").replace("%d", result.first.toString()) +
+                if (result.second > 0) " " + AppState.t("import_capped").replace("%d", result.second.toString()) else ""
+        }
+    }
     Column(Modifier.fillMaxSize()) {
         PageHeader(AppState.t("settings"), nav)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
@@ -72,8 +109,10 @@ fun SettingsScreen(nav: Navigator) {
                     Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                         Avatar(user.avatar, 44.dp)
                         Spacer(Modifier.width(12.dp))
-                        Text(user.displayName, color = TU.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold,
-                             modifier = Modifier.weight(1f))
+                        Column(Modifier.weight(1f)) {
+                            Text(user.displayName, color = TU.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                            Text(AppState.t("account_api_sub"), color = TU.muted, fontSize = 12.sp)
+                        }
                         OutlinedButton(onClick = { Auth.logout() }) { Text(AppState.t("tv_logout"), color = TU.text) }
                     }
                 } else {
@@ -83,10 +122,28 @@ fun SettingsScreen(nav: Navigator) {
                                modifier = Modifier.padding(top = 8.dp)) { Text(AppState.t("tv_login")) }
                     }
                 }
+                WebSessionRow(nav)
+            }
+            Group(AppState.t("settings_twitch_extras")) {
+                LinkRow(AppState.t("drops") + " · " + AppState.t("drops_sub")) { nav.push(Screen.Drops) }
+                LinkRow(AppState.t("points_tracker") + " · " + AppState.t("points_tracker_sub")) { nav.push(Screen.PointsTracker) }
+                Toggle(AppState.t("auto_claim"), AppState.t("auto_claim_sub"), Features.autoClaimChest.value) { Features.autoClaimChest.set(it) }
+                Toggle(AppState.t("sub_adfree"), AppState.t("sub_adfree_sub"), Features.subAdFree.value) { Features.subAdFree.set(it) }
             }
             Group(AppState.t("settings_general")) {
                 Choice(AppState.t("language"), Lang.entries.map { it.code to it.label }, AppState.lang.code) { code ->
                     Lang.of(code)?.let { AppState.updateLang(it) }
+                }
+                Choice(AppState.t("top_lang"),
+                       listOf("" to AppState.t("lang_auto") + " (" + TopLanguage.name(TopLanguage.device) + ")") +
+                           TopLanguage.codes.map { it to TopLanguage.name(it) }.sortedBy { it.second.lowercase() },
+                       Features.topLang ?: "",
+                       AppState.t("top_lang_sub").replace("{l}", TopLanguage.name(TopLanguage.device))) {
+                    Features.updateTopLang(it.ifEmpty { null })
+                }
+                Toggle(AppState.t("show_recent"), AppState.t("show_recent_sub"), Features.showRecent.value) { Features.showRecent.set(it) }
+                LinkRow(AppState.t("hidden_title") + if (Hidden.isEmpty) "" else " (${Hidden.channels.size + Hidden.categories.size})") {
+                    nav.push(Screen.Hidden)
                 }
             }
             Group(AppState.t("settings_player")) {
@@ -102,7 +159,57 @@ fun SettingsScreen(nav: Navigator) {
                 Toggle(AppState.t("background_play"), AppState.t("background_play_sub"), AppState.backgroundPlay) { AppState.updateBackgroundPlay(it) }
                 Toggle(AppState.t("auto_pip"), AppState.t("auto_pip_sub"), AppState.autoPip) { AppState.updateAutoPip(it) }
             }
+            Group(AppState.t("settings_chat")) {
+                Toggle(AppState.t("cfg_timestamps"), AppState.t("cfg_timestamps_sub"), Features.chatTimestamps.value) { Features.chatTimestamps.set(it) }
+                Toggle(AppState.t("cfg_deleted"), AppState.t("cfg_deleted_sub"), Features.chatKeepDeleted.value) { Features.chatKeepDeleted.set(it) }
+                Toggle(AppState.t("cfg_recent"), AppState.t("cfg_recent_sub"), Features.chatLoadHistory.value) { Features.chatLoadHistory.set(it) }
+                Toggle(AppState.t("hide_bots"), AppState.t("hide_bots_sub"), Features.chatHideBots.value) { Features.chatHideBots.set(it) }
+                Toggle(AppState.t("hide_commands"), AppState.t("hide_commands_sub"), Features.chatHideCommands.value) { Features.chatHideCommands.set(it) }
+                WordsField(AppState.t("muted_words"), AppState.t("muted_words_sub"), Features.mutedWords)
+                WordsField(AppState.t("highlight_words"), AppState.t("highlight_words_sub"), Features.highlightWords)
+                if (Features.blockedUsers.value.isNotEmpty()) {
+                    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(AppState.t("hidden_users").replace("{n}", Features.blockedUsers.value.size.toString()), color = TU.text,
+                             fontSize = 15.sp, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { Features.blockedUsers.set(emptyList()) }) { Text(AppState.t("clear"), color = TU.danger) }
+                    }
+                }
+                Column(Modifier.padding(12.dp)) {
+                    Text(AppState.t("cfg_font_size") + " · " + Features.chatFontSize.value, color = TU.text, fontSize = 15.sp)
+                    Slider(
+                        value = Features.chatFontSize.value.toFloat(),
+                        onValueChange = { Features.chatFontSize.set(Math.round(it)) },
+                        valueRange = Features.chatFontSize.range.first.toFloat()..Features.chatFontSize.range.last.toFloat(),
+                        steps = Features.chatFontSize.range.last - Features.chatFontSize.range.first - 1,
+                        colors = SliderDefaults.colors(thumbColor = TU.primary, activeTrackColor = TU.primary),
+                    )
+                }
+            }
+            Group(AppState.t("settings_events")) {
+                Toggle(AppState.t("cfg_pinned"), AppState.t("cfg_pinned_sub"), Features.showPinned.value) { Features.showPinned.set(it) }
+                Toggle(AppState.t("cfg_events"), AppState.t("cfg_events_sub"), Features.showLiveEvents.value) { Features.showLiveEvents.set(it) }
+                Toggle(AppState.t("cfg_raids"), AppState.t("cfg_raids_sub"), Features.enableRaids.value) { Features.enableRaids.set(it) }
+                Toggle(AppState.t("cfg_streak"), AppState.t("cfg_streak_sub"), Features.showWatchStreak.value) { Features.showWatchStreak.set(it) }
+            }
             NotificationSettings()
+            Group(AppState.t("backup")) {
+                Text(AppState.t("backup_sub"), color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp))
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(12.dp)) {
+                    OutlinedButton(onClick = { exporter.launch(Backup.fileName()) }) { Text(AppState.t("export_data"), color = TU.text) }
+                    OutlinedButton(onClick = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) {
+                        Text(AppState.t("import_data"), color = TU.text)
+                    }
+                }
+                backupMessage?.let { Text(it, color = TU.primary, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) }
+                Toggle(AppState.t("cloud_sync"), AppState.t("cloud_sync_sub"), Features.cloudSync.value) {
+                    Features.cloudSync.set(it)
+                    if (it) CloudSync.syncNow()
+                }
+                CloudSync.lastSync?.let { at ->
+                    Text(AppState.t("cloud_sync_last").replace("{t}", SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(at))),
+                         color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp))
+                }
+            }
             Group(AppState.t("expert_worker")) {
                 WorkerField()
             }
@@ -115,6 +222,59 @@ fun SettingsScreen(nav: Navigator) {
                 LinkRow(AppState.t("logs")) { nav.push(Screen.Logs) }
             }
         }
+    }
+}
+
+/** Session web : état, connexion, déconnexion ; compte différent signalé. */
+@Composable
+private fun WebSessionRow(nav: Navigator) {
+    val mismatch = WebSession.mismatch
+    if (mismatch != null) {
+        Column(Modifier.fillMaxWidth().padding(12.dp)) {
+            Text(AppState.t("web_mismatch"), color = TU.danger, fontSize = 14.sp, fontWeight = FontWeight.SemiBold)
+            Text(AppState.t("web_mismatch_sub").replace("{w}", mismatch).replace("{a}", AppState.user?.login ?: ""),
+                 color = TU.muted, fontSize = 12.sp)
+            TextButton(onClick = { WebSession.dismissMismatch() }) { Text(AppState.t("close"), color = TU.primary) }
+        }
+    }
+    Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(AppState.t("account_web"), color = TU.text, fontSize = 15.sp)
+            val status = when {
+                WebSession.token == null -> AppState.t("account_web_sub")
+                WebSession.expired -> AppState.t("web_expired")
+                else -> AppState.t("web_connected_as").replace("{u}", WebSession.login ?: "?")
+            }
+            Text(status, color = if (WebSession.expired) TU.danger else TU.muted, fontSize = 12.sp)
+        }
+        if (WebSession.token == null || WebSession.expired) {
+            Button(onClick = { nav.push(Screen.WebLogin) }, colors = ButtonDefaults.buttonColors(containerColor = TU.primary)) {
+                Text(AppState.t(if (WebSession.expired) "web_reconnect" else "web_banner_btn"))
+            }
+        } else {
+            OutlinedButton(onClick = { WebSession.clear() }) { Text(AppState.t("web_logout"), color = TU.text) }
+        }
+    }
+}
+
+/** Liste de mots séparés par des virgules (enregistrée à chaque frappe). */
+@Composable
+private fun WordsField(title: String, subtitle: String, pref: WordsPref) {
+    var text by remember { mutableStateOf(pref.text) }
+    Column(Modifier.padding(12.dp)) {
+        Text(title, color = TU.text, fontSize = 15.sp)
+        Text(subtitle, color = TU.muted, fontSize = 12.sp)
+        OutlinedTextField(
+            value = text,
+            onValueChange = {
+                text = it
+                pref.setText(it)
+            },
+            singleLine = true,
+            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = TU.primary, unfocusedBorderColor = TU.line,
+                                                      focusedTextColor = TU.text, unfocusedTextColor = TU.text),
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        )
     }
 }
 
@@ -163,7 +323,7 @@ fun Toggle(title: String, subtitle: String?, checked: Boolean, onChange: (Boolea
 }
 
 @Composable
-private fun LinkRow(text: String, onClick: () -> Unit) {
+fun LinkRow(text: String, onClick: () -> Unit) {
     Text(text, color = TU.primary, fontSize = 15.sp,
          modifier = Modifier.fillMaxWidth().focusCard(onClick, RoundedCornerShape(0.dp)).padding(12.dp))
 }

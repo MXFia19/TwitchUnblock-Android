@@ -35,6 +35,8 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         private set
 
     private var channelId: String? = null
+    /** Identifiant de la chaîne (emotes), connu au plus tard à ROOMSTATE. */
+    val roomId: String? get() = channelId
     private var socket: WebSocket? = null
     private var stopped = false
     private var attempts = 0
@@ -51,7 +53,7 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
             Badges.loadGlobal()
         }
         channelIdHint?.let { loadChannelAssets(it) }
-        scope.launch { loadHistory() }
+        if (com.mxfia19.twitchunblock.core.Features.chatLoadHistory.value) scope.launch { loadHistory() }
         connect()
     }
 

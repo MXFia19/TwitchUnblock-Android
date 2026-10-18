@@ -3,7 +3,13 @@ package com.mxfia19.twitchunblock.ui
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import com.mxfia19.twitchunblock.core.Hidden
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
@@ -50,16 +56,19 @@ import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.TwitchStream
 import com.mxfia19.twitchunblock.core.Vod
 
-/** Carte qui se met en avant quand elle a le focus (télécommande, clavier). */
+/** Carte qui se met en avant quand elle a le focus (télécommande, clavier).
+ *  `onLongClick` : appui long (masquer…). */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun Modifier.focusCard(onClick: () -> Unit, shape: RoundedCornerShape = RoundedCornerShape(10.dp)): Modifier {
+fun Modifier.focusCard(onClick: () -> Unit, shape: RoundedCornerShape = RoundedCornerShape(10.dp),
+                       onLongClick: (() -> Unit)? = null): Modifier {
     val source = remember { MutableInteractionSource() }
     val focused by source.collectIsFocusedAsState()
     return this
         .scale(if (focused) 1.04f else 1f)
         .border(BorderStroke(if (focused) 3.dp else 0.dp, if (focused) Color.White else Color.Transparent), shape)
         .clip(shape)
-        .clickable(interactionSource = source, indication = null, onClick = onClick)
+        .combinedClickable(interactionSource = source, indication = null, onLongClick = onLongClick, onClick = onClick)
 }
 
 @Composable
@@ -96,10 +105,10 @@ fun SectionTitle(text: String, modifier: Modifier = Modifier) {
 
 /** Direct : miniature, puis titre, chaîne et jeu. */
 @Composable
-fun StreamCard(stream: TwitchStream, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun StreamCard(stream: TwitchStream, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     // Miniature rafraîchie chaque minute (le CDN la garde en cache).
     val stamp = System.currentTimeMillis() / 60_000
-    Column(modifier.focusCard(onClick)) {
+    Column(modifier.focusCard(onClick, onLongClick = onLongClick)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(TU.surfaceHi)) {
             AsyncImage(model = stream.thumb() + "?t=$stamp", contentDescription = null,
                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -118,8 +127,8 @@ fun StreamCard(stream: TwitchStream, modifier: Modifier = Modifier, onClick: () 
 }
 
 @Composable
-fun CategoryCard(category: Category, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(modifier.focusCard(onClick)) {
+fun CategoryCard(category: Category, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
+    Column(modifier.focusCard(onClick, onLongClick = onLongClick)) {
         AsyncImage(model = category.art(), contentDescription = null, contentScale = ContentScale.Crop,
                    modifier = Modifier.fillMaxWidth().aspectRatio(3f / 4f).background(TU.surfaceHi))
         Text(category.name, color = TU.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
@@ -127,6 +136,43 @@ fun CategoryCard(category: Category, modifier: Modifier = Modifier, onClick: () 
         category.viewers?.let {
             Text(AppState.tn("viewers", it, abbreviated = it >= 1000).let { w -> "${Format.viewers(it)} $w" },
                  color = TU.muted, fontSize = 12.sp, maxLines = 1, modifier = Modifier.padding(horizontal = 2.dp))
+        }
+    }
+}
+
+/** Direct d'une liste (top, catégorie) : appui long pour masquer la chaîne
+ *  ou sa catégorie. */
+@Composable
+fun HideableStreamCard(stream: TwitchStream, withCategory: Boolean = true, onClick: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        StreamCard(stream, onLongClick = { menu = true }, onClick = onClick)
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text(AppState.t("hide_channel")) }, onClick = {
+                menu = false
+                Hidden.hideChannel(stream.login, stream.name)
+            })
+            if (withCategory && stream.gameId.isNotEmpty() && stream.game.isNotEmpty()) {
+                DropdownMenuItem(text = { Text(AppState.t("hide_category").replace("{c}", stream.game)) }, onClick = {
+                    menu = false
+                    Hidden.hideCategory(stream.gameId, stream.game, "")
+                })
+            }
+        }
+    }
+}
+
+/** Catégorie du top : appui long pour la masquer. */
+@Composable
+fun HideableCategoryCard(category: Category, onClick: () -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        CategoryCard(category, onLongClick = { menu = true }, onClick = onClick)
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text(AppState.t("hide_this_category")) }, onClick = {
+                menu = false
+                Hidden.hideCategory(category.id, category.name, category.art())
+            })
         }
     }
 }

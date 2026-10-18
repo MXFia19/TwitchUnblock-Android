@@ -71,6 +71,41 @@ object VodApi {
         LinkedHashMap<String, String>().apply { found.forEach { put(it.first, it.second) } }
     }
 
+    /** Chapitres d'une VOD (changements de jeu) ; vide s'il n'y en a qu'un. */
+    suspend fun chapters(id: String): List<VodChapter> {
+        val q = "query(\$id: ID!) { video(id: \$id) { moments(first: 50, momentRequestType: VIDEO_CHAPTER_MARKERS) { " +
+            "edges { node { positionMilliseconds durationMilliseconds description } } } } }"
+        val edges = Gql.request(q, Gql.vars("id" to id))?.obj("video")?.obj("moments")?.arr("edges") ?: return emptyList()
+        val list = edges.objects().mapNotNull { e ->
+            val n = e.obj("node") ?: return@mapNotNull null
+            VodChapter((n.dbl("positionMilliseconds") ?: 0.0) / 1000, (n.dbl("durationMilliseconds") ?: 0.0) / 1000,
+                       n.str("description") ?: "")
+        }.sortedBy { it.start }
+        return if (list.size > 1) list else emptyList()
+    }
+
+    /** Diffusions passées d'une chaîne, même retirées de Twitch (source
+     *  externe, par le Worker) ; null si la source ne répond pas. */
+    suspend fun recoverList(channel: String): List<RecoverableStream>? {
+        val json = Workers.json("/api/recover-list?channel=${Http.encode(channel.lowercase())}") ?: return null
+        if (json.bool("unavailable") == true) return null
+        return json.arr("streams")?.objects().orEmpty().mapNotNull { o ->
+            val id = o.str("streamID") ?: return@mapNotNull null
+            val epoch = o.long("epoch") ?: return@mapNotNull null
+            RecoverableStream(id, o.str("login") ?: channel.lowercase(), epoch, o.str("title") ?: "", o.str("game") ?: "",
+                              o.int("maxViews") ?: 0, o.int("duration") ?: 0)
+        }
+    }
+
+    /** Playlist reconstruite d'une diffusion passée ; null si elle n'est plus sur le CDN. */
+    suspend fun recoverResolve(s: RecoverableStream): Master? {
+        val json = Workers.json("/api/recover-resolve?login=${Http.encode(s.login)}&streamID=${Http.encode(s.streamId)}" +
+                                "&epoch=${s.epoch}&proxy=false") ?: return null
+        val links = linksOf(json.obj("links"))
+        if (links.isEmpty()) return null
+        return Master(links, emptyMap(), synthesizeMaster(links, emptyMap()))
+    }
+
     /** Titre, chaîne, durée d'une VOD (lien collé, reprise). */
     suspend fun meta(id: String): Vod? {
         val d = Gql.request("query(\$id: ID!) { video(id: \$id) { id title lengthSeconds viewCount publishedAt " +

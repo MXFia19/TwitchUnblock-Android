@@ -7,8 +7,9 @@ import org.json.JSONObject
 /**
  * Lancement d'un direct : infos de la chaîne (GQL), puis les sources dans
  * l'ordre des réglages — Luminous Asie, proxy albanais (TTV.LOL), Luminous
- * Europe, Twitch officiel — et le Worker en dernier recours. Comme getLive
- * (iOS), sans le compte abonné (série suivante).
+ * Europe, Twitch officiel — et le Worker en dernier recours. Compte sans
+ * pub sur la chaîne (abonné, Turbo ; session web) : son flux d'abord. Comme
+ * getLive (iOS).
  */
 object LiveApi {
     /** Jeton de lecture anonyme (valeur, signature) d'un direct ou d'une VOD. */
@@ -33,6 +34,11 @@ object LiveApi {
             "stream { title game { name } previewImageURL(width: 320, height: 180) viewersCount createdAt archiveVideo { id } } } }"
         val gqlTask = async { Gql.raw(q) }
         val tokenTask = async { accessToken(login, live = true) }
+        // En même temps que le reste : 6 s au plus (jeton d'intégrité compris).
+        val accountTask = async {
+            if (Features.subAdFree.value) com.mxfia19.twitchunblock.web.AccountPlayback.forLaunch(login)
+            else com.mxfia19.twitchunblock.web.AccountPlayback.Result.Unavailable
+        }
         val gql = gqlTask.await()
         val token = tokenTask.await()
 
@@ -43,6 +49,7 @@ object LiveApi {
         val user = data?.obj("user")
         if (user == null && data != null && data.isJsonNull("user") && !hasErrors) {
             Logger.error("LIVE", "Chaîne introuvable", login)
+            accountTask.cancel()
             return@coroutineScope LiveResult(LiveInfo(login, error = "not_found"))
         }
         val avatar = user?.str("profileImageURL")
@@ -50,6 +57,7 @@ object LiveApi {
         val stream = user?.obj("stream")
         if (user != null && stream == null) {
             Logger.warn("LIVE", "Chaîne hors ligne", login)
+            accountTask.cancel()
             return@coroutineScope LiveResult(LiveInfo(login, avatar = avatar, userId = userId, error = "offline"))
         }
 
@@ -57,6 +65,25 @@ object LiveApi {
         var found = Master()
         var used: String? = null
         var workerInfo: JSONObject? = null
+        var subscriber: Boolean? = null
+        when (val account = accountTask.await()) {
+            is com.mxfia19.twitchunblock.web.AccountPlayback.Result.Ok -> {
+                val pat = account.token
+                subscriber = pat.subscriber
+                if (pat.adFree && !pat.forbidden) {
+                    found = usher(login, Pair(pat.value, pat.signature), lowLatency)
+                    if (!found.isEmpty) {
+                        used = "account"
+                        Logger.success("LIVE", "Direct par le compte (sans pub)", "${found.links.size} qualités")
+                    } else {
+                        Logger.warn("LIVE", "Flux du compte indisponible", "sources habituelles…")
+                    }
+                } else {
+                    Logger.info("LIVE", "Compte pas sans pub sur cette chaîne", "sources habituelles")
+                }
+            }
+            else -> {}
+        }
         val steps = AppState.liveSourceSteps()
         Logger.info("LIVE", "Ordre des sources", steps.joinToString(" → ").uppercase())
         for (src in steps) {
@@ -96,6 +123,7 @@ object LiveApi {
             master = found,
             source = used,
             dvrVideoId = stream?.obj("archiveVideo")?.str("id"),
+            subscriber = subscriber,
         )
     }
 

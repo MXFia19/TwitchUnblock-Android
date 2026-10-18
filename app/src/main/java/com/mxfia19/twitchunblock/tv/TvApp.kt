@@ -173,7 +173,7 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav) {
             if (home.loading && home.top.isEmpty()) LoadingBox()
             else if (home.failed) MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { home.load(force = true) }
             else LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(home.top, key = { it.login }) { s ->
+                items(home.visibleTop, key = { it.login }) { s ->
                     StreamCard(s, Modifier.width(300.dp)) { nav.push(TvScreen.Player(PlayRequest.Live(s.login))) }
                 }
                 if (home.hasMore) item { Box(Modifier.width(160.dp)) { com.mxfia19.twitchunblock.ui.MoreButton(home.loadingMore) { home.more() } } }
@@ -182,7 +182,7 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav) {
         item { RowTitle(AppState.t("top_categories")) }
         item {
             LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(search.top, key = { it.id }) { c ->
+                items(search.visibleTop, key = { it.id }) { c ->
                     CategoryCard(c, Modifier.width(150.dp)) { nav.push(TvScreen.CategoryPage(c)) }
                 }
             }

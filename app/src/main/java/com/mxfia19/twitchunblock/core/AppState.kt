@@ -122,6 +122,9 @@ object AppState {
             JSONObject().put("id", it.id).put("login", it.login).put("name", it.displayName).put("avatar", it.avatar).toString()
         }
         sp.edit().putString("user", json).apply()
+        // Session web d'un autre compte : retirée (points, drops, prédictions).
+        com.mxfia19.twitchunblock.web.WebSession.checkAccount()
+        if (u != null) CloudSync.syncNow()
     }
 
     fun clearAuth() {
@@ -142,6 +145,25 @@ object AppState {
     // ── Reprise des VODs ──
     /** Position gardée d'une VOD (ms), 0 sans reprise. */
     fun vodPosition(id: String): Long = parseJson(sp.getString("vod_progress", null))?.long(id) ?: 0L
+
+    /** Toutes les positions gardées (ms), pour la synchronisation. */
+    fun vodPositions(): Map<String, Long> {
+        val all = parseJson(sp.getString("vod_progress", null)) ?: return emptyMap()
+        val out = HashMap<String, Long>()
+        val keys = all.keys()
+        while (keys.hasNext()) {
+            val k = keys.next()
+            all.long(k)?.let { out[k] = it }
+        }
+        return out
+    }
+
+    /** Positions après une fusion avec le serveur (300 VODs au plus, les plus récentes). */
+    fun replaceVodPositions(positions: Map<String, Long>) {
+        val all = JSONObject()
+        positions.entries.sortedByDescending { it.key.toLongOrNull() ?: 0L }.take(300).forEach { all.put(it.key, it.value) }
+        sp.edit().putString("vod_progress", all.toString()).apply()
+    }
 
     /** Garde la position (300 VODs au plus) ; effacée près de la fin. */
     fun saveVodPosition(id: String, positionMs: Long, durationMs: Long) {

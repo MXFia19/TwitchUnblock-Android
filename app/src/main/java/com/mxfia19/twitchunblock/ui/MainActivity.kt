@@ -74,6 +74,8 @@ class MainActivity : ComponentActivity() {
             Feedback.refresh()
             if (Ntfy.enabled) Ntfy.sync()
             Usage.ping(this@MainActivity)
+            // Historique et reprise des VODs, partagés avec l'iPhone et le site.
+            com.mxfia19.twitchunblock.core.CloudSync.syncNow()
         }
     }
 

@@ -60,6 +60,8 @@ class SearchModel(private val scope: CoroutineScope) {
     var searching by mutableStateOf(false)
         private set
     val top = mutableStateListOf<Category>()
+    /** Catégories du top sans les masquées. */
+    val visibleTop: List<Category> get() = top.filter { !com.mxfia19.twitchunblock.core.Hidden.hidesCategory(it.id) }
     var topLoading by mutableStateOf(false)
         private set
     var topMore by mutableStateOf(false)
@@ -163,11 +165,31 @@ fun SearchScreen(model: SearchModel, nav: Navigator) {
                 item(span = FullSpan) { ActionRow(AppState.t("watch_clip")) { nav.play(PlayRequest.Clip(clip)) } }
             }
             if (q.isEmpty()) {
+                val recent = com.mxfia19.twitchunblock.core.History.channels.take(12)
+                if (com.mxfia19.twitchunblock.core.Features.showRecent.value && recent.isNotEmpty()) {
+                    item(span = FullSpan) {
+                        Text(AppState.t("show_recent"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                             modifier = Modifier.padding(vertical = 6.dp))
+                    }
+                    item(span = FullSpan) {
+                        androidx.compose.foundation.lazy.LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                            items(recent.size) { i ->
+                                val h = recent[i]
+                                Column(Modifier.width(64.dp).focusCard({ nav.push(Screen.Channel(h.term)) }),
+                                       horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Avatar(h.avatar, 52.dp)
+                                    Text(h.display, color = TU.text, fontSize = 11.sp, maxLines = 1,
+                                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+                                }
+                            }
+                        }
+                    }
+                }
                 item(span = FullSpan) {
                     Text(AppState.t("top_categories"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                          modifier = Modifier.padding(vertical = 6.dp))
                 }
-                items(model.top, key = { "c-" + it.id }) { c -> CategoryCard(c) { nav.push(Screen.CategoryPage(c)) } }
+                items(model.visibleTop, key = { "c-" + it.id }) { c -> HideableCategoryCard(c) { nav.push(Screen.CategoryPage(c)) } }
                 if (model.topLoading && model.top.isEmpty()) item(span = FullSpan) { LoadingBox() }
                 else if (model.topMore) item(span = FullSpan) { MoreButton(model.topLoading) { model.moreTop() } }
             } else if (vodId == null && clip == null) {

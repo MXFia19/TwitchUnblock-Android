@@ -87,6 +87,8 @@ data class LiveResult(
     val master: Master = Master(),
     val source: String? = null,
     val dvrVideoId: String? = null,
+    /** Abonné à la chaîne (jeton du compte), null : inconnu. */
+    val subscriber: Boolean? = null,
 )
 
 data class ClipPlayback(
@@ -104,3 +106,17 @@ data class Page<T>(val items: List<T>, val next: String? = null, val refused: Bo
 
 /** Jeton refusé par Twitch (401) : à renouveler ou se reconnecter. */
 class AuthExpiredException : Exception("auth expired")
+
+/** Chapitre d'une VOD (secondes). */
+data class VodChapter(val start: Double, val duration: Double, val title: String)
+
+/** Diffusion passée retrouvable (VOD retirée ou jamais listée). `epoch` : début (s). */
+data class RecoverableStream(
+    val streamId: String,
+    val login: String,
+    val epoch: Long,
+    val title: String,
+    val game: String,
+    val maxViews: Int,
+    val duration: Int,
+)

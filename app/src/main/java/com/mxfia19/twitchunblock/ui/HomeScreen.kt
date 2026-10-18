@@ -29,6 +29,8 @@ import com.mxfia19.twitchunblock.core.AuthExpiredException
 import com.mxfia19.twitchunblock.core.BrowseApi
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.TwitchStream
+import com.mxfia19.twitchunblock.core.Hidden
+import com.mxfia19.twitchunblock.core.TopLanguage
 import com.mxfia19.twitchunblock.player.PlayRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -51,15 +53,18 @@ class HomeModel(private val scope: CoroutineScope) {
     private var loadedAt = 0L
     private var loadedFor: String? = null
 
+    /** Le top sans les chaînes et catégories masquées (les suivis, eux, ne le sont jamais). */
+    val visibleTop: List<TwitchStream> get() = top.filter { Hidden.allows(it) }
+
     fun load(force: Boolean = false) {
-        val who = AppState.user?.id ?: AppState.localFollows.joinToString(",")
+        val who = (AppState.user?.id ?: AppState.localFollows.joinToString(",")) + "|" + TopLanguage.resolved()
         if (!force && loadedFor == who && System.currentTimeMillis() - loadedAt < 120_000 && top.isNotEmpty()) return
         if (loading) return
         loading = true
         failed = false
         scope.launch {
             followed = loadFollowed()
-            val page = BrowseApi.topStreams(null, null)
+            val page = BrowseApi.topStreams(TopLanguage.resolved(), null)
             if (page != null) {
                 top.clear()
                 top.addAll(page.items.distinctBy { it.login })
@@ -99,7 +104,7 @@ class HomeModel(private val scope: CoroutineScope) {
         if (loadingMore) return
         loadingMore = true
         scope.launch {
-            val page = BrowseApi.topStreams(null, cursor)
+            val page = BrowseApi.topStreams(TopLanguage.resolved(), cursor)
             if (page != null) {
                 val seen = top.map { it.login }.toHashSet()
                 top.addAll(page.items.filter { it.login !in seen }.distinctBy { it.login })
@@ -113,7 +118,7 @@ class HomeModel(private val scope: CoroutineScope) {
 
 @Composable
 fun HomeScreen(model: HomeModel, nav: Navigator) {
-    LaunchedEffect(AppState.user?.id) { model.load() }
+    LaunchedEffect(AppState.user?.id, com.mxfia19.twitchunblock.core.Features.topLang) { model.load() }
     val play = { s: TwitchStream -> nav.play(PlayRequest.Live(s.login)) }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(300.dp),
@@ -147,7 +152,7 @@ fun HomeScreen(model: HomeModel, nav: Navigator) {
                 MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.load(force = true) }
             }
             else -> {
-                items(model.top, key = { "t-" + it.login }) { s -> StreamCard(s) { play(s) } }
+                items(model.visibleTop, key = { "t-" + it.login }) { s -> HideableStreamCard(s) { play(s) } }
                 if (model.hasMore) {
                     item(span = { GridItemSpan(maxLineSpan) }) { MoreButton(model.loadingMore) { model.more() } }
                 }

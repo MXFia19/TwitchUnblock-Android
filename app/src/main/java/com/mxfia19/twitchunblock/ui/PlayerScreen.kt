@@ -70,8 +70,14 @@ import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.Quality
 import com.mxfia19.twitchunblock.download.Downloads
+import com.mxfia19.twitchunblock.core.Features
+import com.mxfia19.twitchunblock.events.LiveEvents
+import com.mxfia19.twitchunblock.events.PinnedWatcher
+import com.mxfia19.twitchunblock.events.RaidWatcher
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.player.PlaybackSession
+import com.mxfia19.twitchunblock.points.ChannelPoints
+import com.mxfia19.twitchunblock.web.WebSession
 import kotlinx.coroutines.delay
 
 /** Image du lecteur (PlayerView de Media3 et ses commandes). */
@@ -132,6 +138,7 @@ fun sourceName(id: String): String = when (id) {
     "al" -> "Proxy (Albanie)"
     "twitch" -> "Twitch"
     "worker" -> "Worker"
+    "account" -> AppState.t("source_account")
     else -> id
 }
 
@@ -221,6 +228,43 @@ fun PlayerScreen(request: PlayRequest, nav: Navigator) {
     }
     val vodChat = rememberVodChat(session, AppState.showChat)
     var chatInLandscape by remember { mutableStateOf(false) }
+
+    // Direct : points de chaîne, événements, message épinglé, raids.
+    val points = remember { ChannelPoints(scope) }
+    val events = remember { LiveEvents(scope) }
+    val pinned = remember { PinnedWatcher(scope) }
+    val raids = remember { RaidWatcher(scope) }
+    var rewardsOpen by remember { mutableStateOf(false) }
+    val liveLogin = if (session.isLive && session.state is PlaybackSession.State.Ready) session.channelLogin else null
+    val liveId = if (liveLogin != null) session.channelId else null
+    DisposableEffect(liveLogin, liveId, WebSession.generation) {
+        if (liveLogin != null && liveId != null) {
+            points.load(liveLogin, liveId)
+            events.start(liveLogin, liveId)
+            pinned.start(liveId)
+            if (Features.enableRaids.value) raids.start(liveId)
+        }
+        onDispose {
+            points.stop()
+            events.stop()
+            pinned.stop()
+            raids.stop()
+        }
+    }
+    // Raid parti : on suit la chaîne raidée.
+    LaunchedEffect(raids.joinTarget) {
+        val target = raids.joinTarget ?: return@LaunchedEffect
+        raids.joinTarget = null
+        if (Features.enableRaids.value) nav.play(PlayRequest.Live(target))
+    }
+    val extras: @Composable () -> Unit = {
+        if (liveLogin != null) {
+            LiveExtras(points, events, pinned, raids,
+                       onJoinRaid = { nav.play(PlayRequest.Live(it)) },
+                       onOpenRewards = { rewardsOpen = true },
+                       onWebLogin = { nav.push(Screen.WebLogin) })
+        }
+    }
     val toggleFullscreen = {
         activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                                          else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
@@ -244,8 +288,18 @@ fun PlayerScreen(request: PlayRequest, nav: Navigator) {
                 }
             }
             if (chatInLandscape) {
-                if (chat != null) ChatPanel(chat, Modifier.width(330.dp).fillMaxHeight().imePadding()) { nav.push(Screen.Login) }
-                else if (vodChat != null) VodChatList(vodChat, Modifier.width(330.dp).fillMaxHeight())
+                if (chat != null) {
+                    Column(Modifier.width(330.dp).fillMaxHeight().imePadding()) {
+                        if (rewardsOpen) {
+                            RewardsPanel(points, Modifier.weight(1f), onClose = { rewardsOpen = false }) { nav.push(Screen.WebLogin) }
+                        } else {
+                            extras()
+                            ChatPanel(chat, Modifier.weight(1f)) { nav.push(Screen.Login) }
+                        }
+                    }
+                } else if (vodChat != null) {
+                    VodChatList(vodChat, Modifier.width(330.dp).fillMaxHeight())
+                }
             }
         }
         return
@@ -258,10 +312,19 @@ fun PlayerScreen(request: PlayRequest, nav: Navigator) {
         }
         InfoBar(session, nav)
         when {
-            chat != null && AppState.showChat ->
+            rewardsOpen && liveLogin != null ->
+                RewardsPanel(points, Modifier.weight(1f).navigationBarsPadding(), onClose = { rewardsOpen = false }) {
+                    nav.push(Screen.WebLogin)
+                }
+            chat != null && AppState.showChat -> {
+                extras()
                 ChatPanel(chat, Modifier.weight(1f).navigationBarsPadding().imePadding()) { nav.push(Screen.Login) }
+            }
             vodChat != null -> VodChatList(vodChat, Modifier.weight(1f).navigationBarsPadding())
-            else -> Spacer(Modifier.weight(1f))
+            else -> {
+                extras()
+                Spacer(Modifier.weight(1f))
+            }
         }
     }
 }
@@ -320,7 +383,7 @@ private fun InfoBar(session: PlaybackSession, nav: Navigator) {
 private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
-    var page by remember { mutableStateOf(0) }   // 0 : menu, 1 : minuterie, 2 : qualité du téléchargement
+    var page by remember { mutableStateOf(0) }   // 0 : menu, 1 : minuterie, 2 : qualité du téléchargement, 3 : chapitres
     var pendingDownload by remember { mutableStateOf<String?>(null) }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         pendingDownload?.let { startDownload(context, session, it) }
@@ -339,6 +402,14 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                     if (session.sleepAt != null) {
                         DropdownMenuItem(text = { Text(AppState.t("sleep_cancel"), color = TU.danger) },
                                          onClick = { open = false; session.setSleepTimer(null) })
+                    }
+                }
+                3 -> {
+                    for (c in session.chapters) {
+                        DropdownMenuItem(
+                            text = { Text(Format.clock(c.start.toLong()) + "  " + c.title.ifEmpty { "—" }) },
+                            onClick = { open = false; session.seekTo((c.start * 1000).toLong()) },
+                        )
                     }
                 }
                 2 -> {
@@ -367,6 +438,24 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                             text = { Text(if (saved != null) AppState.t("dl_section") + "  ✓" else AppState.t("dl_download")) },
                             onClick = { if (saved != null) { open = false; nav.tab(Screen.Library) } else page = 2 },
                         )
+                    }
+                    if (session.chapters.isNotEmpty()) {
+                        DropdownMenuItem(text = { Text(AppState.t("chapters") + " (${session.chapters.size})") }, onClick = { page = 3 })
+                    }
+                    val dvr = session.dvrVideoId
+                    if (session.isLive && dvr != null) {
+                        DropdownMenuItem(text = { Text(AppState.t("rewind")) }, onClick = {
+                            open = false
+                            session.open(PlayRequest.Vod(dvr, session.title, session.channelLogin, rewind = true))
+                        })
+                    }
+                    val rewound = session.request as? PlayRequest.Vod
+                    val back = rewound?.channel
+                    if (rewound != null && rewound.rewind && back != null) {
+                        DropdownMenuItem(text = { Text(AppState.t("rewind_back")) }, onClick = {
+                            open = false
+                            session.open(PlayRequest.Live(back))
+                        })
                     }
                     if (session.isLive) {
                         HorizontalDivider()
