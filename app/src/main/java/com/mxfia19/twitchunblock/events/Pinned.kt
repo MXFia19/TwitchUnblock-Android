@@ -75,12 +75,12 @@ class PinnedWatcher(private val scope: CoroutineScope) {
         val text = content?.str("text")
         val id = node?.str("id")
         if (node == null || id == null || text == null || text.isEmpty()) {
-            setPinned(null)
+            showPinned(null)
             return
         }
         val endsAt = Format.parseDate(node.str("endsAt"))
         if (endsAt != null && endsAt < System.currentTimeMillis()) {
-            setPinned(null)
+            showPinned(null)
             return
         }
         if (pinned?.id == id && pinned?.endsAt == endsAt) return
@@ -111,11 +111,11 @@ class PinnedWatcher(private val scope: CoroutineScope) {
             color = ChatColors.parse(sender?.str("chatColor"), senderLogin), badges = badges, tokens = tokens,
             time = startsAt ?: System.currentTimeMillis(),
         )
-        setPinned(PinnedChat(id, message, text, pinnedBy, startsAt, endsAt))
+        showPinned(PinnedChat(id, message, text, pinnedBy, startsAt, endsAt))
         Logger.success("PINNED", "Message épinglé", text)
     }
 
-    private fun setPinned(p: PinnedChat?) {
+    private fun showPinned(p: PinnedChat?) {
         pinned = p
         expiry?.cancel()
         val ends = p?.endsAt ?: return

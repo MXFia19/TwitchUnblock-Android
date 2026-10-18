@@ -122,6 +122,7 @@ class LiveEvents(private val scope: CoroutineScope) {
         this.login = login.lowercase()
         this.channelId = channelId
         tokenRefused = false
+        cachedViewer = null
         jobs.add(scope.launch {
             while (isActive) {
                 fetchStreak()
