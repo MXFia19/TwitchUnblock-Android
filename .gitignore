@@ -1,0 +1,15 @@
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+.DS_Store
+captures/
+.externalNativeBuild/
+.cxx/
+# Clé de signature : jamais dans le dépôt (secret GitHub, voir le README).
+*.jks
+*.keystore
+# Icônes et bannière TV créées par la CI depuis assets/icon.png.
+app/src/main/res/mipmap-*/ic_launcher.png
+app/src/main/res/drawable-xhdpi/tv_banner.png

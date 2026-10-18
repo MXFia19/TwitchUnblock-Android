@@ -1,0 +1,116 @@
+name: Build APK
+
+on:
+  push:
+    branches:
+      - main
+      # Branche de test : app « TU Test » (identifiant à part, installable à
+      # côté de l'autre), publiée en pré-version.
+      - test-17d298
+    paths-ignore:
+      - 'README.md'
+      - 'LICENSE'
+  workflow_dispatch:
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
+# Un build à la fois par branche.
+concurrency:
+  group: android-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.9'
+
+      - name: Version and channel
+        id: vars
+        run: |
+          base=$(tr -d '[:space:]' < VERSION)
+          echo "version=$base.${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          echo "code=${{ github.run_number }}" >> "$GITHUB_OUTPUT"
+          if [ "${{ github.ref_name }}" = "main" ]; then
+            echo "channel=release" >> "$GITHUB_OUTPUT"
+          else
+            echo "channel=test" >> "$GITHUB_OUTPUT"
+          fi
+
+      # Icônes du lanceur et bannière Android TV, depuis assets/icon.png.
+      - name: Icons and TV banner
+        run: |
+          command -v convert >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick; }
+          for d in mdpi:48 hdpi:72 xhdpi:96 xxhdpi:144 xxxhdpi:192; do
+            dir="app/src/main/res/mipmap-${d%%:*}"
+            size="${d##*:}"
+            mkdir -p "$dir"
+            convert assets/icon.png -resize "${size}x${size}" "$dir/ic_launcher.png"
+          done
+          mkdir -p app/src/main/res/drawable-xhdpi
+          convert -size 320x180 xc:'#140419' \( assets/icon.png -resize 150x150 \) -gravity center -composite \
+            app/src/main/res/drawable-xhdpi/tv_banner.png
+
+      # Clé de signature (secrets du dépôt, voir le README). Sans elle : clé
+      # de débogage, qui change à chaque build.
+      - name: Signing key
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/release.jks"
+            echo "ANDROID_KEYSTORE_PATH=$RUNNER_TEMP/release.jks" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Pas de clé de signature (secret ANDROID_KEYSTORE_B64) : APK signé avec une clé de débogage."
+          fi
+
+      - name: Build APK
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: >
+          gradle :app:assembleRelease --stacktrace
+          -Pchannel=${{ steps.vars.outputs.channel }}
+          -PappVersionName=${{ steps.vars.outputs.version }}
+          -PappVersionCode=${{ steps.vars.outputs.code }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: apk-${{ steps.vars.outputs.channel }}-${{ steps.vars.outputs.version }}
+          path: app/build/outputs/apk/release/*.apk
+
+      # Version publiée : « vX.Y.N » (main) ou pré-version « test-N » (TU Test).
+      # Notes : lignes « Changelog: » du message du commit.
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          apk=$(ls app/build/outputs/apk/release/*.apk | head -1)
+          version="${{ steps.vars.outputs.version }}"
+          notes=$(git log -1 --format=%B | grep '^Changelog:' | sed 's/^Changelog: */- /' || true)
+          [ -n "$notes" ] || notes="- Build ${GITHUB_SHA::7}"
+          if [ "${{ steps.vars.outputs.channel }}" = "test" ]; then
+            name="TwitchUnblock-Test-$version.apk"
+            cp "$apk" "$RUNNER_TEMP/$name"
+            gh release create "test-${{ github.run_number }}" "$RUNNER_TEMP/$name" \
+              --title "TU Test $version" --notes "$notes" --prerelease
+          else
+            name="TwitchUnblock-$version.apk"
+            cp "$apk" "$RUNNER_TEMP/$name"
+            gh release create "v$version" "$RUNNER_TEMP/$name" \
+              --title "TwitchUnblock $version" --notes "$notes" --latest
+          fi
