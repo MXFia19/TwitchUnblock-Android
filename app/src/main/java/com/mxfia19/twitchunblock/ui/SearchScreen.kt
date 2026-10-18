@@ -82,8 +82,8 @@ class SearchModel(private val scope: CoroutineScope) {
             delay(350)
             val users = BrowseApi.searchUsers(q)
             val cats = BrowseApi.searchCategories(q) ?: emptyList()
-            channels = users
-            categories = cats
+            channels = users.distinctBy { it.login }
+            categories = cats.distinctBy { it.id }
             searching = false
         }
     }
