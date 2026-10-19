@@ -397,13 +397,16 @@ object Ntfy {
     }
 
     /** sync() dès que le réseau le permet, par WorkManager : depuis l'action
-     *  d'une notification, l'app peut être fermée. Une seule à la fois (la
-     *  dernière demandée remplace celle en attente). */
+     *  d'une notification, l'app peut être fermée. Une seule à la fois, à la
+     *  suite de celle en cours : remplacée (REPLACE), un envoi déjà parti
+     *  pouvait arriver au Worker après le suivant, et l'ancienne liste y
+     *  restait jusqu'au renvoi du lendemain (même hachage ici). Les suivantes
+     *  n'envoient rien si la liste n'a pas changé. */
     fun syncSoon(context: Context) {
         val request = OneTimeWorkRequestBuilder<NtfySyncWorker>()
             .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
             .build()
-        WorkManager.getInstance(context).enqueueUniqueWork("ntfy-sync", ExistingWorkPolicy.REPLACE, request)
+        WorkManager.getInstance(context).enqueueUniqueWork("ntfy-sync", ExistingWorkPolicy.APPEND_OR_REPLACE, request)
     }
 
     /** Chaînes suivies (compte et appareil) renvoyées au Worker quand elles

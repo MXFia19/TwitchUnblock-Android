@@ -22,6 +22,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -59,8 +60,11 @@ import com.mxfia19.twitchunblock.core.Format
 fun UserCard(login: String, client: ChatClient, onMention: ((String) -> Unit)?, onOpenChannel: ((String) -> Unit)?,
              onClose: () -> Unit) {
     val who = login.lowercase()
-    // Ses messages parmi les 300 derniers du chat, dans l'ordre du chat.
-    val recent = client.messages.filter { it.login.equals(who, ignoreCase = true) && it.tokens.isNotEmpty() }.takeLast(20)
+    // Ses messages parmi les 300 derniers du chat, dans l'ordre du chat. Relus à
+    // chaque message, mais la fiche n'est recomposée que s'ils changent (gros chat).
+    val recent by remember(who, client) {
+        derivedStateOf { client.messages.filter { it.login.equals(who, ignoreCase = true) && it.tokens.isNotEmpty() }.takeLast(20) }
+    }
     val last = recent.lastOrNull()
     var profile by remember(who) { mutableStateOf<ChatProfiles.Profile?>(null) }
     var followedAt by remember(who) { mutableStateOf<Long?>(null) }
@@ -233,10 +237,13 @@ fun chatCompletions(word: String, client: ChatClient): List<ChatCompletion> {
     return emptyList()
 }
 
-/** Le mot en cours remplacé par la proposition choisie, suivie d'une espace. */
+/** Le mot en cours remplacé par la proposition choisie, suivie d'une espace.
+ *  Curseur au milieu d'un mot : sa fin est remplacée aussi (sinon « @pse|udo »
+ *  donnait « @Pseudo udo »). */
 fun completeWord(v: TextFieldValue, text: String): TextFieldValue {
     val (start, _) = currentWord(v) ?: return v
-    val end = v.selection.end.coerceIn(0, v.text.length)
+    val cursor = v.selection.end.coerceIn(0, v.text.length)
+    val end = v.text.indexOf(' ', cursor).let { if (it < 0) v.text.length else it }
     val after = v.text.substring(end)
     val spaced = after.startsWith(" ")
     val insert = if (spaced) text else "$text "
