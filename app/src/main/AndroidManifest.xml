@@ -16,6 +16,8 @@
     <uses-feature android:name="android.software.leanback" android:required="false" />
     <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
 
+    <!-- Sauvegarde Android et transfert d'appareil : ni les préférences
+         (jetons du compte), ni les données de la WebView (cookies de twitch.tv). -->
     <application
         android:name=".App"
         android:label="@string/app_name"
@@ -23,6 +25,8 @@
         android:roundIcon="@mipmap/ic_launcher"
         android:banner="@drawable/tv_banner"
         android:theme="@style/Theme.TwitchUnblock"
+        android:fullBackupContent="@xml/backup_rules"
+        android:dataExtractionRules="@xml/data_extraction_rules"
         android:supportsRtl="true">
 
         <activity

@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 12 et plus : sauvegarde dans le cloud et transfert d'appareil,
+     sans les préférences (jetons du compte) ni les données de la WebView
+     (cookies de twitch.tv). -->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="sharedpref" path="tu_prefs.xml" />
+        <exclude domain="root" path="app_webview" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="sharedpref" path="tu_prefs.xml" />
+        <exclude domain="root" path="app_webview" />
+    </device-transfer>
+</data-extraction-rules>

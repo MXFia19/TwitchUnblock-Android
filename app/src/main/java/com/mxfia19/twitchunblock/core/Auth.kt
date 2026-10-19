@@ -1,6 +1,10 @@
 package com.mxfia19.twitchunblock.core
 
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Compte Twitch par code (Device Code Flow), sur le téléphone comme sur la
@@ -65,23 +69,44 @@ object Auth {
         return false
     }
 
-    /** Nouveau jeton depuis le jeton de renouvellement. */
-    suspend fun renew(): Renewal {
-        val refresh = AppState.refreshToken ?: return Renewal.REFUSED
-        val r = Http.postForm("https://id.twitch.tv/oauth2/token", mapOf(
-            "client_id" to Config.HELIX_CLIENT_ID,
-            "grant_type" to "refresh_token",
-            "refresh_token" to refresh,
-        )) ?: return Renewal.UNREACHABLE
-        val j = parseJson(r.body)
-        val access = j?.str("access_token")
-        if (access == null) {
-            // Refus explicite seulement : une panne de Twitch n'efface rien.
-            return if (r.code in 400..499) Renewal.REFUSED else Renewal.UNREACHABLE
+    /** Un seul renouvellement à la fois : Twitch n'accepte qu'une fois un
+     *  jeton de renouvellement (client public), un second appel avec le même
+     *  était refusé et déconnectait le compte. */
+    private val renewal = Mutex()
+
+    /** Nouveau jeton depuis le jeton de renouvellement. `stale` : le jeton
+     *  refusé ; déjà remplacé pendant l'attente du verrou, rien à refaire.
+     *  Le compte n'est retiré que si Twitch refuse (400, 401), jamais sur
+     *  une panne (réseau, 5xx). Mené à terme même si l'appelant est annulé :
+     *  le jeton consommé serait perdu. */
+    suspend fun renew(stale: String): Renewal = withContext(NonCancellable) {
+        renewal.withLock {
+            val current = AppState.token ?: return@withLock Renewal.REFUSED
+            if (current != stale) return@withLock Renewal.RENEWED
+            val refresh = AppState.refreshToken
+            if (refresh == null) {
+                Logger.warn("AUTH", "Session expirée", "pas de jeton de renouvellement")
+                AppState.clearAuth()
+                return@withLock Renewal.REFUSED
+            }
+            val r = Http.postForm("https://id.twitch.tv/oauth2/token", mapOf(
+                "client_id" to Config.HELIX_CLIENT_ID,
+                "grant_type" to "refresh_token",
+                "refresh_token" to refresh,
+            )) ?: return@withLock Renewal.UNREACHABLE
+            val j = parseJson(r.body)
+            val access = j?.str("access_token")
+            if (access == null) {
+                // Refus explicite seulement : une panne de Twitch n'efface rien.
+                if (r.code != 400 && r.code != 401) return@withLock Renewal.UNREACHABLE
+                Logger.warn("AUTH", "Session expirée", "renouvellement refusé (HTTP ${r.code}), reconnexion nécessaire")
+                AppState.clearAuth()
+                return@withLock Renewal.REFUSED
+            }
+            AppState.saveTokens(access, j?.str("refresh_token"))
+            Logger.success("AUTH", "Jeton renouvelé")
+            Renewal.RENEWED
         }
-        AppState.saveTokens(access, j.str("refresh_token"))
-        Logger.success("AUTH", "Jeton renouvelé")
-        return Renewal.RENEWED
     }
 
     /** Au lancement : jeton vérifié, renouvelé s'il a expiré, compte relu. */
@@ -89,17 +114,8 @@ object Auth {
         val token = AppState.token ?: return
         val r = Http.get("https://id.twitch.tv/oauth2/validate", mapOf("Authorization" to "OAuth $token"), timeout = 10)
             ?: return   // pas de réseau : la session reste
-        if (r.code == 401) {
-            when (renew()) {
-                Renewal.RENEWED -> {}
-                Renewal.REFUSED -> {
-                    Logger.warn("AUTH", "Session expirée", "reconnexion nécessaire")
-                    AppState.clearAuth()
-                    return
-                }
-                Renewal.UNREACHABLE -> return
-            }
-        }
+        // Refus : compte déjà retiré par renew ; panne : la session reste.
+        if (r.code == 401 && renew(token) != Renewal.RENEWED) return
         loadUser()
     }
 
@@ -117,14 +133,17 @@ object Auth {
     }
 
     /** Requête Helix avec le jeton du compte, renouvelé une fois s'il est
-     *  refusé (401). null : pas de compte, ou pas de réponse. */
+     *  refusé (401). null : pas de compte, ou pas de réponse (renouvellement
+     *  injoignable compris : une panne ne passe pas pour un refus). */
     suspend fun helix(url: String): HttpResult? {
         val token = AppState.token ?: return null
         val r = Http.get(url, helixHeaders(token)) ?: return null
         if (r.code != 401) return r
-        if (renew() != Renewal.RENEWED) return r
-        val fresh = AppState.token ?: return r
-        return Http.get(url, helixHeaders(fresh))
+        return when (renew(token)) {
+            Renewal.RENEWED -> AppState.token?.let { Http.get(url, helixHeaders(it)) }
+            Renewal.REFUSED -> r
+            Renewal.UNREACHABLE -> null
+        }
     }
 
     fun helixHeaders(token: String) = mapOf("Authorization" to "Bearer $token", "Client-Id" to Config.HELIX_CLIENT_ID)

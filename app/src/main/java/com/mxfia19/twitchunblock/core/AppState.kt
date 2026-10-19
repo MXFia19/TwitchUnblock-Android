@@ -71,8 +71,11 @@ object AppState {
         backgroundPlay = sp.getBoolean("background_play", true)
         autoPip = sp.getBoolean("auto_pip", true)
         customWorker = sp.getString("custom_worker", null)?.takeIf { it.isNotBlank() }
-        token = sp.getString("token", null)
-        user = parseJson(sp.getString("user", null))?.let {
+        // Jetons chiffrés (Keystore) ; ceux des versions d'avant le sont ici.
+        Secrets.migrate(sp, "token", "refresh_token", "web_token")
+        token = Secrets.read(sp, "token")
+        // Jeton illisible (clé perdue) : compte absent, à reconnecter.
+        user = if (token == null) null else parseJson(sp.getString("user", null))?.let {
             TwitchUser(it.str("id") ?: "", it.str("login") ?: "", it.str("name") ?: "", it.str("avatar") ?: "")
         }
         localFollows.clear()
@@ -106,13 +109,13 @@ object AppState {
     val lookupBases: List<String>
         get() = (listOfNotNull(customWorker) + Config.API_URL + Config.API_FALLBACKS).distinct()
 
-    // ── Compte ──
-    val refreshToken: String? get() = sp.getString("refresh_token", null)
+    // ── Compte ── (jetons chiffrés : Secrets)
+    val refreshToken: String? get() = Secrets.read(sp, "refresh_token")
 
     fun saveTokens(access: String, refresh: String?) {
         token = access
-        val editor = sp.edit().putString("token", access)
-        if (refresh != null) editor.putString("refresh_token", refresh)
+        val editor = Secrets.put(sp.edit(), "token", access)
+        if (refresh != null) Secrets.put(editor, "refresh_token", refresh)
         editor.apply()
     }
 

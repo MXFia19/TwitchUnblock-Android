@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Logger
+import com.mxfia19.twitchunblock.core.Secrets
 
 /**
  * Session web de Twitch (cookie « auth-token » de twitch.tv, pris dans une
@@ -40,7 +41,8 @@ object WebSession {
         private set
 
     fun init() {
-        token = AppState.prefs.getString("web_token", null)?.takeIf { it.length >= 20 }
+        // Chiffré (Secrets), comme les jetons du compte.
+        token = Secrets.read(AppState.prefs, "web_token")?.takeIf { it.length >= 20 }
         login = AppState.prefs.getString("web_login", null)
         checkAccount()
     }
@@ -62,7 +64,7 @@ object WebSession {
         login = newLogin?.lowercase()
         expired = false
         mismatch = null
-        AppState.prefs.edit().putString("web_token", newToken).putString("web_login", login).apply()
+        Secrets.put(AppState.prefs.edit(), "web_token", newToken).putString("web_login", login).apply()
         if (changed) {
             generation++
             Integrity.invalidate()

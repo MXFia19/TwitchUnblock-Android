@@ -84,8 +84,9 @@ class HomeModel(private val scope: CoroutineScope) {
             try {
                 BrowseApi.followedStreams()?.let { return withLocal(it) }
             } catch (e: AuthExpiredException) {
-                Logger.warn("HOME", "Session Twitch expirée", "déconnexion")
-                AppState.clearAuth()
+                // Compte retiré par Auth.renew seulement si Twitch a refusé le
+                // renouvellement : un 401 de plus ne déconnecte pas.
+                Logger.warn("HOME", "Session Twitch refusée")
             }
         }
         return withLocal(emptyList())

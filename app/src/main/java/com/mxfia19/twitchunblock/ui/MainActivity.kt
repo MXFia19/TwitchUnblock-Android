@@ -65,9 +65,11 @@ class MainActivity : ComponentActivity() {
     }
 
     /** À chaque retour dans l'app : mise à jour, comptage, annonce,
-     *  réponses aux signalements, abonnement ntfy. */
+     *  réponses aux signalements, abonnement ntfy ; au premier, les
+     *  téléchargements interrompus reprennent. */
     override fun onStart() {
         super.onStart()
+        com.mxfia19.twitchunblock.download.Downloads.resumePending(this)
         lifecycleScope.launch {
             Updates.check()
             News.refresh()

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Sauvegarde Android jusqu'à Android 11 : sans les préférences (jetons du
+     compte) ni les données de la WebView (cookies de twitch.tv). -->
+<full-backup-content>
+    <exclude domain="sharedpref" path="tu_prefs.xml" />
+    <exclude domain="root" path="app_webview" />
+</full-backup-content>

@@ -28,7 +28,7 @@ class VodDownloadService : DownloadService(
     override fun getDownloadManager(): DownloadManager = Downloads.manager
 
     // Pas de planificateur : les téléchargements interrompus reprennent à la
-    // prochaine ouverture de l'app.
+    // prochaine ouverture de l'app (Downloads.resumePending).
     override fun getScheduler(): Scheduler? = null
 
     override fun getForegroundNotification(downloads: MutableList<Download>, notMetRequirements: Int): Notification {

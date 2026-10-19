@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mxfia19.twitchunblock.core.AppState
+import com.mxfia19.twitchunblock.core.Auth
 import com.mxfia19.twitchunblock.core.Http
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.arr
@@ -45,6 +46,12 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     private var myColor: Int? = null
     private var myBadges: List<String> = emptyList()
     private var myName: String? = null
+    /** Jeton de la connexion en cours (null : anonyme). */
+    private var usedToken: String? = null
+    /** Jeton refusé par l'IRC : renouvelé une fois, sinon chat anonyme. */
+    private var renewing = false
+    private var renewTried = false
+    private var anonymous = false
 
     fun start(channelIdHint: String?) {
         channelId = channelIdHint
@@ -76,8 +83,9 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     private fun connect() {
         if (stopped) return
         val gen = ++generation
-        val token = AppState.token
+        val token = if (anonymous) null else AppState.token
         val login = AppState.user?.login
+        usedToken = token
         val request = Request.Builder().url("wss://irc-ws.chat.twitch.tv:443").build()
         socket = Http.client.newWebSocket(request, object : WebSocketListener() {
             override fun onOpen(webSocket: WebSocket, response: Response) {
@@ -116,7 +124,8 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     private fun dropped(why: String) {
         connected = false
         canSend = false
-        if (stopped) return
+        // Jeton refusé en cours de renouvellement : authRefused reconnecte.
+        if (stopped || renewing) return
         attempts++
         val wait = minOf(30_000L, 1000L shl minOf(attempts - 1, 5))
         Logger.warn("CHAT", "Connexion perdue", "$why · nouvel essai dans ${wait / 1000} s")
@@ -130,6 +139,27 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     private fun reconnectNow() {
         socket?.close(1000, null)
         connect()
+    }
+
+    /** Jeton refusé par l'IRC (expiré) : sinon chaque reconnexion le
+     *  renvoyait, chat vide sans fin. Renouvelé une fois puis reconnexion ;
+     *  à défaut, le chat continue en anonyme (lecture seule). */
+    private fun authRefused() {
+        val refused = usedToken ?: return
+        if (renewing) return
+        renewing = true
+        reconnectJob?.cancel()
+        scope.launch {
+            val renewed = !renewTried && Auth.renew(refused) == Auth.Renewal.RENEWED
+            renewTried = true
+            renewing = false
+            if (stopped) return@launch
+            if (!renewed) {
+                anonymous = true
+                Logger.warn("CHAT", "Jeton refusé", "#$channel en anonyme")
+            }
+            reconnectNow()
+        }
     }
 
     private fun handle(ws: WebSocket, text: String) {
@@ -158,10 +188,12 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
                     }
                 }
                 "NOTICE" -> line.trailing?.let { msg ->
-                    // Connexion refusée (jeton expiré…) : le chat reste lisible en anonyme.
+                    // Connexion refusée (jeton expiré…) : jeton renouvelé, sinon
+                    // le chat reste lisible en anonyme.
                     if (msg.contains("Login authentication failed") || msg.contains("Improperly formatted auth")) {
                         Logger.warn("CHAT", "Authentification refusée", msg)
                         canSend = false
+                        authRefused()
                     }
                     add(system(msg))
                 }

@@ -14,6 +14,7 @@ import androidx.media3.exoplayer.offline.Download
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
+import com.mxfia19.twitchunblock.chat.SavedChat
 import com.mxfia19.twitchunblock.chat.VodChat
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.int
@@ -26,6 +27,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -88,15 +90,39 @@ object Downloads {
             }
         })
         refresh()
-        for (i in items) if (chatFile(i.vodId).exists()) chatCounts[i.vodId] = chatCount(i.vodId)
+        // Nombre de messages des chats gardés : lu dans leur en-tête, hors du
+        // fil principal (avant : chaque fichier relu en entier au lancement).
+        val ids = items.map { it.vodId }
+        scope.launch {
+            val counts = withContext(Dispatchers.IO) {
+                ids.mapNotNull { id -> SavedChat.count(chatFile(id))?.let { id to it } }
+            }
+            for ((id, n) in counts) if (chatCounts[id] == null) chatCounts[id] = n
+        }
     }
 
     fun chatFile(vodId: String) = File(appContext.filesDir, "vodchat/$vodId.json")
 
-    private fun chatCount(vodId: String): Int =
-        parseJson(chatFile(vodId).takeIf { it.exists() }?.readText())?.optJSONArray("comments")?.length() ?: 0
-
     fun find(vodId: String): Item? = items.firstOrNull { it.vodId == vodId }
+
+    /** Le gestionnaire de Media3 démarre en pause et seul son service le
+     *  relance (pas de planificateur) : après un redémarrage ou un arrêt
+     *  forcé, les téléchargements restaient « en préparation ». Relancés une
+     *  fois par lancement de l'app, s'il en reste à finir. */
+    private var resumedAtLaunch = false
+
+    fun resumePending(context: Context) {
+        if (resumedAtLaunch) return
+        if (items.none { !it.completed && !it.failed }) return
+        try {
+            resumeAll(context)
+            resumedAtLaunch = true
+            Logger.info("DOWNLOAD", "Téléchargements repris")
+        } catch (e: Exception) {
+            // Service refusé (app pas encore au premier plan) : au prochain retour.
+            Logger.warn("DOWNLOAD", "Reprise des téléchargements impossible", e.message)
+        }
+    }
 
     /** Relit l'état des téléchargements ; suit leur progression chaque seconde. */
     fun refresh() {
@@ -152,7 +178,8 @@ object Downloads {
             .build()
         DownloadService.sendAddDownload(context, VodDownloadService::class.java, request, false)
         Logger.info("DOWNLOAD", "Téléchargement lancé", "$vodId · $quality")
-        if (!chatFile(vodId).exists()) {
+        // Un seul enregistrement du chat à la fois (il s'écrit au fil des pages).
+        if (!chatFile(vodId).exists() && chatCounts[vodId] != -1) {
             chatCounts[vodId] = -1
             scope.launch {
                 val n = VodChat.archive(vodId, lengthSeconds.toDouble(), chatFile(vodId))

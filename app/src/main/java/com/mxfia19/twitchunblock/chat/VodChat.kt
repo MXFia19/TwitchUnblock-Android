@@ -17,8 +17,10 @@ import com.mxfia19.twitchunblock.core.parseJson
 import com.mxfia19.twitchunblock.core.parseJsonArray
 import com.mxfia19.twitchunblock.core.str
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -49,21 +51,21 @@ class VodChat(private val videoId: String, private val scope: CoroutineScope, pr
     private var generation = 0
     private var retryAt = 0L
     private var failures = 0
-    /** Hors ligne : tous les commentaires, triés, et le prochain à faire passer. */
-    private var offline: List<Pair<Double, ChatMessage>>? = null
-    private var offlineNext = 0
+    /** Hors ligne : le chat gardé, lu par fenêtres de temps (comme les pages
+     *  en ligne), hors du fil principal. */
+    private var saved: SavedChat.Index? = null
 
     fun start() {
         scope.launch {
             val file = offlineFile
-            if (file != null && file.exists()) {
-                val saved = parseJson(file.readText())
-                channelId = saved?.str("channelId")
+            val index = if (file != null && file.exists()) withContext(Dispatchers.IO) { SavedChat.open(file) } else null
+            if (index != null) {
+                saved = index
+                channelId = index.channelId
                 channelId?.let { Emotes.loadChannel(it); Badges.loadChannel(it) }
                 Emotes.loadGlobal()
                 Badges.loadGlobal()
-                offline = saved?.arr("comments")?.objects()?.mapNotNull { build(it) }?.sortedBy { it.first } ?: emptyList()
-                Logger.info("VODCHAT", "Chat hors ligne", "${offline?.size ?: 0} messages")
+                Logger.info("VODCHAT", "Chat hors ligne", "${index.offsets.size} messages")
                 ready = true
                 return@launch
             }
@@ -78,11 +80,6 @@ class VodChat(private val videoId: String, private val scope: CoroutineScope, pr
     /** Position de lecture (s), à appeler régulièrement. */
     fun update(position: Double) {
         if (!ready || position < 0 || position.isNaN()) return
-        val all = offline
-        if (all != null) {
-            releaseOffline(all, position)
-            return
-        }
         // Premier appel, retour en arrière, ou grand saut : on recharge la fenêtre.
         if (lastOffset < 0 || position < lastOffset - 2 || position > lastOffset + 30) {
             lastOffset = position
@@ -118,7 +115,9 @@ class VodChat(private val videoId: String, private val scope: CoroutineScope, pr
         val gen = generation
         fetching = true
         if (first) loading = true
-        val page = page(videoId, offset)
+        val local = saved
+        val page = if (local != null) withContext(Dispatchers.IO) { SavedChat.window(local, offset.toDouble()) }
+                   else page(videoId, offset)
         if (gen != generation) return
         fetching = false
         loading = false
@@ -156,22 +155,6 @@ class VodChat(private val videoId: String, private val scope: CoroutineScope, pr
         var n = 0
         while (buffer.isNotEmpty() && buffer[0].first <= upTo) {
             messages.add(buffer.removeAt(0).second)
-            n++
-        }
-        if (n > 0) trim()
-    }
-
-    private fun releaseOffline(all: List<Pair<Double, ChatMessage>>, position: Double) {
-        // Retour en arrière ou grand saut : la liste repart de cet instant.
-        if (lastOffset < 0 || position < lastOffset - 2 || position > lastOffset + 30) {
-            messages.clear()
-            offlineNext = all.indexOfFirst { it.first > position - 30 }.let { if (it < 0) all.size else it }
-        }
-        lastOffset = position
-        var n = 0
-        while (offlineNext < all.size && all[offlineNext].first <= position) {
-            messages.add(all[offlineNext].second)
-            offlineNext++
             n++
         }
         if (n > 0) trim()
@@ -266,44 +249,61 @@ class VodChat(private val videoId: String, private val scope: CoroutineScope, pr
                 ?.obj("video")?.obj("owner")?.str("id")
 
         /** Tout le chat d'une VOD, gardé dans `file` pour le rejouer hors
-         *  ligne (téléchargements). Nombre de messages, ou null en échec. */
-        suspend fun archive(videoId: String, lengthSeconds: Double, file: File): Int? {
+         *  ligne (téléchargements). Écrit au fil des pages, hors du fil
+         *  principal (SavedChat) : tenu en mémoire d'un bloc, un gros chat
+         *  faisait planter l'app. Nombre de messages, ou null en échec. */
+        suspend fun archive(videoId: String, lengthSeconds: Double, file: File): Int? = withContext(Dispatchers.IO) {
             val channelId = owner(videoId)
-            val out = JSONArray()
-            val seen = HashSet<String>()
-            var position = 0
-            var pages = 0
-            var failures = 0
-            val end = if (lengthSeconds > 0) lengthSeconds else Double.MAX_VALUE
-            while (pages < 20_000 && position <= end) {
-                val page = page(videoId, position)
-                if (page == null) {
-                    failures++
-                    if (failures > 2) return null
-                    delay(failures * 2000L)
-                    continue
+            val writer = try { SavedChat.Writer(file) } catch (e: Exception) { return@withContext null }
+            var done = false
+            try {
+                // Identifiants récents seulement : les pages se chevauchent de peu.
+                val seen = HashMap<String, Double>()
+                var position = 0
+                var pages = 0
+                var failures = 0
+                val end = if (lengthSeconds > 0) lengthSeconds else Double.MAX_VALUE
+                while (pages < 20_000 && position <= end) {
+                    val page = page(videoId, position)
+                    if (page == null) {
+                        failures++
+                        if (failures > 2) return@withContext null
+                        delay(failures * 2000L)
+                        continue
+                    }
+                    failures = 0
+                    pages++
+                    var fresh = 0
+                    var newest = -1.0
+                    var beyond = false
+                    for (node in page.first) {
+                        val at = node.dbl("contentOffsetSeconds") ?: 0.0
+                        if (at > end) { beyond = true; break }
+                        val id = node.str("id") ?: continue
+                        if (seen.containsKey(id)) continue
+                        seen[id] = at
+                        fresh++
+                        newest = maxOf(newest, at)
+                        writer.add(compact(node))
+                    }
+                    if (beyond || (!page.second && fresh == 0)) break
+                    position = if (fresh > 0) maxOf(position + 1, newest.toInt()) else position + 5
+                    if (seen.size > 20_000) {
+                        val keep = seen.filterValues { it >= position - 600 }
+                        seen.clear()
+                        seen.putAll(keep)
+                    }
                 }
-                failures = 0
-                pages++
-                var fresh = 0
-                var newest = -1.0
-                var beyond = false
-                for (node in page.first) {
-                    val at = node.dbl("contentOffsetSeconds") ?: 0.0
-                    if (at > end) { beyond = true; break }
-                    val id = node.str("id") ?: continue
-                    if (!seen.add(id)) continue
-                    fresh++
-                    newest = maxOf(newest, at)
-                    out.put(compact(node))
-                }
-                if (beyond || (!page.second && fresh == 0)) break
-                position = if (fresh > 0) maxOf(position + 1, newest.toInt()) else position + 5
+                writer.finish(channelId)
+                done = true
+                Logger.success("DOWNLOAD", "Chat gardé", "$videoId · ${writer.count} messages")
+                writer.count
+            } catch (e: java.io.IOException) {
+                Logger.warn("DOWNLOAD", "Chat non gardé", "$videoId — ${e.message}")
+                null
+            } finally {
+                if (!done) writer.abort()
             }
-            file.parentFile?.mkdirs()
-            file.writeText(JSONObject().put("channelId", channelId ?: JSONObject.NULL).put("comments", out).toString())
-            Logger.success("DOWNLOAD", "Chat gardé", "$videoId · ${out.length()} messages")
-            return out.length()
         }
 
         /** Le nécessaire d'un commentaire, pour un fichier plus léger. */
