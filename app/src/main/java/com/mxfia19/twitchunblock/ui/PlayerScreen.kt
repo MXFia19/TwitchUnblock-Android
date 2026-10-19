@@ -294,6 +294,10 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
         return
     }
 
+    // Fenêtre du clip : ici et pas dans le menu ⋮ (portrait seulement), pour
+    // rester affichée en paysage au lieu de revenir plus tard sur un autre direct.
+    ClipDialog(nav)
+
     if (landscape) {
         Row(Modifier.fillMaxSize().background(Color.Black)) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
@@ -536,7 +540,6 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
             textContentColor = TU.muted,
         )
     }
-    ClipDialog(nav)
 }
 
 /** Durée de la VOD lue (s) : celle de Twitch, sinon celle du lecteur ; 0 : inconnue. */

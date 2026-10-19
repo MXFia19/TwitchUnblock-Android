@@ -20,7 +20,8 @@ object ContinueWatching {
 
     /** Ce qu'on sait des VODs (durée, titre, miniature), par identifiant. */
     private val metas = mutableStateMapOf<String, Vod>()
-    /** VODs déjà demandées à Twitch pendant ce lancement (trouvées ou non). */
+    /** VODs déjà demandées à Twitch pendant ce lancement (trouvées ou non ;
+     *  une demande annulée ne compte pas). */
     private val asked = HashSet<String>()
 
     /** Infos d'une VOD lue (lecteur) : pas de requête de plus pour elle. */
@@ -70,8 +71,13 @@ object ContinueWatching {
         var shown = 0
         for (h in candidates(positions)) {
             val id = h.term
-            if (length(id) <= 0 && asked.add(id)) {
-                VodApi.meta(id)?.let { keep(it) }
+            if (length(id) <= 0 && id !in asked) {
+                // Notée après la réponse : une demande annulée (accueil quitté,
+                // historique changé) est refaite au prochain passage, au lieu
+                // de laisser la VOD sans durée jusqu'au prochain lancement.
+                val meta = VodApi.meta(id)
+                asked.add(id)
+                meta?.let { keep(it) }
             }
             if (unfinished(positions[id] ?: 0L, length(id))) shown++
             if (shown >= 10) return

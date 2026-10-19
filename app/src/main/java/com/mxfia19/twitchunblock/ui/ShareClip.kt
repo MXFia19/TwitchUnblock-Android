@@ -25,6 +25,7 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.window.DialogProperties
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.player.PlayRequest
@@ -115,6 +116,11 @@ fun ClipDialog(nav: Navigator) {
         containerColor = TU.surface,
         titleContentColor = TU.text,
         textContentColor = TU.muted,
+        // Pendant la création, un toucher à côté (second appui d'un double
+        // appui sur le menu) ne la ferme pas : sans quoi le lien n'irait
+        // qu'au journal et un nouvel essai ferait un second clip. Retour et
+        // « Fermer » la ferment toujours.
+        properties = DialogProperties(dismissOnClickOutside = outcome != null),
     )
 }
 
