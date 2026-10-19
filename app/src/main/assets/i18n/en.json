@@ -676,6 +676,7 @@
   "notif_channels_muted": "{n} channel(s) without notifications",
   "notif_channels_none": "You don't follow any channel yet.",
   "notif_channels_sub": "Live notifications (app wake-ups and ntfy) only cover the channels switched on here. A channel you follow later is on by default.",
+  "notif_channels_sub_android": "Live notifications (checks every 15 minutes and ntfy) only cover the channels switched on here. A channel you follow later is on by default.",
   "notif_last_failed": "failed (network or token)",
   "notif_last_never": "No background check yet. iOS picks the moment: leave the app in the background (without closing it) for a few hours.",
   "notif_last_run": "Last background check: {t}",

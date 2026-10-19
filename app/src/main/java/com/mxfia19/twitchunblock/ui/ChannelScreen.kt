@@ -49,6 +49,7 @@ import com.mxfia19.twitchunblock.core.Vod
 import com.mxfia19.twitchunblock.core.Hidden
 import com.mxfia19.twitchunblock.core.RecoverableStream
 import com.mxfia19.twitchunblock.core.VodApi
+import com.mxfia19.twitchunblock.notify.NotifChannels
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.web.TwitchFollow
 import com.mxfia19.twitchunblock.web.WebSession
@@ -184,6 +185,10 @@ fun ChannelScreen(login: String, nav: Navigator) {
         PageHeader(login, nav) {
             val usesTwitch = twitchFollow != null
             val followed = if (usesTwitch) twitchFollow == true else AppState.isFollowedLocally(login)
+            // Cloche : notifications de live de cette chaîne seulement. Suivie sur
+            // l'appareil, ou par le compte : le statut lu sur Twitch (session
+            // web) fait foi quand il est connu, sinon la liste des suivis.
+            NotifBell(login, followed = AppState.isFollowedLocally(login) || (twitchFollow ?: NotifChannels.followed(login)))
             IconButton(onClick = {
                 when {
                     !usesTwitch -> AppState.toggleLocalFollow(login)

@@ -676,6 +676,7 @@
   "notif_channels_muted": "{n} chaîne(s) sans notification",
   "notif_channels_none": "Aucune chaîne suivie pour l'instant.",
   "notif_channels_sub": "Les notifications de live (réveils de l'app et ntfy) ne concernent que les chaînes allumées ici. Une chaîne suivie plus tard est allumée d'office.",
+  "notif_channels_sub_android": "Les notifications de live (vérification toutes les 15 minutes et ntfy) ne concernent que les chaînes allumées ici. Une chaîne suivie plus tard est allumée d'office.",
   "notif_last_failed": "échec (connexion ou jeton)",
   "notif_last_never": "Aucune vérification en arrière-plan pour l'instant. iOS choisit le moment : laisse l'app en arrière-plan (sans la fermer) quelques heures.",
   "notif_last_run": "Dernière vérification en arrière-plan : {t}",

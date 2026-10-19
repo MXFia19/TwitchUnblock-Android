@@ -4,9 +4,12 @@ import android.Manifest
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.graphics.Bitmap
+import android.graphics.BitmapFactory
 import android.net.Uri
 import android.os.Build
 import androidx.compose.runtime.getValue
@@ -18,7 +21,9 @@ import androidx.core.content.ContextCompat
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
@@ -28,6 +33,7 @@ import com.mxfia19.twitchunblock.core.AuthExpiredException
 import com.mxfia19.twitchunblock.core.BrowseApi
 import com.mxfia19.twitchunblock.core.Config
 import com.mxfia19.twitchunblock.core.Http
+import com.mxfia19.twitchunblock.core.Links
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.TwitchStream
 import com.mxfia19.twitchunblock.core.bool
@@ -35,7 +41,10 @@ import com.mxfia19.twitchunblock.core.parseJson
 import com.mxfia19.twitchunblock.core.parseJsonArray
 import com.mxfia19.twitchunblock.core.strings
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import okhttp3.Request
 import org.json.JSONArray
 import org.json.JSONObject
 import java.util.concurrent.TimeUnit
@@ -43,21 +52,26 @@ import kotlin.random.Random
 
 /**
  * « Chaîne suivie en live » : vérifié toutes les 15 minutes par WorkManager
- * (même app fermée), notification pour chaque nouveau direct. Avec ntfy
- * actif, c'est lui qui prévient (plus vite, sans doublon). Comme
- * LiveNotifier (iOS).
+ * (même app fermée), notification pour chaque nouveau direct (vignette,
+ * « Regarder », « Ne plus notifier cette chaîne »), sauf pour les chaînes
+ * coupées dans « Chaînes notifiées ». Avec ntfy actif, c'est lui qui
+ * prévient (plus vite, sans doublon). Comme LiveNotifier (iOS).
  */
 object LiveNotifier {
     private const val ENABLED = "notif_live"
     private const val KNOWN = "notif_known_live"
     private const val CHANNEL = "lives"
     private const val WORK = "live-check"
+    /** Action « Ne plus notifier cette chaîne » (LiveActionReceiver). */
+    const val ACTION_MUTE = "com.mxfia19.twitchunblock.LIVE_MUTE"
+    const val EXTRA_LOGIN = "login"
 
     var enabled by mutableStateOf(false)
         private set
 
     fun init(context: Context) {
         enabled = AppState.prefs.getBoolean(ENABLED, false)
+        NotifChannels.init()
         if (enabled || Ntfy.enabled) schedule(context)
     }
 
@@ -114,7 +128,12 @@ object LiveNotifier {
         val now = streams.map { it.login.lowercase() }.toSet()
         if (notify && before != null && !(Ntfy.enabled && Ntfy.synced) && canNotify(context)) {
             ensureChannel(context)
-            for (s in streams) if (s.login.lowercase() !in before) post(context, s)
+            // Chaînes coupées dans « Chaînes notifiées » : connues quand même
+            // (plus bas), pour ne pas notifier un direct en cours le jour où
+            // on les rallume. En parallèle : la vignette lente d'une chaîne ne
+            // retarde pas les autres notifications.
+            val fresh = streams.filter { it.login.lowercase() !in before && NotifChannels.notifies(it.login) }
+            coroutineScope { for (s in fresh) launch { post(context, s) } }
         }
         // Seule la partie relue (compte ou appareil) est remplacée : sinon,
         // le compte injoignable une fois, tous ses directs déjà en cours
@@ -125,26 +144,70 @@ object LiveNotifier {
         return true
     }
 
-    private fun post(context: Context, s: TwitchStream) {
-        val open = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.APP_SCHEME}://live/${s.login.lowercase()}"))
+    /** Notification d'une chaîne : une seule à la fois (un nouveau direct
+     *  remplace l'ancien), retirée par « Ne plus notifier cette chaîne ». */
+    fun notificationId(login: String): Int = "live-${login.lowercase()}".hashCode()
+
+    /** Notification d'un direct : vignette si elle arrive à temps, un groupe
+     *  par chaîne, « Regarder » (même lien que la notification) et « Ne plus
+     *  notifier cette chaîne » (LiveActionReceiver, sans ouvrir l'app). */
+    private suspend fun post(context: Context, s: TwitchStream) {
+        val login = s.login.lowercase()
+        val open = Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.APP_SCHEME}://live/$login"))
             .setPackage(context.packageName)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         val pi = PendingIntent.getActivity(context, s.login.hashCode(), open,
                                            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        val mute = Intent(context, LiveActionReceiver::class.java)
+            .setAction(ACTION_MUTE)
+            .putExtra(EXTRA_LOGIN, login)
+        val mutePi = PendingIntent.getBroadcast(context, login.hashCode(), mute,
+                                                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val body = listOf(s.title, s.game).filter { it.isNotEmpty() }.joinToString(" · ")
-        val n = NotificationCompat.Builder(context, CHANNEL)
+        val picture = thumbnail(s)
+        val builder = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(android.R.drawable.ic_media_play)
             .setContentTitle(AppState.t("notif_live_title").replace("{u}", s.name))
             .setContentText(body)
-            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setContentIntent(pi)
             .setAutoCancel(true)
-            .build()
+            .setGroup("live-$login")
+            .addAction(android.R.drawable.ic_media_play, AppState.t("notif_action_watch"), pi)
+            .addAction(android.R.drawable.ic_lock_silent_mode, AppState.t("notif_action_mute"), mutePi)
+        if (picture != null) {
+            // Repliée : la vignette à droite ; dépliée : en grand, sans la répéter.
+            builder.setLargeIcon(picture)
+                .setStyle(NotificationCompat.BigPictureStyle().bigPicture(picture).bigLargeIcon(null as Bitmap?))
+        } else {
+            builder.setStyle(NotificationCompat.BigTextStyle().bigText(body))
+        }
         try {
-            NotificationManagerCompat.from(context).notify("live-${s.login.lowercase()}".hashCode(), n)
+            NotificationManagerCompat.from(context).notify(notificationId(login), builder.build())
         } catch (e: SecurityException) {
             Logger.warn("NOTIF", "Notification refusée par Android")
         }
+    }
+
+    /** Vignette du direct (640×360), téléchargée hors du fil principal, 6 s
+     *  au plus. null (pas encore prête, réseau, image illisible) : la
+     *  notification part sans elle. */
+    private suspend fun thumbnail(s: TwitchStream): Bitmap? = withContext(Dispatchers.IO) {
+        val login = s.login.lowercase()
+        val url = if (s.thumbnail.isNotEmpty()) s.thumb(640, 360)
+                  else "https://static-cdn.jtvnw.net/previews-ttv/live_user_$login-640x360.jpg"
+        val bitmap = try {
+            val request = Request.Builder().url(url).build()
+            Http.client.newBuilder().callTimeout(6, TimeUnit.SECONDS).build().newCall(request).execute().use { r ->
+                // Direct à peine lancé : Twitch renvoie vers son image « 404 ».
+                if (!r.isSuccessful || r.request.url.encodedPath.contains("404_preview")) return@use null
+                val bytes = r.body?.bytes() ?: return@use null
+                BitmapFactory.decodeByteArray(bytes, 0, bytes.size)
+            }
+        } catch (e: Exception) {
+            null
+        }
+        if (bitmap == null) Logger.debug("NOTIF", "Vignette du live indisponible", "@$login")
+        bitmap
     }
 
     /** Notification immédiate, pour vérifier autorisation et affichage. */
@@ -172,6 +235,108 @@ class LiveCheckWorker(context: Context, params: WorkerParameters) : CoroutineWor
         LiveNotifier.check(applicationContext, notify = true)
         if (Ntfy.enabled) Ntfy.sync()
         Result.success()
+    }
+}
+
+/** Envoi ponctuel de la liste ntfy (chaîne coupée ou rallumée : Ntfy.syncSoon). */
+class NtfySyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result = withContext(Dispatchers.Main) {
+        if (Ntfy.enabled) Ntfy.sync()
+        Result.success()
+    }
+}
+
+/**
+ * « Ne plus notifier cette chaîne » (action d'une notification de live), sans
+ * ouvrir l'app : la chaîne passe dans les coupées de « Chaînes notifiées »,
+ * sa notification disparaît, et ntfy suit. Comme LiveNotifier.mute (iOS).
+ */
+class LiveActionReceiver : BroadcastReceiver() {
+    override fun onReceive(context: Context, intent: Intent) {
+        if (intent.action != LiveNotifier.ACTION_MUTE) return
+        val login = intent.getStringExtra(LiveNotifier.EXTRA_LOGIN)?.lowercase() ?: return
+        if (!Links.isValidLogin(login)) return
+        NotifChannels.setNotify(context, login, false)
+        NotificationManagerCompat.from(context).cancel(LiveNotifier.notificationId(login))
+        Logger.info("NOTIF", "Chaîne retirée des notifications", "@$login")
+    }
+}
+
+/**
+ * « Chaînes notifiées » : les notifications de live (vérification de
+ * WorkManager, ntfy) couvrent les chaînes suivies — compte Twitch et
+ * appareil —, moins celles coupées ici (cloche d'une chaîne, action d'une
+ * notification, liste des réglages). La liste reste sur l'appareil : le
+ * Worker ne reçoit que les chaînes à notifier (Ntfy.sync). Une chaîne suivie
+ * plus tard est notifiée d'office. Comme NotifChannels (iOS).
+ */
+object NotifChannels {
+    private const val MUTED = "notif_muted"
+
+    /** Chaînes coupées (pseudos en minuscules). */
+    var muted by mutableStateOf<Set<String>>(emptySet())
+        private set
+    /** Chaînes suivies par le compte Twitch, pour les cloches : relues au plus
+     *  une fois par heure (ou données par ntfy, qui vient de les lire). */
+    var accountFollows by mutableStateOf<Set<String>>(emptySet())
+        private set
+    private var accountUser: String? = null
+    private var accountAt = 0L
+    private var accountLoading = false
+
+    fun init() {
+        muted = parseJsonArray(AppState.prefs.getString(MUTED, null))?.strings()?.map { it.lowercase() }?.toSet() ?: emptySet()
+    }
+
+    /** Notifications de live actives (Android ou ntfy) : les cloches s'affichent. */
+    val active: Boolean get() = LiveNotifier.enabled || Ntfy.enabled
+
+    fun notifies(login: String): Boolean = login.lowercase() !in muted
+
+    /** Chaîne suivie sur l'appareil, ou par le compte (dernière liste lue). */
+    fun followed(login: String): Boolean {
+        val l = login.lowercase()
+        return AppState.isFollowedLocally(l) || (AppState.user?.id == accountUser && l in accountFollows)
+    }
+
+    /** Une seule chaîne (cloche, action d'une notification, liste) : notifiée ou coupée. */
+    fun setNotify(context: Context, login: String, on: Boolean) {
+        val l = login.lowercase()
+        if (l.isEmpty()) return
+        update(context, if (on) muted - l else muted + l)
+    }
+
+    /** Plusieurs chaînes à la fois (« Tout activer », « Tout couper »). */
+    fun setNotifyAll(context: Context, logins: Collection<String>, on: Boolean) {
+        val list = logins.map { it.lowercase() }
+        update(context, if (on) muted - list.toSet() else muted + list)
+    }
+
+    private fun update(context: Context, next: Set<String>) {
+        if (next == muted) return
+        muted = next
+        AppState.prefs.edit().putString(MUTED, JSONArray(next.sorted()).toString()).apply()
+        // ntfy : la liste filtrée part au Worker (l'app peut être fermée).
+        if (Ntfy.enabled) Ntfy.syncSoon(context)
+    }
+
+    /** Suivis du compte qui viennent d'être lus (ntfy, liste des réglages). */
+    fun rememberAccount(logins: List<String>) {
+        accountFollows = logins.map { it.lowercase() }.toSet()
+        accountUser = AppState.user?.id
+        accountAt = System.currentTimeMillis()
+    }
+
+    /** Suivis du compte relus sur Twitch, au plus une fois par heure. */
+    suspend fun loadAccountFollows() {
+        val user = AppState.user?.id ?: return
+        if (accountLoading || (user == accountUser && System.currentTimeMillis() - accountAt < 3_600_000L)) return
+        accountLoading = true
+        try {
+            BrowseApi.followedLogins()?.let { rememberAccount(it) }
+        } finally {
+            accountLoading = false
+        }
     }
 }
 
@@ -231,6 +396,16 @@ object Ntfy {
         post("/api/push/unsubscribe", JSONObject().put("ntfy", topic))
     }
 
+    /** sync() dès que le réseau le permet, par WorkManager : depuis l'action
+     *  d'une notification, l'app peut être fermée. Une seule à la fois (la
+     *  dernière demandée remplace celle en attente). */
+    fun syncSoon(context: Context) {
+        val request = OneTimeWorkRequestBuilder<NtfySyncWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork("ntfy-sync", ExistingWorkPolicy.REPLACE, request)
+    }
+
     /** Chaînes suivies (compte et appareil) renvoyées au Worker quand elles
      *  changent, et au moins une fois par jour (au-delà de 60 jours sans
      *  nouvelles, il oublie le sujet). */
@@ -249,12 +424,16 @@ object Ntfy {
             if (account != null) {
                 p.edit().putString(ACCOUNT, JSONArray(account).toString())
                     .putString(ACCOUNT_USER, user).putLong(ACCOUNT_AT, System.currentTimeMillis()).apply()
+                NotifChannels.rememberAccount(account)
                 list += account
             } else {
                 parseJsonArray(p.getString(ACCOUNT, null))?.strings()?.let { list += it }
             }
         }
-        val all = list.map { it.lowercase() }.distinct().take(500)
+        // Moins celles coupées dans « Chaînes notifiées » (le hachage change :
+        // la nouvelle liste part tout de suite).
+        val muted = NotifChannels.muted
+        val all = list.map { it.lowercase() }.distinct().filter { it !in muted }.take(500)
         val hash = AppState.lang.code + "|" + all.joinToString(",")
         val last = p.getLong(SYNCED, 0L)
         if (!force && hash == p.getString(HASH, null) && System.currentTimeMillis() - last < 86_400_000L && error == null) return true

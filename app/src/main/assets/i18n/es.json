@@ -676,6 +676,7 @@
   "notif_channels_muted": "{n} canal(es) sin notificaciones",
   "notif_channels_none": "Aún no sigues ningún canal.",
   "notif_channels_sub": "Las notificaciones de directo (despertares de la app y ntfy) solo cubren los canales activados aquí. Un canal que sigas más tarde se activa por defecto.",
+  "notif_channels_sub_android": "Las notificaciones de directo (comprobación cada 15 minutos y ntfy) solo cubren los canales activados aquí. Un canal que sigas más tarde se activa por defecto.",
   "notif_last_failed": "error (conexión o token)",
   "notif_last_never": "Aún no hay comprobación en segundo plano. iOS elige el momento: deja la app en segundo plano (sin cerrarla) unas horas.",
   "notif_last_run": "Última comprobación en segundo plano: {t}",

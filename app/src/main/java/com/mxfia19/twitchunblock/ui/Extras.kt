@@ -59,6 +59,7 @@ import com.mxfia19.twitchunblock.core.Updates
 import com.mxfia19.twitchunblock.core.Usage
 import com.mxfia19.twitchunblock.feedback.Feedback
 import com.mxfia19.twitchunblock.notify.LiveNotifier
+import com.mxfia19.twitchunblock.notify.NotifChannels
 import com.mxfia19.twitchunblock.notify.Ntfy
 import kotlinx.coroutines.launch
 
@@ -213,6 +214,7 @@ fun NotificationSettings() {
     val scope = rememberCoroutineScope()
     val uri = LocalUriHandler.current
     var ntfyResult by remember { mutableStateOf<String?>(null) }
+    var channelsOpen by remember { mutableStateOf(false) }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
         if (granted) LiveNotifier.setEnabled(context, true)
     }
@@ -248,7 +250,18 @@ fun NotificationSettings() {
                 ntfyResult?.let { Text(AppState.t(it), color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
             }
         }
+        // Chaînes notifiées : les suivies, moins celles coupées (ici, par leur
+        // cloche ou par l'action d'une notification).
+        if (LiveNotifier.enabled || Ntfy.enabled) {
+            val muted = NotifChannels.muted.size
+            Column(Modifier.fillMaxWidth().focusCard({ channelsOpen = true }, RoundedCornerShape(0.dp)).padding(12.dp)) {
+                Text(AppState.t("notif_channels"), color = TU.text, fontSize = 15.sp)
+                Text(if (muted == 0) AppState.t("notif_channels_all")
+                     else AppState.t("notif_channels_muted").replace("{n}", muted.toString()), color = TU.muted, fontSize = 12.sp)
+            }
+        }
     }
+    if (channelsOpen) NotifChannelsDialog { channelsOpen = false }
     Group(AppState.t("privacy")) {
         Toggle(AppState.t("share_usage"), AppState.t("share_usage_sub"), Usage.enabled) { Usage.updateEnabled(it) }
         var checked by remember { mutableStateOf(false) }

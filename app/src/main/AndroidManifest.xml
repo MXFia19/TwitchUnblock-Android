@@ -62,6 +62,11 @@
             </intent-filter>
         </activity>
 
+        <!-- « Ne plus notifier cette chaîne » (action d'une notification de live). -->
+        <receiver
+            android:name=".notify.LiveActionReceiver"
+            android:exported="false" />
+
         <!-- Lecture en arrière-plan : notification, écran verrouillé, casque. -->
         <service
             android:name=".player.PlaybackService"

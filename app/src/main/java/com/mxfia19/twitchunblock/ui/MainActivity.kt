@@ -16,6 +16,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.mxfia19.twitchunblock.core.AppState
@@ -25,6 +26,7 @@ import com.mxfia19.twitchunblock.core.News
 import com.mxfia19.twitchunblock.core.Updates
 import com.mxfia19.twitchunblock.core.Usage
 import com.mxfia19.twitchunblock.feedback.Feedback
+import com.mxfia19.twitchunblock.notify.LiveNotifier
 import com.mxfia19.twitchunblock.notify.Ntfy
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.player.PlayerHolder
@@ -90,6 +92,8 @@ class MainActivity : ComponentActivity() {
     /** twitchunblock://live/<chaîne> (notification touchée) ; pseudo validé. */
     private fun handleLink(intent: Intent?) {
         val login = Links.liveLink(intent?.data) ?: return
+        // « Regarder » ne ferme pas la notification d'elle-même.
+        NotificationManagerCompat.from(this).cancel(LiveNotifier.notificationId(login))
         navigator.play(PlayRequest.Live(login))
     }
 
