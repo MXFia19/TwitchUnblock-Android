@@ -29,6 +29,9 @@ object LiveApi {
 
     suspend fun getLive(channel: String, onSource: (String) -> Unit = {}): LiveResult = coroutineScope {
         val login = channel.trim().lowercase()
+        // Mis tel quel dans les adresses des sources et du Worker : rien
+        // d'autre qu'un pseudo Twitch (ni « ? », ni « & », ni « / »).
+        if (!Links.isValidLogin(login)) return@coroutineScope LiveResult(LiveInfo(login, error = "not_found"))
         Logger.info("LIVE", "Lancement du direct", login)
         val q = "query { user(login: \"${Gql.str(login)}\") { id profileImageURL(width: 70) " +
             "stream { title game { name } previewImageURL(width: 320, height: 180) viewersCount createdAt archiveVideo { id } } } }"

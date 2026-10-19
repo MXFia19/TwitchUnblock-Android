@@ -1,11 +1,14 @@
 package com.mxfia19.twitchunblock.tv
 
+import android.content.Intent
 import android.os.Bundle
 import android.view.KeyEvent
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.lifecycle.lifecycleScope
 import com.mxfia19.twitchunblock.core.Auth
+import com.mxfia19.twitchunblock.core.Links
+import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.ui.TUTheme
 import kotlinx.coroutines.launch
 
@@ -23,10 +26,24 @@ object TvKeys {
 }
 
 class TvActivity : ComponentActivity() {
+    private val nav = TvNav()
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         lifecycleScope.launch { Auth.restore() }
-        setContent { TUTheme { TvApp() } }
+        handleLink(intent)
+        setContent { TUTheme { TvApp(nav) } }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        handleLink(intent)
+    }
+
+    /** twitchunblock://live/<chaîne> (notification), passé par MainActivity. */
+    private fun handleLink(intent: Intent?) {
+        val login = Links.liveLink(intent?.data) ?: return
+        nav.push(TvScreen.Player(PlayRequest.Live(login)))
     }
 
     override fun onStart() {

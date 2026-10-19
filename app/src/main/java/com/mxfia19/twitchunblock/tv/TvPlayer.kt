@@ -35,6 +35,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
+import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -99,6 +100,7 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
         owner.lifecycle.addObserver(observer)
         onDispose { owner.lifecycle.removeObserver(observer) }
     }
+    KeepScreenOn(session)
     TvKeys.menuOpen = menu
     BackHandler(enabled = menu) {
         menu = false
@@ -122,7 +124,6 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
                         player = session.player
                         setShowNextButton(false)
                         setShowPreviousButton(false)
-                        keepScreenOn = true
                         setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
                             TvKeys.controllerVisible = visibility == android.view.View.VISIBLE
                         })
@@ -138,6 +139,8 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
                     if (view.player !== session.player) view.player = session.player
                     if (!menu && refocus > 0) view.post { view.requestFocus() }
                 },
+                // Vue retirée : elle lâche le lecteur (écouteurs, activité retenue).
+                onRelease = { view -> view.player = null },
                 modifier = Modifier.weight(1f).fillMaxHeight(),
             )
             if (chat != null && AppState.showChat) {
@@ -165,6 +168,20 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
                 refocus++
             }
         }
+    }
+}
+
+/** Écran allumé pendant la lecture seulement : en pause, à la fin ou sur une
+ *  erreur, l'économiseur d'écran de la TV reprend la main. À part du
+ *  lecteur : un changement ne relance pas son `update` (focus rendu au
+ *  lecteur, qui quitterait le bouton pause de la télécommande). */
+@Composable
+private fun KeepScreenOn(session: PlaybackSession) {
+    val view = LocalView.current
+    val playing = session.isPlaying
+    DisposableEffect(view, playing) {
+        view.keepScreenOn = playing
+        onDispose { view.keepScreenOn = false }
     }
 }
 

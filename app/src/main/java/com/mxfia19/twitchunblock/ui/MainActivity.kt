@@ -5,7 +5,6 @@ import android.app.UiModeManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
-import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
@@ -21,6 +20,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Auth
+import com.mxfia19.twitchunblock.core.Links
 import com.mxfia19.twitchunblock.core.News
 import com.mxfia19.twitchunblock.core.Updates
 import com.mxfia19.twitchunblock.core.Usage
@@ -47,9 +47,10 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Lancée sur une TV (lanceur qui ignore la catégorie TV) : l'interface TV.
+        // Lancée sur une TV (lanceur qui ignore la catégorie TV) : l'interface
+        // TV, avec le lien reçu (notification) au lieu de le perdre.
         if (isTelevision(this)) {
-            startActivity(Intent(this, TvActivity::class.java))
+            startActivity(Intent(this, TvActivity::class.java).setData(intent?.data))
             finish()
             return
         }
@@ -86,13 +87,10 @@ class MainActivity : ComponentActivity() {
         handleLink(intent)
     }
 
-    /** twitchunblock://live/<chaîne> (notification touchée). */
+    /** twitchunblock://live/<chaîne> (notification touchée) ; pseudo validé. */
     private fun handleLink(intent: Intent?) {
-        val uri: Uri = intent?.data ?: return
-        if (uri.host == "live") {
-            val login = uri.pathSegments.firstOrNull()?.lowercase() ?: return
-            navigator.play(PlayRequest.Live(login))
-        }
+        val login = Links.liveLink(intent?.data) ?: return
+        navigator.play(PlayRequest.Live(login))
     }
 
     // ── Image dans l'image ──

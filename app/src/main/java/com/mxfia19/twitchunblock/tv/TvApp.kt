@@ -103,10 +103,10 @@ private fun Modifier.reopen(back: TvReturn, key: String): Modifier {
     return focusRequester(back.focus)
 }
 
+/** `nav` : portée par TvActivity (liens des notifications). */
 @Composable
-fun TvApp() {
+fun TvApp(nav: TvNav) {
     val scope = rememberCoroutineScope()
-    val nav = remember { TvNav() }
     val home = remember { HomeModel(scope) }
     val search = remember { SearchModel(scope) }
     val following = remember { FollowingModel(scope) }

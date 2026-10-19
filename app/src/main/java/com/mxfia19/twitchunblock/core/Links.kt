@@ -45,4 +45,13 @@ object Links {
     }
 
     fun isValidLogin(login: String) = Regex("^[a-z0-9_]{1,25}$").matches(login)
+
+    /** Chaîne d'un lien twitchunblock://live/<chaîne> (notification, ntfy) ;
+     *  null sinon. Lien ouvrable par n'importe quelle page web : pseudo
+     *  validé, il finit dans les adresses des sources. */
+    fun liveLink(uri: android.net.Uri?): String? {
+        if (uri == null || uri.host != "live") return null
+        val login = uri.pathSegments.firstOrNull()?.lowercase() ?: return null
+        return login.takeIf { isValidLogin(it) }
+    }
 }

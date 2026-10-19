@@ -89,9 +89,13 @@ fun hiddenByFilters(m: ChatMessage): Boolean {
     val login = m.login.lowercase()
     if (login in Features.blockedUsers.value) return true
     if (Features.chatHideBots.value && login in Features.knownBots) return true
-    val text = m.plainText()
-    if (Features.chatHideCommands.value && text.trimStart().startsWith("!")) return true
+    // Texte recomposé seulement si un filtre le lit : refiltrés à chaque
+    // message, les 300 messages le refaisaient tous.
+    val hideCommands = Features.chatHideCommands.value
     val muted = Features.mutedWords.value
+    if (!hideCommands && muted.isEmpty()) return false
+    val text = m.plainText()
+    if (hideCommands && text.trimStart().startsWith("!")) return true
     if (muted.isNotEmpty()) {
         val lower = text.lowercase()
         if (muted.any { lower.contains(it) }) return true

@@ -6,6 +6,7 @@ import android.content.pm.ActivityInfo
 import android.content.pm.PackageManager
 import android.content.res.Configuration
 import android.os.Build
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
@@ -91,7 +92,6 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
                 player = session.player
                 setShowNextButton(false)
                 setShowPreviousButton(false)
-                keepScreenOn = true
                 setBackgroundColor(android.graphics.Color.BLACK)
                 if (onFullscreen != null) setFullscreenButtonClickListener { onFullscreen() }
                 if (focusOnStart) {
@@ -102,6 +102,9 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
         },
         update = { view ->
             if (view.player !== session.player) view.player = session.player
+            // Écran allumé pendant la lecture seulement (pas en pause, à la fin
+            // ni sur une erreur) ; relu à chaque changement.
+            view.keepScreenOn = session.isPlaying
             if (view.useController != controls) {
                 view.useController = controls
                 if (!controls) view.hideController()
@@ -267,9 +270,17 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
                        onWebLogin = { nav.push(Screen.WebLogin) })
         }
     }
+    // Paysage demandé par le bouton plein écran : Retour revient d'abord en
+    // portrait, au lieu de fermer le lecteur.
+    var forcedLandscape by remember { mutableStateOf(false) }
     val toggleFullscreen = {
+        forcedLandscape = !landscape
         activity?.requestedOrientation = if (landscape) ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
                                          else ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+    }
+    BackHandler(enabled = forcedLandscape && landscape) {
+        forcedLandscape = false
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
     // Image dans l'image : rien que la vidéo.

@@ -96,6 +96,8 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
     fun remove(index: Int) {
         if (index !in tiles.indices) return
         tiles.removeAt(index).session.release()
+        // Tuile retirée avant celle qui a le son : le son reste sur la même chaîne.
+        if (index < audio) audio--
         if (audio >= tiles.size) audio = maxOf(0, tiles.size - 1)
         layout()
     }
@@ -158,10 +160,15 @@ fun MultiTile(tile: MultiLiveModel.Tile, hasAudio: Boolean, modifier: Modifier, 
                     isFocusable = false
                     resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                     player = tile.session.player
-                    keepScreenOn = true
                 }
             },
-            update = { v -> if (v.player !== tile.session.player) v.player = tile.session.player },
+            update = { v ->
+                if (v.player !== tile.session.player) v.player = tile.session.player
+                // Écran allumé tant qu'une tuile joue.
+                v.keepScreenOn = tile.session.isPlaying
+            },
+            // Vue retirée (tuile enlevée, rotation) : elle lâche le lecteur.
+            onRelease = { v -> v.player = null },
             modifier = Modifier.fillMaxSize(),
         )
         when (val s = tile.session.state) {

@@ -168,11 +168,13 @@ object AppState {
         sp.edit().putString("vod_progress", all.toString()).apply()
     }
 
-    /** Garde la position (300 VODs au plus) ; effacée près de la fin. */
+    /** Garde la position (300 VODs au plus) ; effacée près de la fin, et
+     *  avant 30 s (revue depuis le début : l'ancienne position ne sert plus). */
     fun saveVodPosition(id: String, positionMs: Long, durationMs: Long) {
         val all = parseJson(sp.getString("vod_progress", null)) ?: JSONObject()
         if (durationMs > 0 && positionMs > durationMs - 60_000) all.remove(id)
         else if (positionMs > 30_000) all.put(id, positionMs)
+        else all.remove(id)
         while (all.length() > 300) {
             val first = all.keys().next()
             all.remove(first)

@@ -107,7 +107,11 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
             }
 
             override fun onMessage(webSocket: WebSocket, text: String) {
-                scope.launch { if (gen == generation) handle(webSocket, text) }
+                // Lignes découpées ici, hors du fil principal (gros chats) ;
+                // le reste lit l'état de l'interface et les emotes : fil principal.
+                val lines = text.split("\r\n").mapNotNull { raw -> if (raw.isBlank()) null else Irc.parse(raw) }
+                if (lines.isEmpty()) return
+                scope.launch { if (gen == generation) handle(webSocket, lines) }
             }
 
             override fun onFailure(webSocket: WebSocket, t: Throwable, response: Response?) {
@@ -162,10 +166,8 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         }
     }
 
-    private fun handle(ws: WebSocket, text: String) {
-        for (raw in text.split("\r\n")) {
-            if (raw.isBlank()) continue
-            val line = Irc.parse(raw) ?: continue
+    private fun handle(ws: WebSocket, lines: List<IrcLine>) {
+        for (line in lines) {
             when (line.command) {
                 "PING" -> ws.send("PONG :tmi.twitch.tv")
                 "PRIVMSG" -> build(line)?.let { add(it) }
@@ -227,6 +229,20 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         add((base ?: system(systemText)).copy(notice = systemText))
     }
 
+    /** Mention de notre pseudo : expression compilée une fois par pseudo, et
+     *  non à chaque message. */
+    private var mentionRegex: Regex? = null
+    private var mentionLogin: String? = null
+
+    private fun mention(me: String): Regex {
+        val cached = mentionRegex
+        if (cached != null && mentionLogin == me) return cached
+        return Regex("(^|[^a-z0-9_])@?" + Regex.escape(me) + "([^a-z0-9_]|$)").also {
+            mentionRegex = it
+            mentionLogin = me
+        }
+    }
+
     private fun build(line: IrcLine): ChatMessage? {
         val login = line.tags["login"] ?: line.nick ?: return null
         var text = line.trailing ?: ""
@@ -239,8 +255,7 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         if (text.isEmpty() && line.command == "PRIVMSG") return null
         val me = AppState.user?.login?.lowercase()
         val tokens = if (text.isEmpty()) emptyList() else ChatText.tokens(text, line.tags["emotes"], channelId)
-        val highlight = me != null && login != me &&
-            Regex("(^|[^a-z0-9_])@?" + Regex.escape(me) + "([^a-z0-9_]|$)").containsMatchIn(text.lowercase())
+        val highlight = me != null && login != me && mention(me).containsMatchIn(text.lowercase())
         return ChatMessage(
             id = line.tags["id"] ?: "m-${System.nanoTime()}",
             login = login,

@@ -122,6 +122,10 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
     private var job: Job? = null
     private var tickJob: Job? = null
     private var sleepJob: Job? = null
+    /** Reprise après une erreur, saut « fin − 90 s » du rembobinage : liés à
+     *  la source en cours, annulés par open(). */
+    private var retryJob: Job? = null
+    private var seekJob: Job? = null
     private var errors = 0
 
     init {
@@ -160,11 +164,23 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
         saveProgress()
         job?.cancel()
         tickJob?.cancel()
+        // Reprise et saut annulés, état de l'ancienne source remis à zéro :
+        // sinon, erreur sur A puis raid vers B, A repartait pendant que B se
+        // résolvait, ou par le menu qualité.
+        retryJob?.cancel()
+        seekJob?.cancel()
+        val sameLive = req is PlayRequest.Live && req.login.lowercase() == channelLogin?.lowercase()
         request = req
         state = State.Loading()
         errors = 0
         chapters = emptyList()
-        if (req !is PlayRequest.Live) dvrVideoId = null
+        master = Master()
+        qualities = emptyList()
+        quality = null
+        thumbnail = ""
+        lengthSeconds = 0
+        // Enregistrement du direct (rembobiner) : gardé pour la même chaîne seulement.
+        if (!sameLive) dvrVideoId = null
         player.stop()
         if (main && req !is PlayRequest.Live) com.mxfia19.twitchunblock.drops.DropsHeartbeat.stop()
         job = scope.launch { resolve(req) }
@@ -244,7 +260,7 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                 if (main) com.mxfia19.twitchunblock.core.History.addVod(req.id, title, thumbnail, channelLogin)
                 if (req.rewind) {
                     // Près de la fin de l'enregistrement : là où en est le direct.
-                    scope.launch {
+                    seekJob = scope.launch {
                         repeat(50) {
                             val d = player.duration
                             if (d > 0) {
@@ -394,7 +410,8 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
         Logger.warn("PLAYER", "Erreur de lecture", "${error.errorCodeName} (${errors})")
         if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW || errors <= 3) {
             // Direct trop loin derrière, ou coupure passagère : on reprend.
-            scope.launch {
+            retryJob?.cancel()
+            retryJob = scope.launch {
                 delay(if (errors <= 1) 500L else 2000L)
                 if (isLive) player.seekToDefaultPosition()
                 player.prepare()
