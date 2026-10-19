@@ -85,17 +85,26 @@ fun synthesizeMaster(links: Map<String, String>, variants: Map<String, Variant>)
     val sb = StringBuilder("#EXTM3U\n")
     for ((key, url) in video) {
         val h = Quality.height(key, links.keys, variants)
-        val bw = variants[key]?.bandwidth?.takeIf { it > 0 } ?: when {
-            h >= 1080 -> 6_000_000
-            h >= 720 -> 3_000_000
-            h >= 480 -> 1_400_000
-            h >= 360 -> 700_000
-            else -> 300_000
-        }
+        val bw = estimatedBandwidth(key, links.keys, variants)
         val res = if (h > 0) ",RESOLUTION=${h * 16 / 9}x$h" else ""
         sb.append("#EXT-X-STREAM-INF:BANDWIDTH=$bw$res\n").append(url).append('\n')
     }
     return sb.toString()
+}
+
+/** Débit d'une qualité (bits/s) : celui de la liste maîtresse, sinon estimé
+ *  d'après sa hauteur (liste fabriquée, taille d'un téléchargement). */
+fun estimatedBandwidth(key: String, keys: Collection<String>, variants: Map<String, Variant>): Int {
+    variants[key]?.bandwidth?.takeIf { it > 0 }?.let { return it }
+    if (Quality.isAudio(key)) return 160_000
+    val h = Quality.height(key, keys, variants)
+    return when {
+        h >= 1080 -> 6_000_000
+        h >= 720 -> 3_000_000
+        h >= 480 -> 1_400_000
+        h >= 360 -> 700_000
+        else -> 300_000
+    }
 }
 
 /** `variants` d'une réponse du Worker ({ "720p60": { h, fps, bw } }). */

@@ -31,6 +31,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -63,12 +64,15 @@ import androidx.core.content.ContextCompat
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.core.view.WindowInsetsControllerCompat
+import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import com.mxfia19.twitchunblock.chat.ChatClient
 import com.mxfia19.twitchunblock.chat.VodChat
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Format
+import com.mxfia19.twitchunblock.core.Logger
+import com.mxfia19.twitchunblock.core.NetworkStatus
 import com.mxfia19.twitchunblock.core.Quality
 import com.mxfia19.twitchunblock.download.Downloads
 import com.mxfia19.twitchunblock.core.Features
@@ -78,6 +82,7 @@ import com.mxfia19.twitchunblock.events.RaidWatcher
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.player.PlaybackSession
 import com.mxfia19.twitchunblock.points.ChannelPoints
+import com.mxfia19.twitchunblock.web.ClipCreator
 import com.mxfia19.twitchunblock.web.WebSession
 import kotlinx.coroutines.delay
 
@@ -391,13 +396,16 @@ private fun InfoBar(session: PlaybackSession, nav: Navigator) {
     }
 }
 
-/** Menu ⋮ : minuterie, téléchargement (VOD), multi-live (direct). */
+/** Menu ⋮ : partager, créer un clip (direct), minuterie, téléchargement
+ *  (VOD), multi-live (direct). */
 @Composable
 private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf(0) }   // 0 : menu, 1 : minuterie, 2 : qualité du téléchargement, 3 : chapitres
     var pendingDownload by remember { mutableStateOf<String?>(null) }
+    // Téléchargement refusé faute de place : taille estimée et espace libre.
+    var noSpace by remember { mutableStateOf<Pair<Long, Long>?>(null) }
     val notifications = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
         pendingDownload?.let { startDownload(context, session, it) }
         pendingDownload = null
@@ -426,10 +434,29 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                     }
                 }
                 2 -> {
+                    // Durée et espace libre, puis chaque qualité et sa taille
+                    // estimée (débit × durée) ; refusée s'il manque de la place.
+                    val seconds = downloadSeconds(session)
+                    val free = Downloads.freeBytes()
+                    val info = listOfNotNull(
+                        if (seconds > 0) Format.duration(seconds) else null,
+                        if (free >= 0) AppState.t("dl_free_space").replace("{f}", sizeText(free)) else null,
+                    ).joinToString(" · ")
+                    if (info.isNotEmpty()) {
+                        DropdownMenuItem(text = { Text(info, color = TU.muted, fontSize = 13.sp) }, onClick = {}, enabled = false)
+                    }
+                    if (Features.dlWifiOnly.value && NetworkStatus.isCellular) {
+                        DropdownMenuItem(text = { Text(AppState.t("dl_wifi_needed"), color = TU.muted, fontSize = 13.sp) },
+                                         onClick = {}, enabled = false)
+                    }
                     for (q in session.qualities.filter { !Quality.isAuto(it) }) {
-                        DropdownMenuItem(text = { Text(Quality.label(q, AppState.lang)) }, onClick = {
+                        val size = Downloads.estimate(session.bandwidth(q), seconds)
+                        DropdownMenuItem(text = { Text(Quality.label(q, AppState.lang) + if (size > 0) "  ≈ " + sizeText(size) else "") }, onClick = {
                             open = false
-                            if (Build.VERSION.SDK_INT >= 33 &&
+                            if (size > 0 && free >= 0 && size > free) {
+                                Logger.warn("DOWNLOAD", "Pas assez d'espace", "${sizeText(size)} > ${sizeText(free)}")
+                                noSpace = Pair(size, free)
+                            } else if (Build.VERSION.SDK_INT >= 33 &&
                                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                                 pendingDownload = q
                                 notifications.launch(Manifest.permission.POST_NOTIFICATIONS)
@@ -440,6 +467,22 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                     }
                 }
                 else -> {
+                    // Partager : la VOD à la position en cours, la chaîne, le clip.
+                    if (shareUrl(session) != null) {
+                        val at = if (session.request is PlayRequest.Vod) "  " + Format.clock(shareSeconds(session)) else ""
+                        DropdownMenuItem(text = { Text(AppState.t("share") + at) }, onClick = {
+                            open = false
+                            shareUrl(session)?.let { shareViaSheet(context, it) }
+                        })
+                    }
+                    // Direct (pas son rembobinage) : un clip de l'image affichée.
+                    val live = session.request as? PlayRequest.Live
+                    if (live != null && session.state is PlaybackSession.State.Ready) {
+                        DropdownMenuItem(text = { Text(AppState.t("clip_create")) }, onClick = {
+                            open = false
+                            ClipCreator.start(live.login, System.currentTimeMillis() - liveLatency(session))
+                        })
+                    }
                     DropdownMenuItem(
                         text = { Text(AppState.t("sleep_timer") + (session.sleepAt?.let { "  ✓" } ?: "")) },
                         onClick = { page = 1 },
@@ -479,11 +522,37 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
             }
         }
     }
+    noSpace?.let { (need, free) ->
+        AlertDialog(
+            onDismissRequest = { noSpace = null },
+            title = { Text(AppState.t("dl_download")) },
+            text = { Text(AppState.t("dl_no_space_vod").replace("{s}", sizeText(need)).replace("{f}", sizeText(free))) },
+            confirmButton = { TextButton(onClick = { noSpace = null }) { Text(AppState.t("close"), color = TU.primary) } },
+            containerColor = TU.surface,
+            titleContentColor = TU.text,
+            textContentColor = TU.muted,
+        )
+    }
+    ClipDialog(nav)
+}
+
+/** Durée de la VOD lue (s) : celle de Twitch, sinon celle du lecteur ; 0 : inconnue. */
+private fun downloadSeconds(session: PlaybackSession): Int {
+    if (session.lengthSeconds > 0) return session.lengthSeconds
+    val d = session.player.duration
+    return if (d > 0) (d / 1000).toInt() else 0
+}
+
+/** Retard de l'image affichée sur le direct (ms) : mesuré par le lecteur,
+ *  sinon 5 s, celui d'un direct ordinaire. */
+private fun liveLatency(session: PlaybackSession): Long {
+    val offset = session.player.currentLiveOffset
+    return if (offset != C.TIME_UNSET && offset > 0) offset else 5_000L
 }
 
 private fun startDownload(context: android.content.Context, session: PlaybackSession, quality: String) {
     val id = session.vodId ?: return
     val url = session.links[quality] ?: return
     Downloads.start(context, id, session.title, session.channelName ?: "", session.thumbnail,
-                    session.lengthSeconds, quality, url)
+                    downloadSeconds(session), quality, url)
 }

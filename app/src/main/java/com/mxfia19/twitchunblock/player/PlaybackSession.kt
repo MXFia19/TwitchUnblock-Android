@@ -21,6 +21,7 @@ import com.mxfia19.twitchunblock.core.NetworkStatus
 import com.mxfia19.twitchunblock.core.Quality
 import com.mxfia19.twitchunblock.core.Usage
 import com.mxfia19.twitchunblock.core.VodApi
+import com.mxfia19.twitchunblock.core.estimatedBandwidth
 import com.mxfia19.twitchunblock.download.Downloads
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -160,6 +161,9 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
     /** Liens des qualités (téléchargement d'une VOD). */
     val links: Map<String, String> get() = master.links
 
+    /** Débit d'une qualité (bits/s), annoncé ou estimé : taille d'un téléchargement. */
+    fun bandwidth(key: String): Int = estimatedBandwidth(key, master.links.keys, master.variants)
+
     fun open(req: PlayRequest) {
         saveProgress()
         job?.cancel()
@@ -248,6 +252,7 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                     if (title.isEmpty()) title = meta.title
                     thumbnail = meta.thumbnail
                     lengthSeconds = meta.lengthSeconds
+                    com.mxfia19.twitchunblock.core.ContinueWatching.keep(meta)
                 }
                 isClip = false
                 val resume = when {
@@ -257,7 +262,9 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                 }
                 start(m, resume)
                 tickJob = scope.launch { trackProgress(req.id) }
-                if (main) com.mxfia19.twitchunblock.core.History.addVod(req.id, title, thumbnail, channelLogin)
+                // Historique (et « Continuer à regarder ») : TV comprise ; le
+                // multi-live ne lit que des directs.
+                com.mxfia19.twitchunblock.core.History.addVod(req.id, title, thumbnail, channelLogin)
                 if (req.rewind) {
                     // Près de la fin de l'enregistrement : là où en est le direct.
                     seekJob = scope.launch {

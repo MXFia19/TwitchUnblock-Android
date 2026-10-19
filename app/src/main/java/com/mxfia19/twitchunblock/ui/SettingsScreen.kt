@@ -63,6 +63,7 @@ import com.mxfia19.twitchunblock.core.Features
 import com.mxfia19.twitchunblock.core.Hidden
 import com.mxfia19.twitchunblock.core.TopLanguage
 import com.mxfia19.twitchunblock.core.WordsPref
+import com.mxfia19.twitchunblock.download.Downloads
 import com.mxfia19.twitchunblock.web.WebSession
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -163,6 +164,9 @@ fun SettingsScreen(nav: Navigator) {
                 Toggle(AppState.t("tv_chat_show"), null, AppState.showChat) { AppState.updateShowChat(it) }
                 Toggle(AppState.t("background_play"), AppState.t("background_play_sub"), AppState.backgroundPlay) { AppState.updateBackgroundPlay(it) }
                 Toggle(AppState.t("auto_pip"), AppState.t("auto_pip_sub"), AppState.autoPip) { AppState.updateAutoPip(it) }
+                Toggle(AppState.t("dl_wifi_only"), AppState.t("dl_wifi_only_sub"), Features.dlWifiOnly.value) {
+                    Downloads.updateWifiOnly(it)
+                }
             }
             Group(AppState.t("settings_chat")) {
                 Toggle(AppState.t("cfg_timestamps"), AppState.t("cfg_timestamps_sub"), Features.chatTimestamps.value) { Features.chatTimestamps.set(it) }

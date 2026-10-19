@@ -42,19 +42,28 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.exoplayer.offline.Download
 import coil.compose.AsyncImage
 import com.mxfia19.twitchunblock.core.AppState
+import com.mxfia19.twitchunblock.core.Features
 import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.History
 import com.mxfia19.twitchunblock.core.HistoryItem
+import com.mxfia19.twitchunblock.core.Lang
 import com.mxfia19.twitchunblock.download.Downloads
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.filled.Close
 import com.mxfia19.twitchunblock.player.PlayRequest
 
-/** Taille lisible (« 1,2 Go », « 350 Mo »). */
-fun sizeText(bytes: Long): String = when {
-    bytes >= 1_000_000_000L -> String.format("%.1f Go", bytes / 1e9)
-    bytes >= 1_000_000L -> "${bytes / 1_000_000} Mo"
-    else -> "${bytes / 1000} Ko"
+/** Taille lisible (« 1,2 Go », « 350 MB »), unités dans la langue de l'app. */
+fun sizeText(bytes: Long): String {
+    val (g, m, k) = when (AppState.lang) {
+        Lang.FR -> Triple("Go", "Mo", "Ko")
+        Lang.RU -> Triple("ГБ", "МБ", "КБ")
+        else -> Triple("GB", "MB", "KB")
+    }
+    return when {
+        bytes >= 1_000_000_000L -> String.format("%.1f %s", bytes / 1e9, g)
+        bytes >= 1_000_000L -> "${bytes / 1_000_000} $m"
+        else -> "${bytes / 1000} $k"
+    }
 }
 
 /** VODs téléchargées : à regarder hors ligne, avec leur chat. */
@@ -90,6 +99,11 @@ fun LibraryScreen(nav: Navigator) {
                      modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
             }
         }
+        item {
+            Toggle(AppState.t("dl_wifi_only"), AppState.t("dl_wifi_only_sub"), Features.dlWifiOnly.value) {
+                Downloads.updateWifiOnly(it)
+            }
+        }
         items(items, key = { it.vodId }) { d ->
             Row(
                 Modifier.fillMaxWidth().focusCard({ if (d.completed) nav.play(PlayRequest.Download(d.vodId)) })
@@ -110,7 +124,11 @@ fun LibraryScreen(nav: Navigator) {
                     val status = when (d.state) {
                         Download.STATE_COMPLETED -> null
                         Download.STATE_FAILED -> AppState.t("dl_failed")
-                        Download.STATE_QUEUED, Download.STATE_RESTARTING -> AppState.t("dl_preparing")
+                        Download.STATE_QUEUED, Download.STATE_RESTARTING -> when {
+                            Downloads.paused -> AppState.t("dl_paused")
+                            Downloads.waitingForWifi -> AppState.t("dl_waiting_wifi")
+                            else -> AppState.t("dl_preparing")
+                        }
                         Download.STATE_STOPPED -> AppState.t("dl_paused")
                         else -> "${d.percent.toInt()} %"
                     }
@@ -127,6 +145,13 @@ fun LibraryScreen(nav: Navigator) {
                              else AppState.tn("dl_chat_count", chat).replace("{n}", chat.toString()),
                              color = TU.muted, fontSize = 12.sp)
                     }
+                }
+                // En échec : relancé ; en pause (ou gestionnaire en pause) : repris.
+                val resumable = d.state == Download.STATE_STOPPED || (d.state == Download.STATE_QUEUED && Downloads.paused)
+                if (d.failed) {
+                    TextButton(onClick = { Downloads.retry(context, d.vodId) }) { Text(AppState.t("retry"), color = TU.primary) }
+                } else if (resumable) {
+                    TextButton(onClick = { Downloads.resume(context, d.vodId) }) { Text(AppState.t("dl_resume"), color = TU.primary) }
                 }
                 IconButton(onClick = { confirm = d.vodId }) {
                     Icon(Icons.Filled.Delete, contentDescription = AppState.t("remove"), tint = TU.muted)

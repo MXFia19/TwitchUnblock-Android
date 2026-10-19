@@ -29,6 +29,10 @@ installable à côté de l'autre.
   chat des VODs.
 - **Série 3** : points de chaîne, prédictions, sondages, hype train, raids, drops, notifications (ntfy),
   signalements, annonces, sauvegarde, mises à jour, comptage.
+- **Série 4** : partager l'instant (VOD à la position en cours, chaîne, clip) et créer un clip du direct
+  (session web) depuis le menu ⋮ du lecteur ; « Continuer à regarder » sur l'accueil (rangée « Reprendre »
+  sur la TV) ; téléchargements : taille estimée et espace libre avant de lancer, Wi-Fi seulement (le
+  téléchargement attend le Wi-Fi), Reprendre / Réessayer dans la Bibliothèque.
 
 ## Construire
 

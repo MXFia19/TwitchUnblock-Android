@@ -25,6 +25,8 @@ class App : Application(), ImageLoaderFactory {
         Downloads.init(this)
         AppState.init(this)
         com.mxfia19.twitchunblock.core.Features.init()
+        // « Wi-Fi seulement » lu : appliqué avant que le service ne relance un téléchargement.
+        Downloads.applyWifiOnly()
         com.mxfia19.twitchunblock.web.WebSession.init()
         com.mxfia19.twitchunblock.web.Integrity.init(this)
         com.mxfia19.twitchunblock.core.History.init()

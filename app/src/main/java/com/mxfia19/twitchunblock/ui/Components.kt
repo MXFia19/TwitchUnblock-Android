@@ -52,6 +52,7 @@ import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Category
 import com.mxfia19.twitchunblock.core.ChannelBrief
 import com.mxfia19.twitchunblock.core.Clip
+import com.mxfia19.twitchunblock.core.ContinueWatching
 import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.TwitchStream
 import com.mxfia19.twitchunblock.core.Vod
@@ -197,6 +198,33 @@ fun VodCard(vod: Vod, modifier: Modifier = Modifier, onClick: () -> Unit) {
              overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
         Format.parseDate(vod.publishedAt)?.let {
             Text(Format.shortDate(it), color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 4.dp))
+        }
+    }
+}
+
+/** VOD entamée (« Continuer à regarder ») : miniature et part déjà vue,
+ *  titre, chaîne. */
+@Composable
+fun ContinueCard(entry: ContinueWatching.Entry, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Column(modifier.focusCard(onClick)) {
+        Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(TU.surfaceHi)) {
+            if (entry.thumb != null) {
+                AsyncImage(model = entry.thumb, contentDescription = null, contentScale = ContentScale.Crop,
+                           modifier = Modifier.fillMaxSize())
+            }
+            Pill("▶ " + Format.clock(entry.positionMs / 1000) + " / " + Format.clock(entry.lengthSeconds.toLong()),
+                 Modifier.align(Alignment.BottomEnd).padding(6.dp))
+            LinearProgressIndicator(
+                progress = { entry.progress },
+                color = TU.primary, trackColor = Color(0x66000000),
+                modifier = Modifier.fillMaxWidth().height(3.dp).align(Alignment.BottomCenter),
+            )
+        }
+        Text(entry.title, color = TU.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
+             overflow = TextOverflow.Ellipsis, modifier = Modifier.padding(horizontal = 4.dp, vertical = 4.dp))
+        entry.channel?.let {
+            Text(it, color = TU.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
+                 modifier = Modifier.padding(horizontal = 4.dp))
         }
     }
 }

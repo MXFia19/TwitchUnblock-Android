@@ -47,6 +47,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Category
+import com.mxfia19.twitchunblock.core.ContinueWatching
+import com.mxfia19.twitchunblock.core.History
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.ui.CategoryCard
 import com.mxfia19.twitchunblock.ui.CategoryModel
@@ -54,6 +56,7 @@ import com.mxfia19.twitchunblock.ui.ChannelHeader
 import com.mxfia19.twitchunblock.ui.ChannelModel
 import com.mxfia19.twitchunblock.ui.ChannelRow
 import com.mxfia19.twitchunblock.ui.ClipCard
+import com.mxfia19.twitchunblock.ui.ContinueCard
 import com.mxfia19.twitchunblock.ui.FollowingModel
 import com.mxfia19.twitchunblock.ui.HomeModel
 import com.mxfia19.twitchunblock.ui.LoadingBox
@@ -193,7 +196,23 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav, back: TvRet
         home.load()
         search.loadTop()
     }
+    // Reprendre : VODs entamées, en tête ; durées demandées pour les nouvelles.
+    val resume = ContinueWatching.items()
+    LaunchedEffect(History.vods.joinToString(",") { it.term }) { ContinueWatching.load() }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
+        if (resume.isNotEmpty()) {
+            item { RowTitle(AppState.t("tv_resume")) }
+            item {
+                LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(resume, key = { it.id }) { e ->
+                        ContinueCard(e, Modifier.width(300.dp).reopen(back, "cw-" + e.id)) {
+                            back.key = "cw-" + e.id
+                            nav.push(TvScreen.Player(PlayRequest.Vod(e.id, e.title, e.channel)))
+                        }
+                    }
+                }
+            }
+        }
         item { Box(Modifier.padding(horizontal = 40.dp)) { Column { com.mxfia19.twitchunblock.ui.NewsCards() } } }
         if (home.followed.isNotEmpty()) {
             item { RowTitle(AppState.t("home_followed")) }

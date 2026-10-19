@@ -46,6 +46,7 @@ object Backup {
             .put("android_backgroundPlay", AppState.backgroundPlay)
             .put("android_autoPip", AppState.autoPip)
             .put("android_showChat", AppState.showChat)
+            .put("android_downloadWifiOnly", Features.dlWifiOnly.value)
         val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val root = JSONObject()
             .put("format", FORMAT)
@@ -108,6 +109,9 @@ object Backup {
         bool("android_backgroundPlay") { AppState.updateBackgroundPlay(it) }
         bool("android_autoPip") { AppState.updateAutoPip(it) }
         bool("android_showChat") { AppState.updateShowChat(it) }
+        bool("android_downloadWifiOnly", "ios_downloadWifiOnly") {
+            com.mxfia19.twitchunblock.download.Downloads.updateWifiOnly(it)
+        }
         (s.str("android_cellularQuality") ?: s.str("ios_cellularQuality"))?.let {
             if (it in Quality.CELLULAR_PREFS) AppState.updateCellularQuality(it)
         }

@@ -81,13 +81,19 @@ object Features {
     val cloudSync = BoolPref("cloud_sync", true)
     val showRecent = BoolPref("show_recent", true)
 
+    // ── Téléchargements ──
+    /** Wi-Fi seulement : en données mobiles, un téléchargement attend le
+     *  Wi-Fi (Downloads.applyWifiOnly). */
+    val dlWifiOnly = BoolPref("dl_wifi_only", false)
+
     /** Langue du top des lives (TopLanguage.codes), null : celle de l'appareil. */
     var topLang by mutableStateOf<String?>(null)
         private set
 
     private val all get() = listOf(chatTimestamps, chatKeepDeleted, chatLoadHistory, chatHideBots, chatHideCommands,
                                    autoClaimChest, showPinned, showLiveEvents, enableRaids, showWatchStreak,
-                                   subAdFree, dropsProgress, dropsAutoClaim, dropsNotify, cloudSync, showRecent)
+                                   subAdFree, dropsProgress, dropsAutoClaim, dropsNotify, cloudSync, showRecent,
+                                   dlWifiOnly)
 
     fun init() {
         all.forEach { it.load() }

@@ -4,10 +4,13 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Icon
@@ -27,6 +30,8 @@ import androidx.compose.ui.unit.sp
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.AuthExpiredException
 import com.mxfia19.twitchunblock.core.BrowseApi
+import com.mxfia19.twitchunblock.core.ContinueWatching
+import com.mxfia19.twitchunblock.core.History
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.TwitchStream
 import com.mxfia19.twitchunblock.core.Hidden
@@ -120,6 +125,9 @@ class HomeModel(private val scope: CoroutineScope) {
 @Composable
 fun HomeScreen(model: HomeModel, nav: Navigator) {
     LaunchedEffect(AppState.user?.id, com.mxfia19.twitchunblock.core.Features.topLang) { model.load() }
+    // Continuer à regarder : VODs entamées, durées demandées pour les nouvelles.
+    val resume = ContinueWatching.items()
+    LaunchedEffect(History.vods.joinToString(",") { it.term }) { ContinueWatching.load() }
     val play = { s: TwitchStream -> nav.play(PlayRequest.Live(s.login)) }
     LazyVerticalGrid(
         columns = GridCells.Adaptive(300.dp),
@@ -128,6 +136,19 @@ fun HomeScreen(model: HomeModel, nav: Navigator) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { NewsCards() }
+        if (resume.isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Text(AppState.t("continue_watching"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                     modifier = Modifier.padding(top = 8.dp))
+            }
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    items(resume, key = { "cw-" + it.id }) { e ->
+                        ContinueCard(e, Modifier.width(220.dp)) { nav.play(PlayRequest.Vod(e.id, e.title, e.channel)) }
+                    }
+                }
+            }
+        }
         if (model.followed.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(AppState.t("home_followed"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
