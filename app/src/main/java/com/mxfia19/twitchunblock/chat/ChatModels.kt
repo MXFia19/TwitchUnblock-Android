@@ -3,7 +3,11 @@ package com.mxfia19.twitchunblock.chat
 /** Morceau d'un message : texte, emote (image), mention, lien. */
 sealed class ChatToken {
     data class Text(val text: String) : ChatToken()
-    data class Emote(val name: String, val url: String, val ratio: Float = 1f, val zeroWidth: Boolean = false) : ChatToken()
+    /** Pour sa fiche : `source` (« twitch », « 7tv », « bttv », « ffz »), son
+     *  id chez Twitch, son auteur s'il est connu, emote de la chaîne ou globale. */
+    data class Emote(val name: String, val url: String, val ratio: Float = 1f, val zeroWidth: Boolean = false,
+                     val source: String = "twitch", val twitchId: String? = null, val author: String? = null,
+                     val channel: Boolean = false) : ChatToken()
     data class Mention(val name: String) : ChatToken()
     data class Link(val url: String) : ChatToken()
 }

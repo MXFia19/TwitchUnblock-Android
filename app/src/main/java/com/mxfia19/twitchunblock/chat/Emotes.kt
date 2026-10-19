@@ -22,7 +22,10 @@ import java.util.concurrent.ConcurrentHashMap
  * prime sur les globales ; 7TV, puis BTTV, puis FFZ. Comme EmoteService (iOS).
  */
 object Emotes {
-    data class Emote(val name: String, val url: String, val ratio: Float = 1f, val zeroWidth: Boolean = false)
+    /** `source` : « 7tv », « bttv » ou « ffz » ; `author` : qui l'a créée (si
+     *  la source le dit) ; `channel` : emote de la chaîne (sinon globale). */
+    data class Emote(val name: String, val url: String, val ratio: Float = 1f, val zeroWidth: Boolean = false,
+                     val source: String = "", val author: String? = null, val channel: Boolean = false)
 
     private val global = ConcurrentHashMap<String, Emote>()
     private val channels = ConcurrentHashMap<String, Map<String, Emote>>()
@@ -44,8 +47,8 @@ object Emotes {
     suspend fun loadGlobal() = mutex.withLock {
         if (globalLoaded) return@withLock
         coroutineScope {
-            val stv = async { stvSet(parseJson(Http.get("https://7tv.io/v3/emote-sets/global")?.body)?.arr("emotes")?.objects()) }
-            val bttv = async { bttvList(parseJsonArray(Http.get("https://api.betterttv.net/3/cached/emotes/global")?.body)?.objects()) }
+            val stv = async { stvSet(parseJson(Http.get("https://7tv.io/v3/emote-sets/global")?.body)?.arr("emotes")?.objects(), false) }
+            val bttv = async { bttvList(parseJsonArray(Http.get("https://api.betterttv.net/3/cached/emotes/global")?.body)?.objects(), false) }
             val ffz = async { ffzGlobal(parseJson(Http.get("https://api.frankerfacez.com/v1/set/global")?.body)) }
             // Ordre inverse de priorité : la dernière écrite l'emporte.
             val merged = HashMap<String, Emote>()
@@ -66,14 +69,14 @@ object Emotes {
     suspend fun loadChannel(channelId: String) {
         if (System.currentTimeMillis() < (channelsUntil[channelId] ?: 0L)) return
         coroutineScope {
-            val stv = async { answer("https://7tv.io/v3/users/twitch/$channelId")?.let { stvSet(parseJson(it)?.obj("emote_set")?.arr("emotes")?.objects()) } }
+            val stv = async { answer("https://7tv.io/v3/users/twitch/$channelId")?.let { stvSet(parseJson(it)?.obj("emote_set")?.arr("emotes")?.objects(), true) } }
             val bttv = async {
                 answer("https://api.betterttv.net/3/cached/users/twitch/$channelId")?.let {
                     val j = parseJson(it)
-                    bttvList(j?.arr("channelEmotes")?.objects()) + bttvList(j?.arr("sharedEmotes")?.objects())
+                    bttvList(j?.arr("channelEmotes")?.objects(), true) + bttvList(j?.arr("sharedEmotes")?.objects(), true)
                 }
             }
-            val ffz = async { answer("https://api.frankerfacez.com/v1/room/id/$channelId")?.let { ffzSets(parseJson(it)?.obj("sets"), null) } }
+            val ffz = async { answer("https://api.frankerfacez.com/v1/room/id/$channelId")?.let { ffzSets(parseJson(it)?.obj("sets"), null, true) } }
             val sources = listOf(ffz.await(), bttv.await(), stv.await())
             val answered = sources.count { it != null }
             if (answered == 0) {
@@ -93,7 +96,7 @@ object Emotes {
     private suspend fun answer(url: String): String? =
         Http.get(url)?.takeIf { it.code < 500 && it.code != 429 }?.body
 
-    private fun stvSet(list: List<JSONObject>?): List<Emote> = list.orEmpty().mapNotNull { o ->
+    private fun stvSet(list: List<JSONObject>?, channel: Boolean): List<Emote> = list.orEmpty().mapNotNull { o ->
         val name = o.str("name") ?: return@mapNotNull null
         val data = o.obj("data") ?: return@mapNotNull null
         val host = data.obj("host") ?: return@mapNotNull null
@@ -101,22 +104,27 @@ object Emotes {
         val file = host.arr("files")?.objects()?.firstOrNull()
         val w = file?.int("width") ?: 0
         val h = file?.int("height") ?: 0
+        val owner = data.obj("owner")
         // Drapeau actif dans ce jeu d'emotes : 1 = superposée (zero-width).
-        Emote(name, "https:$base/2x.webp", if (w > 0 && h > 0) w.toFloat() / h else 1f, ((o.int("flags") ?: 0) and 1) != 0)
+        Emote(name, "https:$base/2x.webp", if (w > 0 && h > 0) w.toFloat() / h else 1f, ((o.int("flags") ?: 0) and 1) != 0,
+              "7tv", owner?.str("display_name") ?: owner?.str("username"), channel)
     }
 
-    private fun bttvList(list: List<JSONObject>?): List<Emote> = list.orEmpty().mapNotNull { o ->
+    private fun bttvList(list: List<JSONObject>?, channel: Boolean): List<Emote> = list.orEmpty().mapNotNull { o ->
         val id = o.str("id") ?: return@mapNotNull null
         val code = o.str("code") ?: return@mapNotNull null
-        Emote(code, "https://cdn.betterttv.net/emote/$id/2x")
+        // Auteur : dit pour les emotes partagées seulement.
+        val user = o.obj("user")
+        Emote(code, "https://cdn.betterttv.net/emote/$id/2x", source = "bttv",
+              author = user?.str("displayName") ?: user?.str("name"), channel = channel)
     }
 
     private fun ffzGlobal(json: JSONObject?): List<Emote> {
         val defaults = json?.arr("default_sets")?.let { a -> (0 until a.length()).map { a.opt(it).toString() } }?.toSet()
-        return ffzSets(json?.obj("sets"), defaults)
+        return ffzSets(json?.obj("sets"), defaults, false)
     }
 
-    private fun ffzSets(sets: JSONObject?, only: Set<String>?): List<Emote> {
+    private fun ffzSets(sets: JSONObject?, only: Set<String>?, channel: Boolean): List<Emote> {
         if (sets == null) return emptyList()
         val out = mutableListOf<Emote>()
         val keys = sets.keys()
@@ -130,7 +138,9 @@ object Emotes {
                 if (url.startsWith("//")) url = "https:$url"
                 val w = e.int("width") ?: 0
                 val h = e.int("height") ?: 0
-                out += Emote(name, url, if (w > 0 && h > 0) w.toFloat() / h else 1f, e.bool("modifier") == true)
+                val owner = e.obj("owner")
+                out += Emote(name, url, if (w > 0 && h > 0) w.toFloat() / h else 1f, e.bool("modifier") == true,
+                             "ffz", owner?.str("display_name") ?: owner?.str("name"), channel)
             }
         }
         return out

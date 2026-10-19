@@ -25,8 +25,6 @@ import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Face
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -47,14 +45,17 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.LinkInteractionListener
 import androidx.compose.ui.text.Placeholder
 import androidx.compose.ui.text.PlaceholderVerticalAlign
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
@@ -68,6 +69,7 @@ import com.mxfia19.twitchunblock.chat.ChatToken
 import com.mxfia19.twitchunblock.chat.Emotes
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Features
+import com.mxfia19.twitchunblock.core.Links
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -113,8 +115,11 @@ private fun highlighted(m: ChatMessage): Boolean {
 
 private val clock = SimpleDateFormat("HH:mm", Locale.US)
 
-/** Texte d'un message, emotes et badges en images dans la ligne. */
-fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false): Pair<AnnotatedString, Map<String, InlineTextContent>> {
+/** Texte d'un message, emotes et badges en images dans la ligne. `onEmote` :
+ *  emote touchée (sa fiche) ; `onUser` : mention touchée (fiche de la personne). */
+fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false,
+             onEmote: ((ChatToken.Emote) -> Unit)? = null,
+             onUser: ((String) -> Unit)? = null): Pair<AnnotatedString, Map<String, InlineTextContent>> {
     val inline = HashMap<String, InlineTextContent>()
     val badgeSize = (emoteSize.value * 0.7f).sp
     val text = buildAnnotatedString {
@@ -152,11 +157,23 @@ fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false): P
                         val id = "e$i"
                         val width = (emoteSize.value * tok.ratio.coerceIn(0.5f, 4f)).sp
                         inline[id] = InlineTextContent(Placeholder(width, emoteSize, PlaceholderVerticalAlign.Center)) {
-                            AsyncImage(model = tok.url, contentDescription = tok.name, modifier = Modifier.fillMaxSize())
+                            AsyncImage(model = tok.url, contentDescription = tok.name,
+                                       modifier = if (onEmote != null) Modifier.fillMaxSize().clickable { onEmote(tok) }
+                                                  else Modifier.fillMaxSize())
                         }
                         appendInlineContent(id, tok.name)
                     }
-                    is ChatToken.Mention -> withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(tok.name) }
+                    is ChatToken.Mention -> {
+                        // Pseudo mentionné : sa fiche au toucher.
+                        val login = tok.name.removePrefix("@").trimEnd(',', '.', '!', '?', ':', ';').lowercase()
+                        if (onUser != null && Links.isValidLogin(login)) {
+                            withLink(LinkAnnotation.Clickable("user:$login", null, LinkInteractionListener { onUser(login) })) {
+                                withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(tok.name) }
+                            }
+                        } else {
+                            withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append(tok.name) }
+                        }
+                    }
                     is ChatToken.Link -> withLink(LinkAnnotation.Url(tok.url, TextLinkStyles(SpanStyle(color = Color(0xFFBF94FF), textDecoration = TextDecoration.Underline)))) {
                         append(tok.url)
                     }
@@ -169,9 +186,11 @@ fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false): P
 
 @Composable
 fun ChatMessageRow(m: ChatMessage, emoteSize: TextUnit = 24.sp, fontSize: TextUnit = 14.sp, timestamp: Boolean = false,
-                   onClick: (() -> Unit)? = null) {
+                   onClick: (() -> Unit)? = null, onEmote: ((ChatToken.Emote) -> Unit)? = null,
+                   onUser: ((String) -> Unit)? = null) {
     val keepDeleted = Features.chatKeepDeleted.value
-    val (text, inline) = remember(m, timestamp, keepDeleted, emoteSize) { chatLine(m, emoteSize, timestamp) }
+    // onEmote et onUser : rappels stables (ChatPanel), hors des clés du cache.
+    val (text, inline) = remember(m, timestamp, keepDeleted, emoteSize) { chatLine(m, emoteSize, timestamp, onEmote, onUser) }
     val bg = when {
         highlighted(m) -> TU.highlight
         m.notice != null -> TU.primaryDim
@@ -192,14 +211,22 @@ private fun atBottom(state: LazyListState): Boolean {
 }
 
 /** Chat d'un direct : les messages filtrés (qui suivent le bas, sauf si on
- *  remonte), et la saisie avec ses emotes. Toucher un message : masquer la
- *  personne. */
+ *  remonte), et la saisie avec ses emotes et l'autocomplétion. Toucher un
+ *  message ou un pseudo : la fiche de la personne ; une emote : sa fiche.
+ *  `onOpenChannel` : « Sa chaîne » dans la fiche (pas en multi-live). */
 @Composable
-fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onLogin: () -> Unit) {
+fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onOpenChannel: ((String) -> Unit)? = null,
+              onLogin: () -> Unit) {
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var stick by remember { mutableStateOf(true) }
-    var menuFor by remember { mutableStateOf<String?>(null) }
+    var userCard by remember { mutableStateOf<String?>(null) }
+    var emoteCard by remember { mutableStateOf<ChatToken.Emote?>(null) }
+    // Saisie gardée ici : « Mentionner » (fiche d'une personne) y ajoute le pseudo.
+    var draft by remember(client) { mutableStateOf(TextFieldValue("")) }
+    // Rappels stables : les lignes déjà composées gardent les leurs.
+    val openUser = remember { { login: String -> userCard = login } }
+    val openEmote = remember { { e: ChatToken.Emote -> emoteCard = e } }
     val visible by remember(client) { derivedStateOf { client.messages.filter { !hiddenByFilters(it) } } }
     val font = Features.chatFontSize.value
     val emote = (font * 1.7f).sp
@@ -213,17 +240,9 @@ fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onLogin: () -> 
         Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(visible, key = { _, m -> m.id }) { _, m ->
-                    Box {
-                        val open = if (m.login.isNotEmpty()) ({ menuFor = m.id }) else null
-                        ChatMessageRow(m, emoteSize = emote, fontSize = font.sp, timestamp = Features.chatTimestamps.value,
-                                       onClick = open)
-                        DropdownMenu(expanded = menuFor == m.id, onDismissRequest = { menuFor = null }) {
-                            DropdownMenuItem(text = { Text(AppState.t("hide_user") + " · " + m.name) }, onClick = {
-                                menuFor = null
-                                Features.blockedUsers.set(Features.blockedUsers.value + m.login)
-                            })
-                        }
-                    }
+                    val open = if (m.login.isNotEmpty()) ({ userCard = m.login }) else null
+                    ChatMessageRow(m, emoteSize = emote, fontSize = font.sp, timestamp = Features.chatTimestamps.value,
+                                   onClick = open, onEmote = openEmote, onUser = openUser)
                 }
             }
             if (!client.connected && client.messages.isEmpty()) {
@@ -241,38 +260,53 @@ fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onLogin: () -> 
                 ) { Text("↓ " + AppState.t("chat_resume"), color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp)) }
             }
         }
-        ChatInput(client, onLogin)
+        ChatInput(client, draft, { draft = it }, onLogin)
     }
+    userCard?.let { login ->
+        UserCard(login, client,
+                 onMention = if (AppState.user != null) ({ name: String -> draft = withMention(draft, name) }) else null,
+                 onOpenChannel = onOpenChannel, onClose = { userCard = null })
+    }
+    emoteCard?.let { e -> EmoteCard(e) { emoteCard = null } }
 }
 
 @Composable
-private fun ChatInput(client: ChatClient, onLogin: () -> Unit) {
+private fun ChatInput(client: ChatClient, draft: TextFieldValue, onDraft: (TextFieldValue) -> Unit, onLogin: () -> Unit) {
     if (AppState.user == null) {
         Row(Modifier.fillMaxWidth().background(TU.surface).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(AppState.t("chat_login_to_send"), color = TU.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(AppState.t("tv_login"), color = TU.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                  modifier = Modifier.clip(RoundedCornerShape(6.dp)).focusCard(onLogin).padding(6.dp))
+            // Cloche des notifications de live de la chaîne (suivie, notifications actives).
+            NotifBell(client.channel, Modifier.size(40.dp))
         }
         return
     }
-    var text by remember { mutableStateOf("") }
     var picker by remember { mutableStateOf(false) }
     val send = {
-        if (client.send(text)) text = ""
+        if (client.send(draft.text)) onDraft(TextFieldValue(""))
     }
+    // Autocomplétion : « @ » + pseudos récents du chat, « : » + 2 lettres → emotes.
+    val word = currentWord(draft)?.second.orEmpty()
+    val suggestions = remember(word, client.roomId) { chatCompletions(word, client) }
     Column(Modifier.fillMaxWidth().background(TU.surface)) {
         if (picker) {
             EmotePicker(client.roomId) { name ->
-                text = (if (text.isEmpty() || text.endsWith(" ")) text else "$text ") + name + " "
+                val t = draft.text
+                val next = (if (t.isEmpty() || t.endsWith(" ")) t else "$t ") + name + " "
+                if (next.length <= 500) onDraft(TextFieldValue(next, TextRange(next.length)))
             }
         }
+        if (suggestions.isNotEmpty()) ChatSuggestions(suggestions) { onDraft(completeWord(draft, it.text)) }
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Cloche des notifications de live de la chaîne (suivie, notifications actives).
+            NotifBell(client.channel, Modifier.size(40.dp))
             IconButton(onClick = { picker = !picker }) {
                 Icon(Icons.Filled.Face, contentDescription = AppState.t("emotes_channel"), tint = if (picker) TU.primary else TU.muted)
             }
             OutlinedTextField(
-                value = text,
-                onValueChange = { if (it.length <= 500) text = it },
+                value = draft,
+                onValueChange = { if (it.text.length <= 500) onDraft(it) },
                 placeholder = { Text(AppState.t("chat_send_ph"), color = TU.muted) },
                 singleLine = true,
                 enabled = client.canSend,
@@ -281,7 +315,7 @@ private fun ChatInput(client: ChatClient, onLogin: () -> Unit) {
                 colors = fieldColors(),
                 modifier = Modifier.weight(1f),
             )
-            IconButton(onClick = { send() }, enabled = client.canSend && text.isNotBlank()) {
+            IconButton(onClick = { send() }, enabled = client.canSend && draft.text.isNotBlank()) {
                 Icon(Icons.AutoMirrored.Filled.Send, contentDescription = AppState.t("fb_send"), tint = TU.primary)
             }
         }

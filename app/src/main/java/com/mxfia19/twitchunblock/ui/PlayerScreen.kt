@@ -312,7 +312,9 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
                             RewardsPanel(points, Modifier.weight(1f), onClose = { rewardsOpen = false }) { nav.push(Screen.WebLogin) }
                         } else {
                             extras()
-                            ChatPanel(chat, Modifier.weight(1f)) { nav.push(Screen.Login) }
+                            ChatPanel(chat, Modifier.weight(1f), onOpenChannel = { nav.push(Screen.Channel(it)) }) {
+                                nav.push(Screen.Login)
+                            }
                         }
                     }
                 } else if (vodChat != null) {
@@ -336,7 +338,8 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
                 }
             chat != null && AppState.showChat -> {
                 extras()
-                ChatPanel(chat, Modifier.weight(1f).navigationBarsPadding().imePadding()) { nav.push(Screen.Login) }
+                ChatPanel(chat, Modifier.weight(1f).navigationBarsPadding().imePadding(),
+                          onOpenChannel = { nav.push(Screen.Channel(it)) }) { nav.push(Screen.Login) }
             }
             vodChat != null -> VodChatList(vodChat, Modifier.weight(1f).navigationBarsPadding())
             else -> {

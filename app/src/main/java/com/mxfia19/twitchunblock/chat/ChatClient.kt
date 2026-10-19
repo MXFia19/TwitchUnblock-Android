@@ -360,7 +360,8 @@ object ChatText {
             if (r != null) {
                 flushSegment()
                 val name = String(cps, i, r.first - i + 1)
-                out += ChatToken.Emote(name, "https://static-cdn.jtvnw.net/emoticons/v2/${r.second}/default/dark/2.0")
+                out += ChatToken.Emote(name, "https://static-cdn.jtvnw.net/emoticons/v2/${r.second}/default/dark/2.0",
+                                       twitchId = r.second)
                 i = r.first + 1
             } else {
                 segment.appendCodePoint(cps[i])
@@ -378,7 +379,8 @@ object ChatText {
             if (w.isEmpty()) continue
             val emote = Emotes.find(w, channelId)
             when {
-                emote != null -> out += ChatToken.Emote(emote.name, emote.url, emote.ratio, emote.zeroWidth)
+                emote != null -> out += ChatToken.Emote(emote.name, emote.url, emote.ratio, emote.zeroWidth, emote.source,
+                                                        author = emote.author, channel = emote.channel)
                 w.startsWith("@") && w.length > 1 -> out += ChatToken.Mention(w)
                 w.startsWith("http://") || w.startsWith("https://") -> out += ChatToken.Link(w)
                 else -> out += ChatToken.Text(w)

@@ -32,7 +32,11 @@ installable à côté de l'autre.
 - **Série 4** : partager l'instant (VOD à la position en cours, chaîne, clip) et créer un clip du direct
   (session web) depuis le menu ⋮ du lecteur ; « Continuer à regarder » sur l'accueil (rangée « Reprendre »
   sur la TV) ; téléchargements : taille estimée et espace libre avant de lancer, Wi-Fi seulement (le
-  téléchargement attend le Wi-Fi), Reprendre / Réessayer dans la Bibliothèque.
+  téléchargement attend le Wi-Fi), Reprendre / Réessayer dans la Bibliothèque ; notifications de live enrichies (vignette du direct, groupées par chaîne, « Regarder »
+  et « Ne plus notifier cette chaîne »), cloche par chaîne (page de la chaîne, saisie du chat) et liste des
+  chaînes notifiées dans les réglages ; chat : fiche d'une personne au toucher d'un message ou d'un pseudo
+  (badges, création du compte, date de suivi, derniers messages, Mentionner, Masquer, Sa chaîne), fiche d'une
+  emote (source, auteur), autocomplétion (`@` pseudos récents, `:` et 2 lettres pour les emotes).
 
 ## Construire
 
