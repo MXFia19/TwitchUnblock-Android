@@ -34,10 +34,13 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import com.mxfia19.twitchunblock.chat.ChatClient
@@ -77,6 +80,24 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
             TvKeys.controllerVisible = false
             session.release()
         }
+    }
+    // Pas de session média sur la TV : rien ne joue derrière le lanceur.
+    // Pause en quittant l'app (Accueil), reprise au retour (au direct).
+    val owner = LocalLifecycleOwner.current
+    DisposableEffect(owner) {
+        var resume = false
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_STOP) {
+                resume = session.player.playWhenReady
+                session.player.pause()
+            } else if (event == Lifecycle.Event.ON_START && resume) {
+                resume = false
+                if (session.isLive) session.player.seekToDefaultPosition()
+                session.player.play()
+            }
+        }
+        owner.lifecycle.addObserver(observer)
+        onDispose { owner.lifecycle.removeObserver(observer) }
     }
     TvKeys.menuOpen = menu
     BackHandler(enabled = menu) {
@@ -150,7 +171,8 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
 @Composable
 private fun TvChat(chat: ChatClient, modifier: Modifier) {
     val list = rememberLazyListState()
-    LaunchedEffect(chat.messages.size) {
+    // Dernier message en clé : la liste plafonnée (300) garde la même taille.
+    LaunchedEffect(chat.messages.size, chat.messages.lastOrNull()?.id) {
         if (chat.messages.isNotEmpty()) list.scrollToItem(chat.messages.size - 1)
     }
     LazyColumn(state = list, modifier = modifier.background(Color(0xE6000000)).padding(vertical = 8.dp)) {

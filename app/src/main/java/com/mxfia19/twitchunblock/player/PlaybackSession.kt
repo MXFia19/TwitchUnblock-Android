@@ -24,6 +24,8 @@ import com.mxfia19.twitchunblock.core.VodApi
 import com.mxfia19.twitchunblock.download.Downloads
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -46,9 +48,11 @@ sealed class PlayRequest {
  * qualité (Auto = liste maîtresse, ExoPlayer suit le débit), reprise après
  * une erreur, position des VODs gardée, minuterie. `main` : la lecture
  * principale du téléphone (notification, écran verrouillé, image dans
- * l'image) ; pas les tuiles du multi-live ni la TV. `scope` : fil principal.
+ * l'image) ; pas les tuiles du multi-live ni la TV. `parent` : fil principal.
+ * `audioFocus` faux : tuile du multi-live (handleAudioFocus).
  */
-class PlaybackSession(private val context: Context, private val scope: CoroutineScope, private val main: Boolean = true) {
+class PlaybackSession(private val context: Context, parent: CoroutineScope, private val main: Boolean = true,
+                      audioFocus: Boolean = true) {
     sealed class State {
         /** `step` : source en cours d'essai (« as », « al », « eu », « twitch », « worker »). */
         data class Loading(val step: String? = null) : State()
@@ -57,7 +61,11 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
         object Ready : State()
     }
 
-    val player: ExoPlayer = PlayerFactory.build(context)
+    /** Coroutines de la lecture, toutes annulées par release() : la session
+     *  peut finir avant `parent` (lecture principale portée par PhoneApp). */
+    private val scope = CoroutineScope(parent.coroutineContext + SupervisorJob(parent.coroutineContext[Job]))
+
+    val player: ExoPlayer = PlayerFactory.build(context, audioFocus)
 
     var state by mutableStateOf<State>(State.Loading())
         private set
@@ -361,6 +369,9 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
         player.volume = volume
     }
 
+    /** Multi-live : seule la tuile qui a le son gère le focus audio. */
+    fun handleAudioFocus(on: Boolean) = PlayerFactory.setAudioFocus(player, on)
+
     /** Minuterie : pause dans `minutes` minutes (null : annulée). */
     fun setSleepTimer(minutes: Int?) {
         sleepJob?.cancel()
@@ -430,6 +441,7 @@ class PlaybackSession(private val context: Context, private val scope: Coroutine
             com.mxfia19.twitchunblock.core.CloudSync.scheduleSoon()
         }
         player.release()
+        scope.cancel()
     }
 
     companion object {

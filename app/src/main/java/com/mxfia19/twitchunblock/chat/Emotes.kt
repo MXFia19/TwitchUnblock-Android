@@ -26,6 +26,10 @@ object Emotes {
 
     private val global = ConcurrentHashMap<String, Emote>()
     private val channels = ConcurrentHashMap<String, Map<String, Emote>>()
+    /** Fin de validité des emotes de chaque chaîne (ms). */
+    private val channelsUntil = ConcurrentHashMap<String, Long>()
+    private const val CHANNEL_TTL = 3_600_000L
+    private const val RETRY_TTL = 120_000L
     private val mutex = Mutex()
     @Volatile
     private var globalLoaded = false
@@ -56,23 +60,38 @@ object Emotes {
         }
     }
 
+    /** Emotes de la chaîne, gardées une heure ; quelques minutes seulement si
+     *  une source n'a pas répondu, et pas du tout si aucune n'a répondu (la
+     *  chaîne restait sans emotes jusqu'au redémarrage). */
     suspend fun loadChannel(channelId: String) {
-        if (channels.containsKey(channelId)) return
+        if (System.currentTimeMillis() < (channelsUntil[channelId] ?: 0L)) return
         coroutineScope {
-            val stv = async { stvSet(parseJson(Http.get("https://7tv.io/v3/users/twitch/$channelId")?.body)?.obj("emote_set")?.arr("emotes")?.objects()) }
+            val stv = async { answer("https://7tv.io/v3/users/twitch/$channelId")?.let { stvSet(parseJson(it)?.obj("emote_set")?.arr("emotes")?.objects()) } }
             val bttv = async {
-                val j = parseJson(Http.get("https://api.betterttv.net/3/cached/users/twitch/$channelId")?.body)
-                bttvList(j?.arr("channelEmotes")?.objects()) + bttvList(j?.arr("sharedEmotes")?.objects())
+                answer("https://api.betterttv.net/3/cached/users/twitch/$channelId")?.let {
+                    val j = parseJson(it)
+                    bttvList(j?.arr("channelEmotes")?.objects()) + bttvList(j?.arr("sharedEmotes")?.objects())
+                }
             }
-            val ffz = async { ffzSets(parseJson(Http.get("https://api.frankerfacez.com/v1/room/id/$channelId")?.body)?.obj("sets"), null) }
+            val ffz = async { answer("https://api.frankerfacez.com/v1/room/id/$channelId")?.let { ffzSets(parseJson(it)?.obj("sets"), null) } }
+            val sources = listOf(ffz.await(), bttv.await(), stv.await())
+            val answered = sources.count { it != null }
+            if (answered == 0) {
+                Logger.warn("EMOTES", "Emotes de la chaîne injoignables", channelId)
+                return@coroutineScope
+            }
+            // Ordre inverse de priorité : la dernière écrite l'emporte.
             val merged = HashMap<String, Emote>()
-            ffz.await().forEach { merged[it.name] = it }
-            bttv.await().forEach { merged[it.name] = it }
-            stv.await().forEach { merged[it.name] = it }
+            for (list in sources) list?.forEach { merged[it.name] = it }
             channels[channelId] = merged
+            channelsUntil[channelId] = System.currentTimeMillis() + if (answered == sources.size) CHANNEL_TTL else RETRY_TTL
             Logger.success("EMOTES", "Emotes de la chaîne chargées", "$channelId · ${merged.size}")
         }
     }
+
+    /** Corps de la réponse ; null si la source n'a pas répondu (réseau, 429, 5xx). */
+    private suspend fun answer(url: String): String? =
+        Http.get(url)?.takeIf { it.code < 500 && it.code != 429 }?.body
 
     private fun stvSet(list: List<JSONObject>?): List<Emote> = list.orEmpty().mapNotNull { o ->
         val name = o.str("name") ?: return@mapNotNull null

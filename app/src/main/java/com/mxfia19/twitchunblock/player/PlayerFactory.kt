@@ -31,11 +31,16 @@ object PlayerFactory {
         return RewritingFactory(DefaultDataSource.Factory(context, http))
     }
 
+    private val audio: AudioAttributes =
+        AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build()
+
     /** Lecteur : lit d'abord les VODs téléchargées (cache des téléchargements,
      *  sans y écrire), focus audio, pause au débranchement du casque, et
-     *  processeur et Wi-Fi éveillés pendant la lecture (écran éteint). */
+     *  processeur et Wi-Fi éveillés pendant la lecture (écran éteint).
+     *  `audioFocus` faux : tuiles du multi-live (chacune le prenait aux
+     *  autres, qui s'arrêtaient). */
     @OptIn(UnstableApi::class)
-    fun build(context: Context): ExoPlayer {
+    fun build(context: Context, audioFocus: Boolean = true): ExoPlayer {
         val source = CacheDataSource.Factory()
             .setCache(Downloads.cache)
             .setUpstreamDataSourceFactory(upstream(context))
@@ -43,13 +48,16 @@ object PlayerFactory {
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
         return ExoPlayer.Builder(context)
             .setMediaSourceFactory(DefaultMediaSourceFactory(source))
-            .setAudioAttributes(
-                AudioAttributes.Builder().setUsage(C.USAGE_MEDIA).setContentType(C.AUDIO_CONTENT_TYPE_MOVIE).build(),
-                true,
-            )
+            .setAudioAttributes(audio, audioFocus)
             .setHandleAudioBecomingNoisy(true)
             .setWakeMode(C.WAKE_MODE_NETWORK)
             .build()
+    }
+
+    /** Focus audio pris (pause quand une autre app le prend) ou rendu. */
+    @OptIn(UnstableApi::class)
+    fun setAudioFocus(player: ExoPlayer, on: Boolean) {
+        player.setAudioAttributes(audio, on)
     }
 }
 

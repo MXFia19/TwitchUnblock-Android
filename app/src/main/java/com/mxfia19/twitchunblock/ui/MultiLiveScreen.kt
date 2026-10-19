@@ -85,7 +85,7 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
     fun add(input: String): Boolean {
         val login = Links.login(input)
         if (!Links.isValidLogin(login) || tiles.any { it.login == login } || full) return false
-        val session = PlaybackSession(context, scope, main = false).apply { forceAuto = true }
+        val session = PlaybackSession(context, scope, main = false, audioFocus = false).apply { forceAuto = true }
         tiles += Tile(login, session)
         session.open(PlayRequest.Live(login))
         if (tiles.size == 1) audio = 0
@@ -111,7 +111,12 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
         tiles.forEachIndexed { i, t ->
             t.session.setMaxHeight(cap)
             t.session.setVolume(if (i == audio) 1f else 0f)
+            if (i != audio) t.session.handleAudioFocus(false)
         }
+        // Focus audio : rendu par les autres tuiles, puis pris par celle qui a
+        // le son. Pris par chaque tuile, il passait à la dernière ajoutée
+        // (muette) et les autres s'arrêtaient.
+        tiles.getOrNull(audio)?.session?.handleAudioFocus(true)
     }
 
     fun pauseAll() = tiles.forEach { it.session.player.pause() }

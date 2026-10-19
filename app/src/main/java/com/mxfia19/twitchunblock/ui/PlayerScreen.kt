@@ -107,6 +107,8 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
                 if (!controls) view.hideController()
             }
         },
+        // La session survit à l'écran : la vue retirée lâche le lecteur.
+        onRelease = { view -> view.player = null },
         modifier = modifier.background(Color.Black),
     )
 }
@@ -175,7 +177,8 @@ fun rememberVodChat(session: PlaybackSession, show: Boolean): VodChat? {
 @Composable
 fun VodChatList(chat: VodChat, modifier: Modifier = Modifier, emoteSize: Int = 24, fontSize: Int = 14) {
     val list = rememberLazyListState()
-    LaunchedEffect(chat.messages.size) {
+    // Dernier message en clé : la liste plafonnée (200) garde la même taille.
+    LaunchedEffect(chat.messages.size, chat.messages.lastOrNull()?.id) {
         if (chat.messages.isNotEmpty()) list.scrollToItem(chat.messages.size - 1)
     }
     Box(modifier.background(TU.bg)) {
@@ -189,16 +192,15 @@ fun VodChatList(chat: VodChat, modifier: Modifier = Modifier, emoteSize: Int = 2
     }
 }
 
+/** Écran du lecteur ; la session est portée par PhoneApp (elle survit à un
+ *  écran ouvert par-dessus). */
 @Composable
-fun PlayerScreen(request: PlayRequest, nav: Navigator) {
+fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
     val context = LocalContext.current
     val activity = context as? Activity
     val scope = rememberCoroutineScope()
-    val session = remember { PlaybackSession(context, scope) }
-    LaunchedEffect(request) { session.open(request) }
     DisposableEffect(Unit) {
         onDispose {
-            session.release()
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             (activity as? MainActivity)?.updatePip()
         }

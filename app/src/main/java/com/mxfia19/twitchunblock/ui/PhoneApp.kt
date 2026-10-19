@@ -29,18 +29,22 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Category
 import com.mxfia19.twitchunblock.player.PlayRequest
+import com.mxfia19.twitchunblock.player.PlaybackSession
 
 /** Écrans du téléphone. Les quatre onglets, puis les pages empilées. */
 sealed class Screen {
@@ -98,6 +102,7 @@ class Navigator {
 
 @Composable
 fun PhoneApp(nav: Navigator) {
+    val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val home = remember { HomeModel(scope) }
     val search = remember { SearchModel(scope) }
@@ -105,9 +110,18 @@ fun PhoneApp(nav: Navigator) {
     val screen = nav.current
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
 
+    // Lecture principale, portée ici et non par l'écran du lecteur : elle
+    // continue sous une fiche chaîne, la connexion ou la session web, et
+    // reprend telle quelle au retour (rembobinage compris). Arrêtée quand le
+    // lecteur quitte la pile (fermé, onglet, multi-live).
+    val playing = nav.stack.filterIsInstance<Screen.Player>().lastOrNull()?.request
+    val session = remember(playing != null) { if (playing != null) PlaybackSession(context, scope) else null }
+    DisposableEffect(session) { onDispose { session?.release() } }
+    LaunchedEffect(session, playing) { if (session != null && playing != null) session.open(playing) }
+
     UpdatePrompt()
-    if (screen is Screen.Player) {
-        PlayerScreen(screen.request, nav)
+    if (screen is Screen.Player && session != null) {
+        PlayerScreen(session, nav)
         return
     }
     if (screen is Screen.MultiLive) {

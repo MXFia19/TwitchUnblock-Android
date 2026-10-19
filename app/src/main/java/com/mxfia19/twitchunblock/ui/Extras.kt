@@ -6,6 +6,7 @@ import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Format
+import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.News
 import com.mxfia19.twitchunblock.core.Updates
 import com.mxfia19.twitchunblock.core.Usage
@@ -60,10 +62,48 @@ import com.mxfia19.twitchunblock.notify.LiveNotifier
 import com.mxfia19.twitchunblock.notify.Ntfy
 import kotlinx.coroutines.launch
 
+/** Ouvre un lien. Sans app pour l'ouvrir (la plupart des TV n'ont pas de
+ *  navigateur), l'adresse s'affiche avec son QR code au lieu de planter. */
+@Composable
+fun rememberLinkOpener(): (String) -> Unit {
+    val uri = LocalUriHandler.current
+    var shown by remember { mutableStateOf<String?>(null) }
+    shown?.let { link -> LinkDialog(link) { shown = null } }
+    return { link ->
+        try {
+            uri.openUri(link)
+        } catch (e: Exception) {
+            shown = link
+            Logger.warn("APP", "Aucune app pour ouvrir le lien", link)
+        }
+    }
+}
+
+@Composable
+private fun LinkDialog(link: String, onClose: () -> Unit) {
+    val qr = remember(link) { runCatching { qrBitmap(link, 360) }.getOrNull() }
+    AlertDialog(
+        onDismissRequest = onClose,
+        text = {
+            Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                if (qr != null) Image(qr, contentDescription = null, modifier = Modifier.size(180.dp))
+                Text(AppState.t("tv_login_steps"), fontSize = 14.sp, modifier = Modifier.padding(top = 10.dp))
+                Text(link, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = onClose) { Text(AppState.t("close"), color = TU.primary) }
+        },
+        containerColor = TU.surface,
+        titleContentColor = TU.text,
+        textContentColor = TU.text,
+    )
+}
+
 /** Nouvelle version disponible : télécharger l'APK, ou plus tard. */
 @Composable
 fun UpdatePrompt() {
-    val uri = LocalUriHandler.current
+    val open = rememberLinkOpener()
     var hidden by remember { mutableStateOf(false) }
     val u = Updates.available ?: return
     if (hidden || Updates.skipped(u)) return
@@ -77,7 +117,7 @@ fun UpdatePrompt() {
             }
         },
         confirmButton = {
-            TextButton(onClick = { hidden = true; uri.openUri(u.apkUrl) }) { Text(AppState.t("update_open"), color = TU.primary) }
+            TextButton(onClick = { hidden = true; open(u.apkUrl) }) { Text(AppState.t("update_open"), color = TU.primary) }
         },
         dismissButton = {
             TextButton(onClick = { hidden = true; Updates.skip(u) }) { Text(AppState.t("update_later"), color = TU.text) }
@@ -92,7 +132,7 @@ fun UpdatePrompt() {
 @Composable
 fun NewsCards() {
     val scope = rememberCoroutineScope()
-    val uri = LocalUriHandler.current
+    val open = rememberLinkOpener()
     News.announcement?.let { a ->
         Column(
             Modifier.fillMaxWidth().padding(vertical = 6.dp).clip(RoundedCornerShape(12.dp)).background(TU.primaryDim).padding(12.dp),
@@ -104,7 +144,7 @@ fun NewsCards() {
             if (a.message.isNotEmpty()) Text(a.message, color = TU.text, fontSize = 14.sp, modifier = Modifier.padding(top = 4.dp))
             a.link?.let { link ->
                 Text(link, color = TU.primary, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis,
-                     modifier = Modifier.padding(top = 4.dp).focusCard({ uri.openUri(link) }))
+                     modifier = Modifier.padding(top = 4.dp).focusCard({ open(link) }))
             }
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(top = 8.dp)) {
                 for (e in News.REACTIONS) {

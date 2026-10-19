@@ -227,8 +227,8 @@ private fun ActionRow(text: String, onClick: () -> Unit) {
 }
 
 @Composable
-fun SuggestionRow(s: Suggestion, onClick: () -> Unit) {
-    Row(Modifier.fillMaxWidth().focusCard(onClick).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+fun SuggestionRow(s: Suggestion, modifier: Modifier = Modifier, onClick: () -> Unit) {
+    Row(modifier.fillMaxWidth().focusCard(onClick).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
         Avatar(s.avatar, 40.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {

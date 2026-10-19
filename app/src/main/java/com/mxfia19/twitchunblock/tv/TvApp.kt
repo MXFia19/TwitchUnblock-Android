@@ -33,7 +33,9 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -61,6 +63,7 @@ import com.mxfia19.twitchunblock.ui.StreamCard
 import com.mxfia19.twitchunblock.ui.SuggestionRow
 import com.mxfia19.twitchunblock.ui.TU
 import com.mxfia19.twitchunblock.ui.VodCard
+import kotlinx.coroutines.delay
 
 sealed class TvScreen {
     object Tabs : TvScreen()
@@ -81,6 +84,25 @@ class TvNav {
     }
 }
 
+/** Onglets : la carte ouverte en dernier (direct, chaîne, catégorie)
+ *  reprend le focus au retour, au lieu de la barre d'onglets. */
+class TvReturn {
+    var key by mutableStateOf<String?>(null)
+    val focus = FocusRequester()
+}
+
+/** Carte des onglets retenue par `back` (sa clé posée à l'ouverture) : elle
+ *  reprend le focus quand l'onglet revient. */
+@Composable
+private fun Modifier.reopen(back: TvReturn, key: String): Modifier {
+    if (back.key != key) return this
+    LaunchedEffect(Unit) {
+        withFrameNanos { }   // carte placée
+        if (runCatching { back.focus.requestFocus() }.isSuccess) back.key = null
+    }
+    return focusRequester(back.focus)
+}
+
 @Composable
 fun TvApp() {
     val scope = rememberCoroutineScope()
@@ -89,17 +111,23 @@ fun TvApp() {
     val search = remember { SearchModel(scope) }
     val following = remember { FollowingModel(scope) }
     var tab by remember { mutableStateOf(0) }
+    // Onglets : leurs listes (défilement) gardées pendant qu'un direct, une
+    // chaîne ou une catégorie est ouvert par-dessus.
+    val tabsState = rememberSaveableStateHolder()
+    val back = remember { TvReturn() }
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
     com.mxfia19.twitchunblock.ui.UpdatePrompt()
     Box(Modifier.fillMaxSize().background(TU.bg)) {
         when (val s = nav.stack.last()) {
             TvScreen.Tabs -> Column(Modifier.fillMaxSize()) {
-                TvTabBar(tab) { tab = it }
-                when (tab) {
-                    0 -> TvHome(home, search, nav)
-                    1 -> TvSearch(search, nav)
-                    2 -> TvFollowing(following, nav)
-                    else -> TvAccount()
+                TvTabBar(tab, back) { tab = it }
+                tabsState.SaveableStateProvider(tab) {
+                    when (tab) {
+                        0 -> TvHome(home, search, nav, back)
+                        1 -> TvSearch(search, nav, back)
+                        2 -> TvFollowing(following, nav, back)
+                        else -> TvAccount()
+                    }
                 }
             }
             is TvScreen.Channel -> TvChannel(s.login, nav)
@@ -129,9 +157,18 @@ fun TvButton(text: String, selected: Boolean = false, modifier: Modifier = Modif
 }
 
 @Composable
-private fun TvTabBar(tab: Int, onTab: (Int) -> Unit) {
+private fun TvTabBar(tab: Int, back: TvReturn, onTab: (Int) -> Unit) {
     val first = remember { FocusRequester() }
-    LaunchedEffect(Unit) { runCatching { first.requestFocus() } }
+    LaunchedEffect(Unit) {
+        // Retour d'une carte : elle reprend le focus ; la barre seulement si
+        // elle n'a pas pu (liste rechargée sans elle).
+        if (back.key != null) {
+            delay(800)
+            if (back.key == null) return@LaunchedEffect
+            back.key = null
+        }
+        runCatching { first.requestFocus() }
+    }
     val labels = listOf("tab_home", "tv_search", "tv_following", "tv_account")
     Row(Modifier.fillMaxWidth().padding(horizontal = 40.dp, vertical = 18.dp), horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically) {
@@ -151,7 +188,7 @@ private fun RowTitle(text: String) {
 }
 
 @Composable
-private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav) {
+private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav, back: TvReturn) {
     LaunchedEffect(AppState.user?.id) {
         home.load()
         search.loadTop()
@@ -163,7 +200,10 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav) {
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(home.followed, key = { it.login }) { s ->
-                        StreamCard(s, Modifier.width(300.dp)) { nav.push(TvScreen.Player(PlayRequest.Live(s.login))) }
+                        StreamCard(s, Modifier.width(300.dp).reopen(back, "f-" + s.login)) {
+                            back.key = "f-" + s.login
+                            nav.push(TvScreen.Player(PlayRequest.Live(s.login)))
+                        }
                     }
                 }
             }
@@ -174,7 +214,10 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav) {
             else if (home.failed) MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { home.load(force = true) }
             else LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(home.visibleTop, key = { it.login }) { s ->
-                    StreamCard(s, Modifier.width(300.dp)) { nav.push(TvScreen.Player(PlayRequest.Live(s.login))) }
+                    StreamCard(s, Modifier.width(300.dp).reopen(back, "t-" + s.login)) {
+                        back.key = "t-" + s.login
+                        nav.push(TvScreen.Player(PlayRequest.Live(s.login)))
+                    }
                 }
                 if (home.hasMore) item { Box(Modifier.width(160.dp)) { com.mxfia19.twitchunblock.ui.MoreButton(home.loadingMore) { home.more() } } }
             }
@@ -183,7 +226,10 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav) {
         item {
             LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(search.visibleTop, key = { it.id }) { c ->
-                    CategoryCard(c, Modifier.width(150.dp)) { nav.push(TvScreen.CategoryPage(c)) }
+                    CategoryCard(c, Modifier.width(150.dp).reopen(back, "c-" + c.id)) {
+                        back.key = "c-" + c.id
+                        nav.push(TvScreen.CategoryPage(c))
+                    }
                 }
             }
         }
@@ -191,7 +237,7 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav) {
 }
 
 @Composable
-private fun TvSearch(model: SearchModel, nav: TvNav) {
+private fun TvSearch(model: SearchModel, nav: TvNav, back: TvReturn) {
     Column(Modifier.fillMaxSize().padding(horizontal = 40.dp)) {
         OutlinedTextField(
             value = model.query, onValueChange = { model.update(it) }, singleLine = true,
@@ -203,13 +249,19 @@ private fun TvSearch(model: SearchModel, nav: TvNav) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp)) {
             if (model.searching && model.channels.isEmpty()) item { LoadingBox() }
             items(model.channels, key = { "u-" + it.login }) { s ->
-                SuggestionRow(s) { nav.push(TvScreen.Channel(s.login)) }
+                SuggestionRow(s, Modifier.reopen(back, "u-" + s.login)) {
+                    back.key = "u-" + s.login
+                    nav.push(TvScreen.Channel(s.login))
+                }
             }
             if (model.categories.isNotEmpty()) {
                 item {
                     LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp), contentPadding = PaddingValues(vertical = 12.dp)) {
                         items(model.categories, key = { it.id }) { c ->
-                            CategoryCard(c, Modifier.width(150.dp)) { nav.push(TvScreen.CategoryPage(c)) }
+                            CategoryCard(c, Modifier.width(150.dp).reopen(back, "sc-" + c.id)) {
+                                back.key = "sc-" + c.id
+                                nav.push(TvScreen.CategoryPage(c))
+                            }
                         }
                     }
                 }
@@ -219,7 +271,7 @@ private fun TvSearch(model: SearchModel, nav: TvNav) {
 }
 
 @Composable
-private fun TvFollowing(model: FollowingModel, nav: TvNav) {
+private fun TvFollowing(model: FollowingModel, nav: TvNav, back: TvReturn) {
     LaunchedEffect(AppState.user?.id) { model.load() }
     when {
         model.isEmptySetup -> MessageBox(AppState.t("tv_need_login"))
@@ -233,7 +285,8 @@ private fun TvFollowing(model: FollowingModel, nav: TvNav) {
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             items(model.channels, key = { it.login }) { b ->
-                ChannelRow(b) {
+                ChannelRow(b, Modifier.reopen(back, "fo-" + b.login)) {
+                    back.key = "fo-" + b.login
                     if (b.stream != null) nav.push(TvScreen.Player(PlayRequest.Live(b.login))) else nav.push(TvScreen.Channel(b.login))
                 }
             }
