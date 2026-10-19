@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -77,6 +78,8 @@ fun SettingsScreen(nav: Navigator) {
     val uri = LocalUriHandler.current
     val context = LocalContext.current
     var backupMessage by remember { mutableStateOf<String?>(null) }
+    // Déconnexion avec une session web connectée : son retrait est proposé.
+    var askLogout by remember { mutableStateOf(false) }
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { target ->
         if (target == null) return@rememberLauncherForActivityResult
         backupMessage = try {
@@ -113,7 +116,9 @@ fun SettingsScreen(nav: Navigator) {
                             Text(user.displayName, color = TU.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
                             Text(AppState.t("account_api_sub"), color = TU.muted, fontSize = 12.sp)
                         }
-                        OutlinedButton(onClick = { Auth.logout() }) { Text(AppState.t("tv_logout"), color = TU.text) }
+                        OutlinedButton(onClick = { if (WebSession.token != null) askLogout = true else Auth.logout() }) {
+                            Text(AppState.t("tv_logout"), color = TU.text)
+                        }
                     }
                 } else {
                     Column(Modifier.padding(12.dp)) {
@@ -222,6 +227,24 @@ fun SettingsScreen(nav: Navigator) {
                 LinkRow(AppState.t("logs")) { nav.push(Screen.Logs) }
             }
         }
+    }
+    if (askLogout) {
+        AlertDialog(
+            onDismissRequest = { askLogout = false },
+            title = { Text(AppState.t("tv_logout")) },
+            text = { Text(AppState.t("logout_web_too")) },
+            confirmButton = {
+                TextButton(onClick = { askLogout = false; Auth.logout(); WebSession.clear() }) {
+                    Text(AppState.t("web_logout"), color = TU.danger)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { askLogout = false; Auth.logout() }) { Text(AppState.t("tv_logout"), color = TU.text) }
+            },
+            containerColor = TU.surface,
+            titleContentColor = TU.text,
+            textContentColor = TU.muted,
+        )
     }
 }
 
@@ -332,6 +355,9 @@ fun LinkRow(text: String, onClick: () -> Unit) {
 @Composable
 private fun WorkerField() {
     var text by remember { mutableStateOf(AppState.customWorker ?: "") }
+    // Trafic en clair bloqué par Android : une adresse en http:// échouait
+    // sans rien dire. Refusée, avec la raison.
+    var http by remember { mutableStateOf(false) }
     Column(Modifier.padding(12.dp)) {
         Text(AppState.t("expert_worker_sub"), color = TU.muted, fontSize = 12.sp)
         OutlinedTextField(
@@ -341,12 +367,21 @@ private fun WorkerField() {
                                                       focusedTextColor = TU.text, unfocusedTextColor = TU.text),
             modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
         )
+        if (http) {
+            Text(AppState.t("expert_http_android"), color = TU.danger, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-            TextButton(onClick = { AppState.updateCustomWorker(normalizeWorker(text)); text = AppState.customWorker ?: "" }) {
+            TextButton(onClick = {
+                http = text.trim().lowercase().startsWith("http://")
+                if (!http) {
+                    AppState.updateCustomWorker(normalizeWorker(text))
+                    text = AppState.customWorker ?: ""
+                }
+            }) {
                 Text(AppState.t("save"), color = TU.primary)
             }
             if (AppState.customWorker != null) {
-                TextButton(onClick = { AppState.updateCustomWorker(null); text = "" }) { Text(AppState.t("remove"), color = TU.danger) }
+                TextButton(onClick = { AppState.updateCustomWorker(null); text = ""; http = false }) { Text(AppState.t("remove"), color = TU.danger) }
             }
         }
     }

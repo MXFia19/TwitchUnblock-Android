@@ -2,6 +2,7 @@ package com.mxfia19.twitchunblock.web
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
@@ -81,11 +82,22 @@ object Integrity {
             web.settings.javaScriptEnabled = true
             web.settings.domStorageEnabled = true
             web.settings.userAgentString = WebSession.UA
-            web.addJavascriptInterface(IntegrityBridge { text -> main.post { finish(parse(text, webToken)) } }, "TUBridge")
+            // Pont visible de toutes les frames de la page (pubs, iframes
+            // tierces) : seule compte la réponse qui porte le secret du script.
+            val secret = java.util.UUID.randomUUID().toString()
+            web.addJavascriptInterface(IntegrityBridge(secret) { text -> main.post { finish(parse(text, webToken)) } }, "TUBridge")
 
             fun request() {
                 if (started || finished) return
                 started = true
+                // Jeton du compte dans le script : seulement sur une page de
+                // twitch.tv, pas après une redirection vers un autre site.
+                val host = Uri.parse(web.url ?: "").host
+                if (!WebSession.isTwitchHost(host)) {
+                    Logger.warn("INTEGRITY", "Page hors de twitch.tv", host)
+                    finish(null)
+                    return
+                }
                 // Identifiant d'appareil de twitch.tv (cookie unique_id) : le
                 // jeton y est lié, les mutations l'enverront avec lui.
                 val device = WebSession.cookies()["unique_id"]?.takeIf { it.isNotEmpty() } ?: WebSession.deviceId
@@ -97,9 +109,9 @@ object Integrity {
                           'Authorization': ${JSONObject.quote("OAuth $webToken")},
                           'X-Device-Id': ${JSONObject.quote(device)} } });
                         const body = await r.text();
-                        TUBridge.done(JSON.stringify({ status: r.status, body: body, device: ${JSONObject.quote(device)} }));
+                        TUBridge.done(${JSONObject.quote(secret)}, JSON.stringify({ status: r.status, body: body, device: ${JSONObject.quote(device)} }));
                       } catch (e) {
-                        TUBridge.done(JSON.stringify({ error: String(e) }));
+                        TUBridge.done(${JSONObject.quote(secret)}, JSON.stringify({ error: String(e) }));
                       }
                     })();
                 """.trimIndent()
@@ -140,10 +152,11 @@ object Integrity {
     }
 }
 
-/** Réponse de la page cachée (appelée par son script, hors du fil principal). */
-class IntegrityBridge(private val onDone: (String) -> Unit) {
+/** Réponse de la page cachée (appelée par son script, hors du fil principal).
+ *  Sans le secret du script injecté (appel d'une autre frame) : ignorée. */
+class IntegrityBridge(private val secret: String, private val onDone: (String) -> Unit) {
     @JavascriptInterface
-    fun done(text: String) {
-        onDone(text)
+    fun done(key: String, text: String) {
+        if (key == secret) onDone(text)
     }
 }

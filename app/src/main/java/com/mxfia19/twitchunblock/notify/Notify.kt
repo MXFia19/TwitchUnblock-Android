@@ -91,19 +91,22 @@ object LiveNotifier {
         if (!enabled) return false
         val streams = mutableListOf<TwitchStream>()
         var reached = false
+        var accountRead = AppState.user == null
         if (AppState.user != null) {
             try {
-                BrowseApi.followedStreams()?.let { streams += it; reached = true }
+                BrowseApi.followedStreams()?.let { streams += it; reached = true; accountRead = true }
             } catch (e: AuthExpiredException) {
                 Logger.warn("NOTIF", "Session Twitch expirée")
             }
         }
         val local = AppState.localFollows.toList()
+        var localRead = local.isEmpty()
         if (local.isNotEmpty()) {
             val known = streams.map { it.login.lowercase() }.toHashSet()
             BrowseApi.liveByLogins(local)?.let { live ->
                 streams += live.filter { it.login.lowercase() !in known }
                 reached = true
+                localRead = true
             }
         }
         if (!reached) return false
@@ -113,7 +116,12 @@ object LiveNotifier {
             ensureChannel(context)
             for (s in streams) if (s.login.lowercase() !in before) post(context, s)
         }
-        AppState.prefs.edit().putString(KNOWN, JSONArray(now.toList()).toString()).apply()
+        // Seule la partie relue (compte ou appareil) est remplacée : sinon,
+        // le compte injoignable une fois, tous ses directs déjà en cours
+        // étaient notifiés comme nouveaux à la vérification suivante.
+        val localSet = local.map { it.lowercase() }.toHashSet()
+        val kept = before.orEmpty().filter { if (it in localSet) !localRead else !accountRead }
+        AppState.prefs.edit().putString(KNOWN, JSONArray((now + kept).toList()).toString()).apply()
         return true
     }
 
@@ -180,6 +188,8 @@ object Ntfy {
     private const val SYNCED = "ntfy_synced"
     private const val COUNT = "ntfy_channels"
     private const val ACCOUNT = "ntfy_account_follows"
+    private const val ACCOUNT_USER = "ntfy_account_user"
+    private const val ACCOUNT_AT = "ntfy_account_at"
 
     var enabled by mutableStateOf(false)
         private set
@@ -229,9 +239,16 @@ object Ntfy {
         val p = AppState.prefs
         val list = ArrayList<String>(AppState.localFollows)
         if (AppState.user != null) {
-            val account = BrowseApi.followedLogins()
+            // Suivis du compte (jusqu'à 10 pages Helix) relus au plus une fois
+            // par heure, et non à chaque retour dans l'app : entre-temps, la
+            // dernière liste lue pour ce compte.
+            val user = AppState.user?.id ?: ""
+            val recent = p.getString(ACCOUNT_USER, null) == user &&
+                System.currentTimeMillis() - p.getLong(ACCOUNT_AT, 0L) < 3_600_000L
+            val account = if (force || !recent) BrowseApi.followedLogins() else null
             if (account != null) {
-                p.edit().putString(ACCOUNT, JSONArray(account).toString()).apply()
+                p.edit().putString(ACCOUNT, JSONArray(account).toString())
+                    .putString(ACCOUNT_USER, user).putLong(ACCOUNT_AT, System.currentTimeMillis()).apply()
                 list += account
             } else {
                 parseJsonArray(p.getString(ACCOUNT, null))?.strings()?.let { list += it }

@@ -92,7 +92,15 @@ object Feedback {
     /** Photo choisie : JPEG d'au plus 1600 px et ~470 Ko (le Worker refuse au-delà). */
     fun photoBase64(context: Context, uri: Uri): String? = try {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
-        var bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size) ?: return null
+        // Dimensions d'abord : une photo de 50 à 200 Mpx décodée en entier
+        // épuisait la mémoire. Réduite dès le décodage (par 2, 4, 8…), sans
+        // passer sous 1600 px.
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 1600) sample *= 2
+        val bmp = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return null
         var side = 1600
         var quality = 80
         var out: ByteArray
@@ -109,6 +117,10 @@ object Feedback {
         Base64.encodeToString(out, Base64.NO_WRAP)
     } catch (e: Exception) {
         Logger.warn("FEEDBACK", "Photo illisible", e.message)
+        null
+    } catch (e: OutOfMemoryError) {
+        // Une Error : « Exception » ne l'attrape pas, l'app plantait.
+        Logger.warn("FEEDBACK", "Photo trop lourde", e.message)
         null
     }
 

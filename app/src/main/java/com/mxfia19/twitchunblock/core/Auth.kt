@@ -1,7 +1,11 @@
 package com.mxfia19.twitchunblock.core
 
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -73,6 +77,8 @@ object Auth {
      *  jeton de renouvellement (client public), un second appel avec le même
      *  était refusé et déconnectait le compte. */
     private val renewal = Mutex()
+    /** Révocations, envoyées sans faire attendre la déconnexion. */
+    private val background = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     /** Nouveau jeton depuis le jeton de renouvellement. `stale` : le jeton
      *  refusé ; déjà remplacé pendant l'attente du verrou, rien à refaire.
@@ -103,6 +109,13 @@ object Auth {
                 AppState.clearAuth()
                 return@withLock Renewal.REFUSED
             }
+            if (AppState.token != current) {
+                // Déconnecté pendant la requête : le compte ne revient pas avec
+                // ce jeton, révoqué aussitôt (reconnecté : le nouveau reste).
+                if (AppState.token != null) return@withLock Renewal.RENEWED
+                revoke(access)
+                return@withLock Renewal.REFUSED
+            }
             AppState.saveTokens(access, j?.str("refresh_token"))
             Logger.success("AUTH", "Jeton renouvelé")
             Renewal.RENEWED
@@ -127,9 +140,23 @@ object Auth {
                                        u.str("display_name") ?: "", u.str("profile_image_url") ?: ""))
     }
 
+    /** Déconnexion : jetons effacés de l'appareil, et le jeton révoqué chez
+     *  Twitch (sinon valable jusqu'à son expiration). Un renouvellement en
+     *  cours (verrou) ne remet pas le compte derrière : voir renew. */
     fun logout() {
         Logger.info("AUTH", "Déconnexion")
+        val token = AppState.token
         AppState.clearAuth()
+        if (token != null) revoke(token)
+    }
+
+    /** Révocation chez Twitch, sans attendre (échec sans conséquence ici). */
+    private fun revoke(token: String) {
+        background.launch {
+            val r = Http.postForm("https://id.twitch.tv/oauth2/revoke",
+                                  mapOf("client_id" to Config.HELIX_CLIENT_ID, "token" to token))
+            if (r?.code != 200) Logger.warn("AUTH", "Révocation du jeton échouée", r?.code?.let { "HTTP $it" } ?: "réseau")
+        }
     }
 
     /** Requête Helix avec le jeton du compte, renouvelé une fois s'il est

@@ -56,7 +56,8 @@ object Usage {
         if (events != null && events.length() > 0) body.put("ev", events)
         val headers = HashMap<String, String>()
         if (BuildConfig.PING_KEY.isNotEmpty()) headers["X-TU-Key"] = BuildConfig.PING_KEY
-        AppState.token?.let { headers["Authorization"] = "Bearer $it" }
+        // Sans le jeton du compte : le signal reste anonyme (identifiant tiré
+        // au hasard), comme l'annonce le réglage.
         val r = Http.postJson("${Config.API_URL}/api/ping", body.toString(), headers, timeout = 15) ?: return
         if (r.code == 200) {
             AppState.prefs.edit().putLong(LAST, System.currentTimeMillis()).remove(EVENTS).apply()

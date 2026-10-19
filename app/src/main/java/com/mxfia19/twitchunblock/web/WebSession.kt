@@ -116,6 +116,13 @@ object WebSession {
 
     fun dismissMismatch() { mismatch = null }
 
+    /** Adresse de twitch.tv ou d'un de ses sous-domaines : seules pages à
+     *  recevoir la session (page de connexion, jeton d'intégrité). */
+    fun isTwitchHost(host: String?): Boolean {
+        val h = host?.lowercase() ?: return false
+        return h == "twitch.tv" || h.endsWith(".twitch.tv")
+    }
+
     /** Cookies de twitch.tv, par nom. */
     fun cookies(): Map<String, String> {
         val raw = try { CookieManager.getInstance().getCookie("https://www.twitch.tv") } catch (e: Exception) { null }

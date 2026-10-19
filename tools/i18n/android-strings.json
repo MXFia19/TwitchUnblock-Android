@@ -62,5 +62,7 @@
   "points_tracker_total": {"fr": "{m} regardées · +{p} pts", "en": "{m} watched · +{p} pts", "es": "{m} vistos · +{p} pts", "ru": "Просмотрено {m} · +{p} баллов"},
   "points_tracker_chests": {"fr": "{n} coffres", "en": "{n} chests", "es": "{n} cofres", "ru": "{n} сундуков"},
   "points_tracker_chests_one": {"fr": "{n} coffre", "en": "{n} chest", "es": "{n} cofre", "ru": "{n} сундук"},
-  "points_tracker_chests_few": {"ru": "{n} сундука"}
+  "points_tracker_chests_few": {"ru": "{n} сундука"},
+  "expert_http_android": {"fr": "Android refuse les adresses en http:// : il faut du HTTPS (Caddy, Cloudflare Tunnel…).", "en": "Android refuses http:// addresses: it needs HTTPS (Caddy, Cloudflare Tunnel…).", "es": "Android rechaza las direcciones http://: hace falta HTTPS (Caddy, Cloudflare Tunnel…).", "ru": "Android не пускает адреса http://: нужен HTTPS (Caddy, Cloudflare Tunnel…)."},
+  "logout_web_too": {"fr": "La session web (points, drops, prédictions) reste connectée. La retirer aussi ?", "en": "The web session (points, drops, predictions) stays connected. Remove it too?", "es": "La sesión web (puntos, drops, predicciones) sigue conectada. ¿Quitarla también?", "ru": "Веб-сессия (баллы, дропсы, прогнозы) остаётся подключённой. Удалить и её?"}
 }

@@ -1,6 +1,7 @@
 package com.mxfia19.twitchunblock.ui
 
 import android.annotation.SuppressLint
+import android.content.Intent
 import android.graphics.Bitmap
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
@@ -102,6 +103,18 @@ fun WebLoginScreen(nav: Navigator) {
                         CookieManager.getInstance().setAcceptCookie(true)
                         CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
                         webViewClient = object : WebViewClient() {
+                            // Hors de twitch.tv (liens de la page, pubs) : ouvert à
+                            // l'extérieur, pas dans la page qui porte la session.
+                            override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                                if (!request.isForMainFrame || WebSession.isTwitchHost(request.url.host)) return false
+                                try {
+                                    view.context.startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                                } catch (e: Exception) {
+                                    // Aucune app pour ce lien : il n'est pas ouvert.
+                                }
+                                return true
+                            }
+
                             override fun onPageStarted(view: WebView, url: String?, favicon: Bitmap?) {
                                 loading = true
                             }
