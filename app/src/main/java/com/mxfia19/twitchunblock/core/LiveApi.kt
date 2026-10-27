@@ -93,9 +93,12 @@ object LiveApi {
             if (!found.isEmpty) break
             onSource(src)
             when (src) {
-                "as" -> found = luminous(listOf("as.luminous.dev"), login, lowLatency)
-                "al" -> found = ttvlol(login, lowLatency)
-                "eu" -> found = luminous(Config.LUMINOUS_HOSTS.filter { it != "as.luminous.dev" }, login, lowLatency)
+                "as" -> found = luminous(Config.ASIA_LIVE_HOSTS, login, lowLatency)
+                "al" -> {
+                    found = ttvlol(login, lowLatency)
+                    if (found.isEmpty) found = luminous(Config.ALBANIA_LIVE_HOSTS, login, lowLatency)
+                }
+                "eu" -> found = luminous(Config.EUROPE_LIVE_HOSTS, login, lowLatency)
                 "twitch" -> if (token != null) found = usher(login, token, lowLatency)
                 else -> {
                     val w = worker(login)
@@ -132,18 +135,18 @@ object LiveApi {
 
     private suspend fun luminous(hosts: List<String>, login: String, lowLatency: Boolean): Master {
         for (host in hosts) {
-            Logger.info("LIVE", "Tentative Luminous…", host)
+            Logger.info("LIVE", "Tentative proxy…", host)
             val url = "https://$host/live/$login?allow_source=true&allow_audio_only=true&fast_bread=$lowLatency"
             val r = Http.get(url, Config.TWITCH_HEADERS, timeout = 8)
             if (r != null && r.code == 200) {
                 val m = parseMaster(r.body, url)
                 if (!m.isEmpty) {
-                    Logger.success("LIVE", "Luminous OK ($host)", "${m.links.size} qualités")
+                    Logger.success("LIVE", "Proxy OK ($host)", "${m.links.size} qualités")
                     return m
                 }
-                Logger.warn("LIVE", "Luminous $host : playlist vide", "miroir suivant…")
+                Logger.warn("LIVE", "Proxy $host : playlist vide", "serveur suivant…")
             } else {
-                Logger.warn("LIVE", "Luminous $host : échec (${r?.code ?: "réseau"})", "miroir suivant…")
+                Logger.warn("LIVE", "Proxy $host : échec (${r?.code ?: "réseau"})", "serveur suivant…")
             }
         }
         return Master()

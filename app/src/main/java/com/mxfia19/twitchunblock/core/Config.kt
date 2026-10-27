@@ -14,10 +14,17 @@ object Config {
      *  listes seulement (sans jeton), la page 1 reste sur le web. */
     const val GQL_NEXT_CLIENT_ID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
 
-    /** Miroirs Luminous, essayés dans l'ordre (as = Asie, eu = Europe). */
-    val LUMINOUS_HOSTS = listOf("as.luminous.dev", "eu.luminous.dev", "eu2.luminous.dev", "eu3.luminous.dev")
+    /** Proxys au format Luminous (/live/<chaîne>) par source, le second en
+     *  secours (sondés le 27/10 sur trois directs, sans pré-roll). Asie :
+     *  Luminous (Ouzbékistan) puis PerfProd Asie (Maurice) ; Europe :
+     *  Luminous Europe puis Europe 2 (eu3 ne répondait plus). */
+    val ASIA_LIVE_HOSTS = listOf("as.luminous.dev", "lb-as.cdn-perfprod.com")
+    val EUROPE_LIVE_HOSTS = listOf("eu.luminous.dev", "eu2.luminous.dev")
     /** Proxys au format TTV.LOL v1 (Albanie). */
     val TTVLOL_HOSTS = listOf("twitch-al.nadeko.net")
+    /** Secours albanais au format Luminous : l'autre serveur de nadeko
+     *  (twitch.zzls.xyz n'est qu'une redirection vers lui). */
+    val ALBANIA_LIVE_HOSTS = listOf("twitch.nadeko.net")
     /** Sources du direct, dans l'ordre automatique ; le Worker toujours en dernier. */
     val LIVE_SOURCES = listOf("as", "al", "eu", "twitch")
     val LIVE_SOURCE_CHOICES = listOf("auto", "as", "al", "eu", "twitch")

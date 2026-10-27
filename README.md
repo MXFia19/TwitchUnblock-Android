@@ -18,7 +18,8 @@ installable à côté de l'autre.
 
 ## État du portage
 
-- **Série 1** (en cours) : directs (Luminous Asie et Europe, proxy albanais, Twitch, Worker en secours),
+- **Série 1** (en cours) : directs (Luminous Asie et Europe, proxy albanais — chacun avec un serveur de
+  secours : PerfProd Asie, l'autre serveur de nadeko, Luminous Europe 2 —, Twitch, Worker en secours),
   qualité Auto (suit le débit) ou fixe, qualité en données mobiles, VODs (passages coupés lisibles, reprise),
   clips, recherche (chaînes, catégories, liens collés), catégories, chaînes suivies (compte Twitch ou appareil),
   page de chaîne (VODs, clips), chat (emotes Twitch, 7TV, BTTV, FFZ, badges, historique récent, écrire avec
