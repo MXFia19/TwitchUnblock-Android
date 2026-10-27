@@ -14,20 +14,26 @@ object Config {
      *  listes seulement (sans jeton), la page 1 reste sur le web. */
     const val GQL_NEXT_CLIENT_ID = "kd1unb4b3q4t58fwlpcbzcbnm76a8fp"
 
-    /** Proxys au format Luminous (/live/<chaîne>) par source, le second en
-     *  secours (sondés le 27/10 sur trois directs, sans pré-roll). Asie :
-     *  Luminous (Ouzbékistan) puis PerfProd Asie (Maurice) ; Europe :
-     *  Luminous Europe puis Europe 2 (eu3 ne répondait plus). */
-    val ASIA_LIVE_HOSTS = listOf("as.luminous.dev", "lb-as.cdn-perfprod.com")
-    val EUROPE_LIVE_HOSTS = listOf("eu.luminous.dev", "eu2.luminous.dev")
-    /** Proxys au format TTV.LOL v1 (Albanie). */
+    /** Proxys au format Luminous (/live/<chaîne>) : un serveur par source
+     *  (sondés le 27/10 sur trois directs, sans pré-roll). as = Luminous Asie
+     *  (Ouzbékistan), pp = PerfProd Asie (Maurice), al2 = l'autre serveur de
+     *  nadeko (twitch.zzls.xyz n'est qu'une redirection vers lui), eu / eu2 =
+     *  Luminous Europe et Europe 2 (eu3 ne répondait plus). */
+    val LIVE_PROXY_HOSTS = mapOf(
+        "as" to "as.luminous.dev",
+        "pp" to "lb-as.cdn-perfprod.com",
+        "al2" to "twitch.nadeko.net",
+        "eu" to "eu.luminous.dev",
+        "eu2" to "eu2.luminous.dev",
+    )
+    /** Proxys au format TTV.LOL v1 (source « al », Albanie). */
     val TTVLOL_HOSTS = listOf("twitch-al.nadeko.net")
-    /** Secours albanais au format Luminous : l'autre serveur de nadeko
-     *  (twitch.zzls.xyz n'est qu'une redirection vers lui). */
-    val ALBANIA_LIVE_HOSTS = listOf("twitch.nadeko.net")
+    /** Source ajoutée → celle qu'elle secourt : elle est essayée juste après
+     *  (comme l'app iPhone, le site et le Worker). */
+    val LIVE_SOURCE_BACKUP_OF = mapOf("pp" to "as", "al2" to "al", "eu2" to "eu")
     /** Sources du direct, dans l'ordre automatique ; le Worker toujours en dernier. */
-    val LIVE_SOURCES = listOf("as", "al", "eu", "twitch")
-    val LIVE_SOURCE_CHOICES = listOf("auto", "as", "al", "eu", "twitch")
+    val LIVE_SOURCES = listOf("as", "pp", "al", "al2", "eu", "eu2", "twitch")
+    val LIVE_SOURCE_CHOICES = listOf("auto", "as", "pp", "al", "al2", "eu", "eu2", "twitch")
 
     const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Safari/537.36"
     val TWITCH_HEADERS = mapOf(

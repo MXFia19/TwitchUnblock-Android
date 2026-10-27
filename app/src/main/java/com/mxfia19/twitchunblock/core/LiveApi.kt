@@ -93,13 +93,9 @@ object LiveApi {
             if (!found.isEmpty) break
             onSource(src)
             when (src) {
-                "as" -> found = luminous(Config.ASIA_LIVE_HOSTS, login, lowLatency)
-                "al" -> {
-                    found = ttvlol(login, lowLatency)
-                    if (found.isEmpty) found = luminous(Config.ALBANIA_LIVE_HOSTS, login, lowLatency)
-                }
-                "eu" -> found = luminous(Config.EUROPE_LIVE_HOSTS, login, lowLatency)
+                "al" -> found = ttvlol(login, lowLatency)
                 "twitch" -> if (token != null) found = usher(login, token, lowLatency)
+                in Config.LIVE_PROXY_HOSTS -> found = luminous(listOf(Config.LIVE_PROXY_HOSTS.getValue(src)), login, lowLatency)
                 else -> {
                     val w = worker(login)
                     found = w.first
