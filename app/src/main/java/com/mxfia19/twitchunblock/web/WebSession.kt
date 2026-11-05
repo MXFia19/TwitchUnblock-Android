@@ -8,6 +8,10 @@ import androidx.compose.runtime.setValue
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.Secrets
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 
 /**
  * Session web de Twitch (cookie « auth-token » de twitch.tv, pris dans une
@@ -40,6 +44,9 @@ object WebSession {
     var generation by mutableStateOf(0)
         private set
 
+    /** Vérifications de la session (WebSessionCheck), sans faire attendre. */
+    private val checks = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
     fun init() {
         // Chiffré (Secrets), comme les jetons du compte.
         token = Secrets.read(AppState.prefs, "web_token")?.takeIf { it.length >= 20 }
@@ -70,14 +77,43 @@ object WebSession {
             Integrity.invalidate()
         }
         Logger.success("WEB", "Session web enregistrée", "@${login ?: "?"}")
+        // Vérifiée auprès de Twitch dès la connexion : un cookie périmé repris
+        // par la page passe pour expiré, une session d'un autre compte est
+        // retirée (pseudo absent du cookie compris).
+        checks.launch { WebSessionCheck.validate() }
+    }
+
+    /** Vérification au lancement (MainActivity), sans faire attendre. */
+    fun checkSoon() {
+        if (token == null) return
+        checks.launch { WebSessionCheck.validate() }
+    }
+
+    /** Pseudo de la session donné par Twitch, quand le cookie n'en avait pas. */
+    fun confirmLogin(l: String) {
+        if (l.isEmpty() || login != null) return
+        login = l.lowercase()
+        AppState.prefs.edit().putString("web_login", login).apply()
+    }
+
+    /** Session d'un autre compte que celui de l'app (vérifiée auprès de
+     *  Twitch) : retirée, et dit dans les réglages. */
+    fun refuse(webLogin: String) {
+        Logger.warn("WEB", "Session web d'un autre compte retirée", "@$webLogin ≠ @${AppState.user?.login ?: "?"}")
+        mismatch = webLogin
+        clear()
     }
 
     /** Twitch refuse ce jeton (401) : on le dit, sans l'effacer (la page de
-     *  connexion le remplacera). */
+     *  connexion le remplacera). Les cookies de twitch.tv, eux, partent :
+     *  sinon « Rétablir » reprenait aussitôt le cookie périmé, sans rien
+     *  demander, et l'app se croyait reconnectée. */
     fun markExpired(refused: String) {
         if (refused != token || expired) return
         expired = true
         Logger.warn("WEB", "Session web refusée par Twitch", "à rétablir dans les réglages")
+        // Sur le fil principal : la WebView n'accepte pas d'ailleurs.
+        checks.launch { if (expired && token == refused) clearCookies() }
     }
 
     /** Déconnexion : jeton oublié, cookies et données de twitch.tv effacés. */

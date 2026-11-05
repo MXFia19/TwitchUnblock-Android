@@ -57,6 +57,8 @@ class FollowingModel(private val scope: CoroutineScope) {
 fun FollowingScreen(model: FollowingModel, nav: Navigator) {
     LaunchedEffect(AppState.user?.id, AppState.localFollows.size) { model.load() }
     when {
+        // « Sans compte Twitch » : seulement les suivis de l'appareil.
+        model.isEmptySetup && com.mxfia19.twitchunblock.core.NoAccount.active -> MessageBox(AppState.t("ap_following_empty_local"))
         model.isEmptySetup -> MessageBox(AppState.t("following_empty"), action = AppState.t("tv_login")) { nav.push(Screen.Login) }
         model.loading && model.channels.isEmpty() -> LoadingBox()
         model.failed -> MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.load(force = true) }

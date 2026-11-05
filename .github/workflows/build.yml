@@ -49,7 +49,8 @@ jobs:
             echo "channel=test" >> "$GITHUB_OUTPUT"
           fi
 
-      # Icônes du lanceur et bannière Android TV, depuis assets/icon.png.
+      # Icônes du lanceur et bannière Android TV, depuis assets/icon.png ;
+      # icônes au choix depuis assets/icons.
       - name: Icons and TV banner
         run: |
           command -v convert >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq imagemagick; }
@@ -58,6 +59,10 @@ jobs:
             size="${d##*:}"
             mkdir -p "$dir"
             convert assets/icon.png -resize "${size}x${size}" "$dir/ic_launcher.png"
+            # Icônes au choix (Réglages → Apparence), celles de l'app iPhone.
+            for f in assets/icons/*.png; do
+              convert "$f" -resize "${size}x${size}" "$dir/ic_launcher_$(basename "$f" .png).png"
+            done
           done
           mkdir -p app/src/main/res/drawable-xhdpi
           convert -size 320x180 xc:'#140419' \( assets/icon.png -resize 150x150 \) -gravity center -composite \

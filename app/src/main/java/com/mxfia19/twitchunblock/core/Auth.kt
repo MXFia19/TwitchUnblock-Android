@@ -57,8 +57,9 @@ object Auth {
             val j = parseJson(r?.body)
             val access = j?.str("access_token")
             if (access != null) {
-                AppState.saveTokens(access, j.str("refresh_token"))
-                loadUser()
+                // Un autre compte que celui en place le garde de côté
+                // (changement de compte) au lieu de l'oublier.
+                Accounts.adoptLogin(access, j.str("refresh_token"))
                 Logger.success("AUTH", "Connecté par code", AppState.user?.login)
                 return true
             }
@@ -79,6 +80,13 @@ object Auth {
     private val renewal = Mutex()
     /** Révocations, envoyées sans faire attendre la déconnexion. */
     private val background = CoroutineScope(SupervisorJob() + Dispatchers.Main)
+
+    /** Changement des jetons du compte (Accounts), jamais pendant un
+     *  renouvellement : sinon le jeton renouvelé d'un compte mis de côté
+     *  était perdu, et son jeton de renouvellement (à usage unique) avec. */
+    suspend fun <T> exclusive(block: () -> T): T = withContext(NonCancellable) {
+        renewal.withLock { block() }
+    }
 
     /** Nouveau jeton depuis le jeton de renouvellement. `stale` : le jeton
      *  refusé ; déjà remplacé pendant l'attente du verrou, rien à refaire.

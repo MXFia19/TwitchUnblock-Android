@@ -5,14 +5,16 @@ import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-/** Couleurs de l'app iPhone (thème sombre, violet de Twitch). */
+/** Couleurs de l'app iPhone : fond et accent selon le thème choisi
+ *  (AppTheme ; sombre et violet de Twitch par défaut), lus à chaque
+ *  affichage pour qu'un changement de thème redessine tout. */
 object TU {
-    val bg = Color(0xFF0E0E10)
-    val surface = Color(0xFF18181B)
-    val surfaceHi = Color(0xFF1F1F23)
-    val line = Color(0xFF2F2F35)
-    val primary = Color(0xFF9147FF)
-    val primaryDim = Color(0x339147FF)
+    val bg: Color get() = AppTheme.background.bg
+    val surface: Color get() = AppTheme.background.surface
+    val surfaceHi: Color get() = AppTheme.background.surfaceHi
+    val line: Color get() = AppTheme.background.line
+    val primary: Color get() = AppTheme.accent.primary
+    val primaryDim: Color get() = AppTheme.accent.primary.copy(alpha = 0.2f)
     val text = Color(0xFFEFEFF1)
     val muted = Color(0xFFADADB8)
     val live = Color(0xFFEB0400)

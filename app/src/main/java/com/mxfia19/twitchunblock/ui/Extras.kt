@@ -305,6 +305,21 @@ fun FeedbackScreen(nav: Navigator) {
                 placeholder = { Text(AppState.t("fb_ph_$kind"), color = TU.muted) }, colors = colors,
                 modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             )
+            // Nom joint, comme l'iPhone : connecté, signé avec le compte
+            // Twitch (interrupteur allumé d'office) ; sinon un pseudo facultatif.
+            val signLogin = Feedback.signLogin
+            if (signLogin != null) {
+                Column(Modifier.fillMaxWidth().padding(top = 8.dp).clip(RoundedCornerShape(10.dp)).background(TU.surface)) {
+                    Toggle(AppState.t("fb_sign"), AppState.t("fb_sign_sub").replace("{login}", signLogin),
+                           Feedback.signWithTwitch.value) { Feedback.signWithTwitch.set(it) }
+                }
+            } else {
+                OutlinedTextField(
+                    value = Feedback.pseudo.value, onValueChange = { Feedback.pseudo.set(it.take(30)) }, singleLine = true,
+                    placeholder = { Text(AppState.t("fb_name_ph"), color = TU.muted) }, colors = colors,
+                    modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                )
+            }
             OutlinedTextField(
                 value = contact, onValueChange = { if (it.length <= 100) contact = it }, singleLine = true,
                 placeholder = { Text(AppState.t("fb_contact_ph"), color = TU.muted) }, colors = colors,
