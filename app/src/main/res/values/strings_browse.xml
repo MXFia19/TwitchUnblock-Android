@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget des directs suivis (liste des widgets du lanceur). -->
+    <string name="br_widget_label">Followed channels live</string>
+    <string name="br_widget_desc">Your followed channels that are live now. Tap one to watch it.</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget des directs suivis (liste des widgets du lanceur). -->
+    <string name="br_widget_label">追隨中的直播</string>
+    <string name="br_widget_desc">目前正在直播的追隨頻道。點一下即可觀看。</string>
+</resources>

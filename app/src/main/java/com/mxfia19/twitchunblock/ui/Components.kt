@@ -203,10 +203,11 @@ fun VodCard(vod: Vod, modifier: Modifier = Modifier, onClick: () -> Unit) {
 }
 
 /** VOD entamée (« Continuer à regarder ») : miniature et part déjà vue,
- *  titre, chaîne. */
+ *  titre, chaîne. `onLongClick` : menu du téléphone (reprendre, retirer). */
 @Composable
-fun ContinueCard(entry: ContinueWatching.Entry, modifier: Modifier = Modifier, onClick: () -> Unit) {
-    Column(modifier.focusCard(onClick)) {
+fun ContinueCard(entry: ContinueWatching.Entry, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null,
+                 onClick: () -> Unit) {
+    Column(modifier.focusCard(onClick, onLongClick = onLongClick)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(TU.surfaceHi)) {
             if (entry.thumb != null) {
                 AsyncImage(model = entry.thumb, contentDescription = null, contentScale = ContentScale.Crop,
@@ -243,11 +244,13 @@ fun ClipCard(clip: Clip, modifier: Modifier = Modifier, onClick: () -> Unit) {
     }
 }
 
-/** Chaîne suivie : avatar, nom, direct en cours ou hors ligne depuis. */
+/** Chaîne suivie : avatar, nom, direct en cours ou hors ligne depuis.
+ *  `pinned` : épinglée (téléphone) ; `onLongClick` : son menu. */
 @Composable
-fun ChannelRow(brief: ChannelBrief, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun ChannelRow(brief: ChannelBrief, modifier: Modifier = Modifier, pinned: Boolean = false,
+               onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     Row(
-        modifier.fillMaxWidth().focusCard(onClick).padding(horizontal = 12.dp, vertical = 8.dp),
+        modifier.fillMaxWidth().focusCard(onClick, onLongClick = onLongClick).padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box {
@@ -258,7 +261,13 @@ fun ChannelRow(brief: ChannelBrief, modifier: Modifier = Modifier, onClick: () -
         }
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
-            Text(brief.name, color = TU.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (pinned) {
+                    PinMark()
+                    Spacer(Modifier.width(3.dp))
+                }
+                Text(brief.name, color = TU.text, fontSize = 15.sp, fontWeight = FontWeight.SemiBold, maxLines = 1)
+            }
             val s = brief.stream
             val sub = when {
                 s != null -> listOf(s.game, "● ${Format.viewers(s.viewers)}").filter { it.isNotEmpty() }.joinToString(" · ")

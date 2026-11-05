@@ -141,6 +141,23 @@
             android:name=".notify.LiveActionReceiver"
             android:exported="false" />
 
+        <!-- Widget de l'écran d'accueil : chaînes suivies en direct, et ses lignes. -->
+        <receiver
+            android:name=".widget.LiveWidgetProvider"
+            android:exported="false"
+            android:label="@string/br_widget_label">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/live_widget_info" />
+        </receiver>
+        <service
+            android:name=".widget.LiveWidgetService"
+            android:exported="false"
+            android:permission="android.permission.BIND_REMOTEVIEWS" />
+
         <!-- Lecture en arrière-plan : notification, écran verrouillé, casque. -->
         <service
             android:name=".player.PlaybackService"

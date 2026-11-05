@@ -21,6 +21,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,6 +37,12 @@ import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.TwitchStream
 import com.mxfia19.twitchunblock.core.Hidden
 import com.mxfia19.twitchunblock.core.TopLanguage
+import com.mxfia19.twitchunblock.core.BrowsePrefs
+import com.mxfia19.twitchunblock.core.BrowseRules
+import com.mxfia19.twitchunblock.core.FollowedCategories
+import com.mxfia19.twitchunblock.core.Pins
+import com.mxfia19.twitchunblock.web.WebSession
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import com.mxfia19.twitchunblock.player.PlayRequest
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
@@ -124,19 +131,38 @@ class HomeModel(private val scope: CoroutineScope) {
 
 @Composable
 fun HomeScreen(model: HomeModel, nav: Navigator) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(AppState.user?.id, com.mxfia19.twitchunblock.core.Features.topLang) { model.load() }
     // Continuer à regarder : VODs entamées, durées demandées pour les nouvelles.
-    val resume = ContinueWatching.items()
+    // Les positions ne sont pas un état observé : celles retirées ici sont
+    // écartées aussitôt.
+    var removed by remember { mutableStateOf(emptySet<String>()) }
+    val resume = ContinueWatching.items().filter { it.id !in removed }
     LaunchedEffect(History.vods.joinToString(",") { it.term }) { ContinueWatching.load() }
+    // Catégories suivies : celles du compte (session web) et leur audience.
+    LaunchedEffect(WebSession.token, FollowedCategories.local.size) { FollowedCategories.refresh() }
     val play = { s: TwitchStream -> nav.play(PlayRequest.Live(s.login)) }
+    val list = BrowsePrefs.homeList.value
+    // Épinglées en tête des suivies ; le widget reprend la même liste.
+    val followed = Pins.sortStreams(model.followed)
+    // Seulement une liste lue (pas celle, vide, d'avant le chargement ou d'un échec).
+    LaunchedEffect(model.followed, model.loading) {
+        if (!model.loading && !model.failed) com.mxfia19.twitchunblock.widget.LiveWidget.save(context, model.followed)
+    }
+    val followedLogins = model.followed.map { it.login.lowercase() }.toHashSet()
+    val grid = rememberLazyGridState()
+    TabTop.Listen(Screen.Home) { grid.animateScrollToItem(0) }
+    val showFollowed = BrowsePrefs.showsHome("followed")
+    val showTop = BrowsePrefs.showsHome("top")
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(300.dp),
+        columns = BrowseGrid.lives(list),
+        state = grid,
         contentPadding = androidx.compose.foundation.layout.PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(if (list) 8.dp else 12.dp),
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }) { NewsCards() }
-        if (resume.isNotEmpty()) {
+        if (BrowsePrefs.showsHome("announcement")) item(span = { GridItemSpan(maxLineSpan) }) { NewsCards() }
+        if (resume.isNotEmpty() && BrowsePrefs.showsHome("continue")) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(AppState.t("continue_watching"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
                      modifier = Modifier.padding(top = 8.dp))
@@ -144,41 +170,69 @@ fun HomeScreen(model: HomeModel, nav: Navigator) {
             item(span = { GridItemSpan(maxLineSpan) }) {
                 LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                     items(resume, key = { "cw-" + it.id }) { e ->
-                        ContinueCard(e, Modifier.width(220.dp)) { nav.play(PlayRequest.Vod(e.id, e.title, e.channel)) }
+                        // Retirer : la position de reprise est oubliée (la VOD reste dans Mes VODs).
+                        ContinueItem(e, Modifier.width(220.dp), onRemove = {
+                            AppState.saveVodPosition(e.id, 0, 0)
+                            removed = removed + e.id
+                        }) {
+                            nav.play(PlayRequest.Vod(e.id, e.title, e.channel))
+                        }
                     }
                 }
             }
         }
-        if (model.followed.isNotEmpty()) {
+        if (showFollowed && followed.isNotEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
-                Text(AppState.t("home_followed"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                     modifier = Modifier.padding(top = 8.dp))
-            }
-            items(model.followed, key = { "f-" + it.login }) { s -> StreamCard(s) { play(s) } }
-        }
-        item(span = { GridItemSpan(maxLineSpan) }) {
-            Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(AppState.t("top_streams"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
-                     modifier = Modifier.weight(1f))
-                androidx.compose.material3.TextButton(onClick = { nav.multi(null) }) {
-                    Text(AppState.t("multi_title"), color = TU.primary, fontSize = 14.sp)
-                }
-                IconButton(onClick = { model.load(force = true) }) {
-                    Icon(Icons.Filled.Refresh, contentDescription = AppState.t("drops_refresh"), tint = TU.muted)
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(AppState.t("home_followed"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
+                         modifier = Modifier.weight(1f))
+                    if (!showTop) HomeActions(model, nav)
                 }
             }
-        }
-        when {
-            model.loading && model.top.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { LoadingBox() }
-            model.failed -> item(span = { GridItemSpan(maxLineSpan) }) {
-                MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.load(force = true) }
+            items(followed, key = { "f-" + it.login }) { s ->
+                BrowseStreamItem(s, list, pinnable = true) { play(s) }
             }
-            else -> {
-                items(model.visibleTop, key = { "t-" + it.login }) { s -> HideableStreamCard(s) { play(s) } }
-                if (model.hasMore) {
-                    item(span = { GridItemSpan(maxLineSpan) }) { MoreButton(model.loadingMore) { model.more() } }
+        }
+        if (BrowsePrefs.showsHome("categories") && FollowedCategories.sorted().isNotEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) { FollowedCategoriesRow { nav.push(Screen.CategoryPage(it)) } }
+        }
+        if (showTop || !showFollowed || followed.isEmpty()) {
+            item(span = { GridItemSpan(maxLineSpan) }) {
+                Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Text(if (showTop) AppState.t("top_streams") else "", color = TU.text, fontSize = 18.sp,
+                         fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
+                    HomeActions(model, nav)
                 }
             }
         }
+        if (showTop) {
+            when {
+                model.loading && model.top.isEmpty() -> item(span = { GridItemSpan(maxLineSpan) }) { LoadingBox() }
+                model.failed -> item(span = { GridItemSpan(maxLineSpan) }) {
+                    MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.load(force = true) }
+                }
+                else -> {
+                    // Ce qu'on suit ou épingle n'est jamais masqué.
+                    items(model.top.filter { BrowseRules.shows(it, followedLogins) }, key = { "t-" + it.login }) { s ->
+                        BrowseStreamItem(s, list, hideable = true) { play(s) }
+                    }
+                    if (model.hasMore) {
+                        item(span = { GridItemSpan(maxLineSpan) }) { MoreButton(model.loadingMore) { model.more() } }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** Boutons de l'accueil : grille ou liste, multi-live, actualiser. */
+@Composable
+private fun HomeActions(model: HomeModel, nav: Navigator) {
+    LayoutToggle()
+    androidx.compose.material3.TextButton(onClick = { nav.multi(null) }) {
+        Text(AppState.t("multi_title"), color = TU.primary, fontSize = 14.sp)
+    }
+    IconButton(onClick = { model.load(force = true) }) {
+        Icon(Icons.Filled.Refresh, contentDescription = AppState.t("drops_refresh"), tint = TU.muted)
     }
 }

@@ -49,6 +49,7 @@ import com.mxfia19.twitchunblock.player.PlaybackSession
 /** Écrans du téléphone. Les quatre onglets, puis les pages empilées. */
 sealed class Screen {
     object Home : Screen()
+    object Discover : Screen()
     object Search : Screen()
     object Following : Screen()
     object Library : Screen()
@@ -60,6 +61,8 @@ sealed class Screen {
     object Drops : Screen()
     object PointsTracker : Screen()
     object Hidden : Screen()
+    /** Personnaliser l'app : onglets, accueil (SettingsBrowse). */
+    object Customize : Screen()
     data class FeedbackThread(val id: String) : Screen()
     data class Channel(val login: String) : Screen()
     data class CategoryPage(val category: Category) : Screen()
@@ -69,7 +72,8 @@ sealed class Screen {
 }
 
 class Navigator {
-    val stack = mutableStateListOf<Screen>(Screen.Home)
+    // Onglet au lancement : Personnaliser l'app (l'accueil par défaut).
+    val stack = mutableStateListOf<Screen>(BrowseTabs.startScreen())
     val current: Screen get() = stack.last()
 
     fun push(s: Screen) {
@@ -120,6 +124,7 @@ fun PhoneApp(nav: Navigator) {
     LaunchedEffect(session, playing) { if (session != null && playing != null) session.open(playing) }
 
     UpdatePrompt()
+    BrowseEffects()
     if (screen is Screen.Player && session != null) {
         PlayerScreen(session, nav)
         return
@@ -128,24 +133,29 @@ fun PhoneApp(nav: Navigator) {
         Box(Modifier.fillMaxSize().background(TU.bg).statusBarsPadding()) { MultiLiveScreen(screen.first, nav) }
         return
     }
-    val isTab = screen is Screen.Home || screen is Screen.Search || screen is Screen.Following || screen is Screen.Library
+    val isTab = BrowseTabs.isTab(screen)
+    // Écran large (tablette, pliable ouvert, paysage) : onglets en colonne à gauche.
+    val wide = androidx.compose.ui.platform.LocalConfiguration.current.screenWidthDp >= 700
     Scaffold(
         containerColor = TU.bg,
         topBar = { if (isTab) TopBar(screen, nav) },
         bottomBar = {
-            if (isTab) {
+            if (isTab && !wide) {
                 NavigationBar(containerColor = TU.surface) {
-                    TabItem(Screen.Home, Icons.Filled.Home, "tab_home", screen, nav)
-                    TabItem(Screen.Search, Icons.Filled.Search, "tv_search", screen, nav)
-                    TabItem(Screen.Following, Icons.Filled.Favorite, "tv_following", screen, nav)
-                    TabItem(Screen.Library, Icons.AutoMirrored.Filled.List, "dl_section", screen, nav)
+                    // Ordre et onglets masqués : Personnaliser l'app.
+                    for (key in com.mxfia19.twitchunblock.core.BrowsePrefs.visibleTabs) {
+                        TabItem(BrowseTabs.screen(key), BrowseTabs.icon(key), BrowseTabs.labelKey(key), screen, nav)
+                    }
                 }
             }
         },
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
+        Row(Modifier.padding(padding).fillMaxSize()) {
+          if (isTab && wide) BrowseTabRail(screen, nav)
+          Box(Modifier.weight(1f).fillMaxSize()) {
             when (screen) {
                 Screen.Home -> HomeScreen(home, nav)
+                Screen.Discover -> DiscoverScreen(nav)
                 Screen.Search -> SearchScreen(search, nav)
                 Screen.Following -> FollowingScreen(following, nav)
                 Screen.Library -> LibraryScreen(nav)
@@ -157,11 +167,13 @@ fun PhoneApp(nav: Navigator) {
                 Screen.Drops -> DropsScreen(nav)
                 Screen.PointsTracker -> PointsTrackerScreen(nav)
                 Screen.Hidden -> HiddenScreen(nav)
+                Screen.Customize -> CustomizeScreen(nav)
                 is Screen.FeedbackThread -> FeedbackThreadScreen(screen.id, nav)
                 is Screen.Channel -> ChannelScreen(screen.login, nav)
                 is Screen.CategoryPage -> CategoryScreen(screen.category, nav)
                 is Screen.Player, is Screen.MultiLive -> {}
             }
+          }
         }
     }
 }
@@ -172,7 +184,8 @@ private fun androidx.compose.foundation.layout.RowScope.TabItem(
 ) {
     NavigationBarItem(
         selected = current == target,
-        onClick = { if (current != target) nav.tab(target) },
+        // Onglet déjà affiché : sa liste remonte en haut.
+        onClick = { if (current != target) nav.tab(target) else TabTop.request(target) },
         icon = { Icon(icon, contentDescription = null) },
         label = { Text(AppState.t(key)) },
         colors = NavigationBarItemDefaults.colors(
@@ -185,6 +198,7 @@ private fun androidx.compose.foundation.layout.RowScope.TabItem(
 @Composable
 private fun TopBar(screen: Screen, nav: Navigator) {
     val title = when (screen) {
+        Screen.Discover -> AppState.t("tab_discover")
         Screen.Search -> AppState.t("tv_search")
         Screen.Following -> AppState.t("tv_following")
         Screen.Library -> AppState.t("dl_section")

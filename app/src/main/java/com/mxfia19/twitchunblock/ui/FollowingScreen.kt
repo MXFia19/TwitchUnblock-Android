@@ -1,17 +1,24 @@
 package com.mxfia19.twitchunblock.ui
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.BrowseApi
 import com.mxfia19.twitchunblock.core.ChannelBrief
+import com.mxfia19.twitchunblock.core.Pins
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
@@ -63,8 +70,27 @@ fun FollowingScreen(model: FollowingModel, nav: Navigator) {
         model.loading && model.channels.isEmpty() -> LoadingBox()
         model.failed -> MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.load(force = true) }
         model.channels.isEmpty() -> MessageBox(AppState.t("following_none"))
-        else -> LazyColumn(Modifier.fillMaxSize()) {
-            items(model.channels, key = { it.login }) { b -> ChannelRow(b) { nav.push(Screen.Channel(b.login)) } }
+        else -> {
+            // Épinglées en tête (en direct, puis hors ligne) ; deux colonnes sur tablette.
+            val grid = rememberLazyGridState()
+            TabTop.Listen(Screen.Following) { grid.animateScrollToItem(0) }
+            LazyVerticalGrid(columns = BrowseGrid.rows, state = grid, modifier = Modifier.fillMaxSize()) {
+                items(Pins.sortBriefs(model.channels), key = { it.login }) { b -> PinnableChannelRow(b, nav) }
+            }
+        }
+    }
+}
+
+/** Chaîne suivie : appui long pour l'épingler en tête des suivies, ou l'en retirer. */
+@Composable
+private fun PinnableChannelRow(b: ChannelBrief, nav: Navigator) {
+    var menu by remember { mutableStateOf(false) }
+    val pinned = Pins.isPinned(b.login)
+    Box {
+        ChannelRow(b, pinned = pinned, onLongClick = { menu = true }) { nav.push(Screen.Channel(b.login)) }
+        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            DropdownMenuItem(text = { Text(AppState.t(if (pinned) "unpin_streamer" else "pin_streamer")) },
+                             onClick = { menu = false; Pins.toggle(b.login) })
         }
     }
 }

@@ -1,6 +1,8 @@
 package com.mxfia19.twitchunblock.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -150,10 +152,14 @@ fun ChannelScreen(login: String, nav: Navigator) {
     val model = remember(login) { ChannelModel(login, scope) }
     var tab by remember { mutableStateOf(0) }
     LaunchedEffect(login) { model.load() }
+    // Planning (onglet 3, s'il y en a un) et À propos (onglet 4) : ChannelPanels.kt.
+    val extras = remember(login) { ChannelExtrasModel(login, scope) }
     LaunchedEffect(tab) {
         if (tab == 1) model.loadClips()
         if (tab == 2) model.loadRecovered()
+        if (tab == 4) extras.loadAbout()
     }
+    LaunchedEffect(model.info) { model.info?.let { extras.loadSchedule(it.userId) } }
     // Session web : le cœur suit la chaîne sur le compte Twitch ; sinon sur l'appareil.
     var twitchFollow by remember(login) { mutableStateOf<Boolean?>(null) }
     var twitchId by remember(login) { mutableStateOf<String?>(null) }
@@ -203,6 +209,12 @@ fun ChannelScreen(login: String, nav: Navigator) {
             Box {
                 IconButton(onClick = { menu = true }) { Icon(Icons.Filled.MoreVert, contentDescription = null, tint = TU.text) }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+                    // Épingler en tête des suivies : pour une chaîne suivie (ou déjà épinglée).
+                    val pinned = com.mxfia19.twitchunblock.core.Pins.isPinned(login)
+                    if (pinned || followed || NotifChannels.followed(login)) {
+                        DropdownMenuItem(text = { Text(AppState.t(if (pinned) "unpin_streamer" else "pin_streamer")) },
+                                         onClick = { menu = false; com.mxfia19.twitchunblock.core.Pins.toggle(login) })
+                    }
                     val hidden = Hidden.hidesChannel(login)
                     DropdownMenuItem(text = { Text(AppState.t(if (hidden) "remove" else "hide_channel") + if (hidden) " · " + AppState.t("hidden_badge") else "") },
                                      onClick = {
@@ -224,21 +236,37 @@ fun ChannelScreen(login: String, nav: Navigator) {
             )
         }
         LazyVerticalGrid(
-            columns = GridCells.Adaptive(260.dp),
+            columns = BrowseGrid.cards,
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
             item(span = FullSpan) { ChannelHeader(login, info) { nav.play(PlayRequest.Live(login)) } }
+            // Hors ligne : son prochain live prévu, ou ses vacances.
+            val schedule = extras.schedule
+            if (info?.error == "offline" && schedule != null) item(span = FullSpan) { ScheduleHeadline(schedule) }
             item(span = FullSpan) {
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     TabChip(AppState.t("tv_videos"), tab == 0) { tab = 0 }
                     TabChip(AppState.t("clips"), tab == 1) { tab = 1 }
                     TabChip(AppState.t("recover_tab"), tab == 2) { tab = 2 }
+                    if (extras.hasSchedule) TabChip(AppState.t("sched_tab"), tab == 3) { tab = 3 }
+                    TabChip(AppState.t("about"), tab == 4) { tab = 4 }
                 }
             }
-            if (tab == 2) {
+            if (tab == 3 && schedule != null) {
+                item(span = FullSpan) { ScheduleTab(schedule) }
+            } else if (tab == 4) {
+                val about = extras.about
+                when {
+                    about != null -> item(span = FullSpan) { AboutTab(about, info?.login ?: login) }
+                    extras.aboutFailed -> item(span = FullSpan) {
+                        MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { extras.loadAbout() }
+                    }
+                    else -> item(span = FullSpan) { LoadingBox() }
+                }
+            } else if (tab == 2) {
                 item(span = FullSpan) { Text(AppState.t("recover_sub"), color = TU.muted, fontSize = 13.sp) }
                 val list = model.recovered
                 when {
