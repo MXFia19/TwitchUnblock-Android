@@ -213,25 +213,37 @@ object BrowseApi {
 
     // ── Compte (Helix) ──
     /** Directs suivis par le compte (300 au plus). Jeton refusé : AuthExpiredException. */
-    suspend fun followedStreams(): List<TwitchStream>? {
+    suspend fun followedStreams(): List<TwitchStream>? = followedStreamsPaged()?.first
+
+    /** Pareil, avec « liste complète » : faux si une page suivante n'a pas
+     *  répondu ou si 300 sont atteints avec une suite (notifications de live :
+     *  un direct absent n'est alors pas forcément fini). */
+    suspend fun followedStreamsPaged(): Pair<List<TwitchStream>, Boolean>? {
         val uid = AppState.user?.id ?: return null
         val out = mutableListOf<TwitchStream>()
         val seen = HashSet<String>()
         var cursor: String? = null
+        var complete = true
         for (page in 0 until 3) {
             var url = "https://api.twitch.tv/helix/streams/followed?user_id=$uid&first=100"
             if (cursor != null) url += "&after=${Http.encode(cursor)}"
             val r = Auth.helix(url)
             if (r == null) {
                 if (page == 0) return null
+                complete = false
                 break
             }
             if (r.code == 401) throw AuthExpiredException()
             if (r.code != 200) {
                 if (page == 0) return null
+                complete = false
                 break
             }
-            val json = parseJson(r.body) ?: break
+            val json = parseJson(r.body)
+            if (json == null) {
+                complete = false
+                break
+            }
             val arr = json.arr("data")?.objects().orEmpty()
             for (d in arr) {
                 val login = d.str("user_login") ?: continue
@@ -246,9 +258,11 @@ object BrowseApi {
             }
             cursor = json.obj("pagination")?.str("cursor")
             if (cursor.isNullOrEmpty() || arr.isEmpty()) break
+            // 300 atteints, et il en reste.
+            if (page == 2) complete = false
         }
-        Logger.success("HELIX", "${out.size} directs suivis")
-        return out
+        Logger.success("HELIX", "${out.size} directs suivis", if (complete) null else "liste partielle")
+        return Pair(out, complete)
     }
 
     /** Toutes les chaînes suivies par le compte (1 000 au plus). */

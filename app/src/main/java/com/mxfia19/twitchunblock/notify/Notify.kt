@@ -18,6 +18,7 @@ import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -27,6 +28,7 @@ import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import com.mxfia19.twitchunblock.App
 import com.mxfia19.twitchunblock.BuildConfig
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.AuthExpiredException
@@ -60,6 +62,8 @@ import kotlin.random.Random
 object LiveNotifier {
     private const val ENABLED = "notif_live"
     private const val KNOWN = "notif_known_live"
+    /** Compte Twitch dont KNOWN contient les directs suivis ("" : aucun). */
+    private const val KNOWN_USER = "notif_known_user"
     private const val CHANNEL = "lives"
     private const val WORK = "live-check"
     /** Action « Ne plus notifier cette chaîne » (LiveActionReceiver). */
@@ -72,13 +76,23 @@ object LiveNotifier {
     fun init(context: Context) {
         enabled = AppState.prefs.getBoolean(ENABLED, false)
         NotifChannels.init()
-        if (enabled || Ntfy.enabled) schedule(context)
+        if (enabled || Ntfy.enabled) schedule(context) else cancelIfUnused(context)
     }
 
     fun setEnabled(context: Context, on: Boolean) {
+        // Rallumées : la liste des directs connus date de la coupure. Effacée,
+        // le premier passage la refait sans notifier ; sinon, chaque direct
+        // déjà en cours partait comme nouveau. Comme enable() sur l'iPhone.
+        if (on && !enabled) AppState.prefs.edit().remove(KNOWN).apply()
         enabled = on
         AppState.prefs.edit().putBoolean(ENABLED, on).apply()
-        if (on || Ntfy.enabled) schedule(context) else WorkManager.getInstance(context).cancelUniqueWork(WORK)
+        if (on || Ntfy.enabled) schedule(context) else cancelIfUnused(context)
+    }
+
+    /** Ni notifications Android ni ntfy : plus de vérification périodique
+     *  (WorkManager relançait l'app toutes les 15 min pour rien). */
+    fun cancelIfUnused(context: Context) {
+        if (!enabled && !Ntfy.enabled) WorkManager.getInstance(context).cancelUniqueWork(WORK)
     }
 
     fun schedule(context: Context) {
@@ -106,9 +120,18 @@ object LiveNotifier {
         val streams = mutableListOf<TwitchStream>()
         var reached = false
         var accountRead = AppState.user == null
+        // Liste du compte incomplète (une page suivante sans réponse) : un
+        // direct qui n'y est pas n'est pas fini pour autant. Le retirer des
+        // connus le faisait notifier de nouveau au passage suivant.
+        var accountPartial = false
         if (AppState.user != null) {
             try {
-                BrowseApi.followedStreams()?.let { streams += it; reached = true; accountRead = true }
+                BrowseApi.followedStreamsPaged()?.let { (list, complete) ->
+                    streams += list
+                    accountPartial = !complete
+                    reached = true
+                    accountRead = true
+                }
             } catch (e: AuthExpiredException) {
                 Logger.warn("NOTIF", "Session Twitch expirée")
             }
@@ -126,7 +149,13 @@ object LiveNotifier {
         if (!reached) return false
         val before = parseJsonArray(AppState.prefs.getString(KNOWN, null))?.strings()?.toSet()
         val now = streams.map { it.login.lowercase() }.toSet()
-        if (notify && before != null && !(Ntfy.enabled && Ntfy.synced) && canNotify(context)) {
+        // Autre compte (changement, connexion, déconnexion) : les directs
+        // connus étaient ceux de l'ancien. Ce passage les refait sans
+        // notifier ; sinon, tous ceux du nouveau partaient en rafale.
+        val user = AppState.user?.id ?: ""
+        val knownUser = AppState.prefs.getString(KNOWN_USER, null)
+        val sameUser = knownUser == null || knownUser == user
+        if (notify && sameUser && before != null && !(Ntfy.enabled && Ntfy.synced) && canNotify(context)) {
             ensureChannel(context)
             // Chaînes coupées dans « Chaînes notifiées » : connues quand même
             // (plus bas), pour ne pas notifier un direct en cours le jour où
@@ -138,9 +167,13 @@ object LiveNotifier {
         // Seule la partie relue (compte ou appareil) est remplacée : sinon,
         // le compte injoignable une fois, tous ses directs déjà en cours
         // étaient notifiés comme nouveaux à la vérification suivante.
+        // Liste du compte partielle : ses anciens connus restent (union).
         val localSet = local.map { it.lowercase() }.toHashSet()
-        val kept = before.orEmpty().filter { if (it in localSet) !localRead else !accountRead }
-        AppState.prefs.edit().putString(KNOWN, JSONArray((now + kept).toList()).toString()).apply()
+        val kept = before.orEmpty().filter { if (it in localSet) !localRead else (!accountRead || accountPartial) }
+        val edit = AppState.prefs.edit().putString(KNOWN, JSONArray((now + kept).toList()).toString())
+        // Le compte de la liste ne change qu'une fois ses directs relus.
+        if (accountRead) edit.putString(KNOWN_USER, user)
+        edit.apply()
         return true
     }
 
@@ -243,6 +276,13 @@ class NtfySyncWorker(context: Context, params: WorkerParameters) : CoroutineWork
     override suspend fun doWork(): Result = withContext(Dispatchers.Main) {
         if (Ntfy.enabled) Ntfy.sync()
         Result.success()
+    }
+}
+
+/** ntfy coupé : désabonnement renvoyé (délai croissant) jusqu'à la réponse du Worker. */
+class NtfyUnsubscribeWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result = withContext(Dispatchers.Main) {
+        if (Ntfy.unsubscribe()) Result.success() else Result.retry()
     }
 }
 
@@ -355,6 +395,9 @@ object Ntfy {
     private const val ACCOUNT = "ntfy_account_follows"
     private const val ACCOUNT_USER = "ntfy_account_user"
     private const val ACCOUNT_AT = "ntfy_account_at"
+    /** Désabonnement pas encore confirmé par le Worker. */
+    private const val UNSUB_PENDING = "ntfy_unsub_pending"
+    private const val UNSUB_WORK = "ntfy-unsubscribe"
 
     var enabled by mutableStateOf(false)
         private set
@@ -384,16 +427,45 @@ object Ntfy {
 
     suspend fun enable(context: Context): Boolean {
         enabled = true
-        AppState.prefs.edit().putBoolean(ENABLED, true).apply()
+        // Rallumé avant que le désabonnement ne parte : il n'a plus lieu
+        // d'être (il passerait après le nouvel abonnement).
+        AppState.prefs.edit().putBoolean(ENABLED, true).remove(UNSUB_PENDING).apply()
+        WorkManager.getInstance(context).cancelUniqueWork(UNSUB_WORK)
         LiveNotifier.schedule(context)
         return sync(force = true)
     }
 
-    suspend fun disable() {
+    /** Le Worker oublie le sujet par NtfyUnsubscribeWorker (réseau requis,
+     *  renvoyé jusqu'à sa réponse) : envoyé d'ici, il se perdait sans réseau,
+     *  au quota du Worker ou en quittant l'écran, et le Worker publiait
+     *  encore jusqu'à 60 jours. Comme NtfyNotifier.retire (iOS). */
+    fun disable() {
         enabled = false
         synced = false
-        AppState.prefs.edit().putBoolean(ENABLED, false).remove(HASH).remove(SYNCED).apply()
-        post("/api/push/unsubscribe", JSONObject().put("ntfy", topic))
+        AppState.prefs.edit().putBoolean(ENABLED, false).remove(HASH).remove(SYNCED).putBoolean(UNSUB_PENDING, true).apply()
+        val context: Context = App.instance
+        val request = OneTimeWorkRequestBuilder<NtfyUnsubscribeWorker>()
+            .setConstraints(Constraints.Builder().setRequiredNetworkType(NetworkType.CONNECTED).build())
+            .setBackoffCriteria(BackoffPolicy.EXPONENTIAL, 1, TimeUnit.MINUTES)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(UNSUB_WORK, ExistingWorkPolicy.REPLACE, request)
+        LiveNotifier.cancelIfUnused(context)
+    }
+
+    /** Désabonnement en attente envoyé au Worker. false : à renvoyer plus tard. */
+    suspend fun unsubscribe(): Boolean {
+        val p = AppState.prefs
+        if (enabled || !p.getBoolean(UNSUB_PENDING, false)) return true
+        val code = post("/api/push/unsubscribe", JSONObject().put("ntfy", topic)) ?: return false
+        if (enabled) return true
+        // 200, ou un refus qui ne changera pas (route absente, sujet inconnu).
+        if (code == 200 || (code in 400..499 && code != 429)) {
+            p.edit().remove(UNSUB_PENDING).apply()
+            Logger.info("NTFY", "Sujet ntfy oublié par le Worker", "HTTP $code")
+            return true
+        }
+        Logger.warn("NTFY", "Désabonnement refusé par le Worker", "HTTP $code — nouvel essai plus tard")
+        return false
     }
 
     /** sync() dès que le réseau le permet, par WorkManager : depuis l'action
