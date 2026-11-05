@@ -100,7 +100,7 @@ fun WebSessionCard(nav: Navigator) {
 @Composable
 fun TopLangChips(model: HomeModel) {
     Row(Modifier.fillMaxWidth().padding(bottom = 2.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        SmallChip(TopLanguage.name(TopLanguage.resolved()), !model.world) { model.setWorld(false) }
-        SmallChip(AppState.t("top_world"), model.world) { model.setWorld(true) }
+        SmallChip(TopLanguage.name(TopLanguage.resolved()), !model.world) { model.chooseWorld(false) }
+        SmallChip(AppState.t("top_world"), model.world) { model.chooseWorld(true) }
     }
 }

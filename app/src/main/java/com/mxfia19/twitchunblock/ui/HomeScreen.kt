@@ -150,7 +150,7 @@ class HomeModel(private val scope: CoroutineScope) {
     }
 
     /** Top de ma langue ou du monde entier (puces au-dessus du Top). */
-    fun setWorld(on: Boolean) {
+    fun chooseWorld(on: Boolean) {
         if (on == world) return
         world = on
         top.clear()
