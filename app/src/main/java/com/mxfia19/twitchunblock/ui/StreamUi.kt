@@ -62,30 +62,38 @@ fun BoxScope.StreamVideoOverlay(session: PlaybackSession) {
     // Image verticale (Dual Format) : cherchée une fois le direct parti.
     val login = if (session.isLive && session.state is PlaybackSession.State.Ready) session.channelLogin else null
     LaunchedEffect(login, session.openCount) { if (login != null) session.vertical.lookup(login) }
-    if (session.isLive) {
-        AdBreakBanner(session.adBreaks, modifier = Modifier.align(Alignment.TopCenter).padding(top = 8.dp, start = 52.dp, end = 52.dp))
-    }
-    val vertical = session.vertical
-    if (vertical.available) {
-        val on = vertical.on
-        IconButton(onClick = { vertical.toggle() },
-                   modifier = Modifier.align(Alignment.TopStart)
-                       .semantics { contentDescription = AppState.t(if (on) "vertical_off" else "vertical_format") }) {
-            Box(Modifier.size(32.dp).clip(CircleShape).background(Color(0x80000000)), contentAlignment = Alignment.Center) {
-                // Le cadre de l'autre image : couché pour revenir, debout pour y aller.
-                Box(Modifier.size(if (on) 16.dp else 10.dp, if (on) 10.dp else 16.dp)
-                        .border(2.dp, if (on) TU.primary else Color.White, RoundedCornerShape(2.dp)))
+    // Chat posé sur l'image (paysage) : bandeau et bouton s'en écartent. Le
+    // titre cliquable qu'affichent les commandes en paysage (PlayerAddons.kt)
+    // couvrait le haut du bandeau : il passe dessous, comme l'avis des passages coupés.
+    val inset = LocalChatOverlayInset.current
+    val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    val adTop = if (landscape && PlayerUi.controlsVisible) 72.dp else 8.dp
+    Box(Modifier.matchParentSize().padding(start = inset.start, end = inset.end)) {
+        if (session.isLive) {
+            AdBreakBanner(session.adBreaks, modifier = Modifier.align(Alignment.TopCenter).padding(top = adTop, start = 52.dp, end = 52.dp))
+        }
+        val vertical = session.vertical
+        if (vertical.available) {
+            val on = vertical.on
+            IconButton(onClick = { vertical.toggle() },
+                       modifier = Modifier.align(Alignment.TopStart)
+                           .semantics { contentDescription = AppState.t(if (on) "vertical_off" else "vertical_format") }) {
+                Box(Modifier.size(32.dp).clip(CircleShape).background(Color(0x80000000)), contentAlignment = Alignment.Center) {
+                    // Le cadre de l'autre image : couché pour revenir, debout pour y aller.
+                    Box(Modifier.size(if (on) 16.dp else 10.dp, if (on) 10.dp else 16.dp)
+                            .border(2.dp, if (on) TU.primary else Color.White, RoundedCornerShape(2.dp)))
+                }
             }
         }
-    }
-    vertical.notice?.let { text ->
-        LaunchedEffect(text) {
-            delay(3_000)
-            vertical.notice = null
+        vertical.notice?.let { text ->
+            LaunchedEffect(text) {
+                delay(3_000)
+                vertical.notice = null
+            }
+            Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                 modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp).clip(RoundedCornerShape(16.dp))
+                     .background(Color(0xB3000000)).padding(horizontal = 12.dp, vertical = 6.dp))
         }
-        Text(text, color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
-             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp).clip(RoundedCornerShape(16.dp))
-                 .background(Color(0xB3000000)).padding(horizontal = 12.dp, vertical = 6.dp))
     }
     // Chromecast (CastUi.kt) : par-dessus le reste pendant la diffusion.
     CastOverlay(session)
@@ -108,8 +116,10 @@ fun AdBreakBanner(watcher: AdBreakWatcher, compact: Boolean = false, modifier: M
         return
     }
     // Pas de session web, ou réglage coupé : un abonné ne profite pas de son
-    // abonnement sans pub, on le lui dit.
-    val loginHint = !Features.subAdFree.value || WebSession.token == null
+    // abonnement sans pub, on le lui dit ; jamais avec « Sans compte Twitch »
+    // (invitations masquées, réglages du compte aussi), comme l'iPhone.
+    val loginHint = !com.mxfia19.twitchunblock.core.NoAccount.active &&
+        (!Features.subAdFree.value || WebSession.token == null)
     Column(modifier.widthIn(max = 360.dp).clip(RoundedCornerShape(12.dp)).background(Color(0xB3000000))
                .border(1.dp, TU.primary.copy(alpha = 0.6f), RoundedCornerShape(12.dp))
                .clickable(enabled = watcher.mutedByUs) { watcher.unmute() }

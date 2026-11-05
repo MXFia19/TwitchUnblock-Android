@@ -228,12 +228,26 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
         request?.let { open(it) }
     }
 
+    /** Chaîne de la lecture : ce qui venait d'une autre chaîne (avatar,
+     *  identifiant, spectateurs, abonnement, début du direct) ne reste pas sous
+     *  son titre ni dans la notification. Même chaîne : gardé (rembobinage). */
+    private fun setChannel(login: String?, name: String?) {
+        if (login == null || !login.equals(channelLogin, ignoreCase = true)) {
+            avatar = null
+            channelId = null
+            viewers = 0
+            subscriber = null
+            startedAt = null
+        }
+        channelLogin = login
+        channelName = name
+    }
+
     private suspend fun resolve(req: PlayRequest) {
         when (req) {
             is PlayRequest.Live -> {
                 val r = LiveApi.getLive(req.login) { step -> state = State.Loading(step) }
-                channelLogin = r.info.login
-                channelName = r.info.login
+                setChannel(r.info.login, r.info.login)
                 avatar = r.info.avatar
                 channelId = r.info.userId
                 title = r.info.title
@@ -260,8 +274,7 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
             }
             is PlayRequest.Vod -> {
                 title = req.title
-                channelLogin = req.channel
-                channelName = req.channel
+                setChannel(req.channel, req.channel)
                 game = ""
                 source = null
                 // Téléchargée : lue sur le téléphone, sans chercher de source.
@@ -277,11 +290,17 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                     return
                 }
                 Usage.count("vod")
-                VodApi.meta(req.id)?.let { meta ->
+                VodApi.metaWithOwner(req.id)?.let { (meta, owner) ->
                     if (title.isEmpty()) title = meta.title
                     thumbnail = meta.thumbnail
                     lengthSeconds = meta.lengthSeconds
                     com.mxfia19.twitchunblock.core.ContinueWatching.keep(meta)
+                    // Lien collé ou numéro : la chaîne vient de la VOD (avatar,
+                    // « Voir la chaîne », notification, historique, téléchargement).
+                    if (owner != null) {
+                        if (channelLogin == null) setChannel(owner.login, owner.name)
+                        if (avatar == null && owner.login.equals(channelLogin, ignoreCase = true)) avatar = owner.avatar
+                    }
                 }
                 isClip = false
                 // Rembobinage : à l'instant visé sur la barre du direct, sinon près de la fin.
@@ -321,8 +340,8 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                     return
                 }
                 title = item.title
-                channelLogin = item.channel.takeIf { it.isNotEmpty() }
-                channelName = channelLogin
+                val login = item.channel.takeIf { it.isNotEmpty() }
+                setChannel(login, login)
                 thumbnail = item.thumbnail
                 lengthSeconds = item.lengthSeconds
                 source = null
@@ -333,8 +352,7 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
             is PlayRequest.Recovered -> {
                 val st = req.stream
                 title = st.title
-                channelLogin = st.login
-                channelName = st.login
+                setChannel(st.login, st.login)
                 game = st.game
                 source = null
                 val m = VodApi.recoverResolve(st)
@@ -352,8 +370,9 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                     return
                 }
                 title = c.title
-                channelLogin = c.broadcasterLogin
-                channelName = c.broadcasterName ?: c.broadcasterLogin
+                setChannel(c.broadcasterLogin, c.broadcasterName ?: c.broadcasterLogin)
+                // Pas de source pour un clip : le menu qualité ne montre pas celle du direct précédent.
+                source = null
                 isClip = true
                 start(Master(c.links), startMs = 0)
             }
@@ -402,8 +421,10 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
      *  changement de qualité, sans chercher les sources. */
     fun swapMaster(m: Master, src: String?) {
         if (!isLive || m.isEmpty) return
+        val held = liveHeldMs()
         source = src
         start(m, startMs = -1)
+        held?.let { keepLiveDelay(it) }
         // Drops : un jeton anonyme ne compte pas, la pulsation relit les segments.
         val login = channelLogin
         if (main && login != null) com.mxfia19.twitchunblock.drops.DropsHeartbeat.start(login, pollSegments = src != "account")
@@ -412,11 +433,43 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
     /** Qualité choisie dans le lecteur : retenue comme préférence. */
     fun selectQuality(key: String) {
         if (key == quality) return
+        val held = liveHeldMs()
         val pos = if (isLive) -1L else player.currentPosition
         play(key, pos)
+        held?.let { keepLiveDelay(it) }
         val pref = Quality.preferenceFor(key, master.links.keys, master.variants)
         if (pref != null && !NetworkStatus.isCellular && main) AppState.updateQualityPref(pref)
         Logger.info("PLAYER", "Qualité choisie", key)
+    }
+
+    /** Direct reculé (au-delà du retard normal, 3 s) : ce recul (ms), à garder
+     *  au changement de qualité ou d'image ; null sinon. */
+    private fun liveHeldMs(): Long? {
+        if (!isLive || state !is State.Ready) return null
+        return PlayerSpeed.liveBehindMs(player)?.takeIf { it > 3_000 }
+    }
+
+    /** Même recul sur le nouveau flux, dès que sa fenêtre est connue (avant
+     *  le relevé du rattrapage) : relancé au point par défaut, il repartait au
+     *  bord (l'iPhone garde le retard). Le saut passe par PlayerSpeed.onSeek,
+     *  comme un recul à la barre. Abandonné après 10 s ou par open(). */
+    private fun keepLiveDelay(behindMs: Long) {
+        seekJob?.cancel()
+        val listener = object : Player.Listener {
+            override fun onTimelineChanged(timeline: androidx.media3.common.Timeline, reason: Int) {
+                val edge = PlayerSpeed.liveEdgeMs(player) ?: return
+                player.removeListener(this)
+                player.seekTo(maxOf(0L, edge - behindMs))
+            }
+        }
+        player.addListener(listener)
+        seekJob = scope.launch {
+            try {
+                delay(10_000)
+            } finally {
+                player.removeListener(listener)
+            }
+        }
     }
 
     /** Multi-live : hauteur maximale en qualité Auto (null : sans plafond). */

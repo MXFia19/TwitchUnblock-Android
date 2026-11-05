@@ -38,12 +38,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -63,13 +63,15 @@ import com.mxfia19.twitchunblock.core.TwitchStream
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.player.PlaybackSession
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.launch
 
 /**
  * Multi-live : jusqu'à 4 directs côte à côte, un seul avec le son (toucher
  * une vidéo pour l'entendre ; sur le téléphone, le haut-parleur d'une tuile en
  * ajoute d'autres : MultiSound.kt). Chaque tuile est en qualité Auto, plafonnée
- * (720p à 2, 480p à 3 ou 4) pour que le débit et le décodeur suivent.
- * Partagé avec la TV.
+ * (capHeight) pour que le débit et le décodeur suivent. Une tuile se tait
+ * pendant la pause pub de sa chaîne. Partagé avec la TV.
  */
 class MultiLiveModel(private val context: Context, private val scope: CoroutineScope) {
     class Tile(val login: String, val session: PlaybackSession)
@@ -77,6 +79,9 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
     val tiles = mutableStateListOf<Tile>()
     var audio by mutableStateOf(0)
         private set
+    /** Première chaîne déjà ajoutée : l'écran recomposé (retour de la
+     *  connexion) ne la rajoute pas. */
+    var started = false
     /** Directs suivis à proposer. */
     var suggestions by mutableStateOf<List<TwitchStream>>(emptyList())
         private set
@@ -85,6 +90,13 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
 
     /** Tuiles qui ont le son et leur volume (MultiSound.kt). */
     val sound = MultiSound()
+
+    /** Début et fin d'une pause pub, sur chaque tuile : volumes reposés. */
+    private val adWatch = scope.launch {
+        snapshotFlow { tiles.map { it.session.adBreaks.remaining != null } }
+            .distinctUntilChanged()
+            .collect { applyVolumes() }
+    }
 
     fun add(input: String): Boolean {
         val login = Links.login(input)
@@ -123,8 +135,30 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
         layout()
     }
 
+    /** Plafond d'une tuile, comme l'iPhone : 1080p seule, 720p à deux, 480p
+     *  au-delà, ou la qualité préférée si elle est plus basse ; en données
+     *  mobiles, celle choisie pour elles (Auto : 720p au plus ; audio seul :
+     *  la vidéo la plus basse, une tuile ayant besoin d'image). */
+    private fun capHeight(): Int {
+        val rule = when {
+            tiles.size <= 1 -> 1080
+            tiles.size == 2 -> 720
+            else -> 480
+        }
+        var want = AppState.qualityPref.toIntOrNull()?.let { minOf(it, rule) } ?: rule
+        if (com.mxfia19.twitchunblock.core.NetworkStatus.isCellular) {
+            when (val cell = AppState.cellularQuality) {
+                "same" -> {}
+                "auto" -> want = minOf(want, 720)
+                "audio" -> want = 160
+                else -> want = minOf(cell.toIntOrNull() ?: want, rule)
+            }
+        }
+        return want
+    }
+
     private fun layout() {
-        val cap = if (tiles.size <= 2) 720 else 480
+        val cap = capHeight()
         tiles.forEachIndexed { i, t ->
             t.session.setMaxHeight(cap)
             if (i != audio) t.session.handleAudioFocus(false)
@@ -137,10 +171,14 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
     }
 
     /** Son de chaque tuile : celles de `sound.on`, à leur volume (les autres
-     *  se taisent quand la principale perd le focus audio). */
+     *  se taisent quand la principale perd le focus audio). Pendant la pause
+     *  pub de sa chaîne, une tuile se tait (comme l'iPhone) : son bandeau le dit. */
     private fun applyVolumes() {
         val main = tiles.getOrNull(audio)?.session?.player
-        tiles.forEachIndexed { i, t -> t.session.setVolume(sound.volumeFor(t.login, i == audio, main)) }
+        tiles.forEachIndexed { i, t ->
+            val ad = t.session.adBreaks.remaining != null
+            t.session.setVolume(if (ad) 0f else sound.volumeFor(t.login, i == audio, main))
+        }
     }
 
     /** Haut-parleur d'une tuile (téléphone) : son ajouté aux autres, ou coupé. */
@@ -175,6 +213,7 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
     }
 
     fun release() {
+        adWatch.cancel()
         tiles.forEach { it.session.release() }
         tiles.clear()
     }
@@ -219,8 +258,11 @@ fun MultiTile(tile: MultiLiveModel.Tile, hasAudio: Boolean, modifier: Modifier, 
                                                    color = TU.muted, fontSize = 13.sp, modifier = Modifier.align(Alignment.Center).padding(8.dp))
             PlaybackSession.State.Ready -> {}
         }
-        // Pause pub de la chaîne : bandeau d'une ligne (StreamUi.kt).
-        AdBreakBanner(tile.session.adBreaks, compact = true, modifier = Modifier.align(Alignment.BottomStart).padding(4.dp))
+        // Pause pub de la chaîne : bandeau d'une ligne (StreamUi.kt), à droite
+        // du haut-parleur sur le téléphone (il en cachait le début).
+        AdBreakBanner(tile.session.adBreaks, compact = true,
+                      modifier = Modifier.align(Alignment.BottomStart).padding(start = if (sound != null) 48.dp else 4.dp,
+                                                                                 top = 4.dp, end = 4.dp, bottom = 4.dp))
         Text(
             (if (hasAudio && sound == null) "🔊 " else "") + tile.login,
             color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
@@ -279,16 +321,24 @@ fun PauseInBackground(model: MultiLiveModel) {
     }
 }
 
+/** `model` : porté par PhoneApp tant que le multi-live est dans la pile ; il
+ *  garde ses tuiles sous la connexion ouverte depuis le chat (libérées avant,
+ *  seule la première revenait). */
 @Composable
-fun MultiLiveScreen(initial: String?, nav: Navigator) {
-    val context = LocalContext.current
+fun MultiLiveScreen(model: MultiLiveModel, initial: String?, nav: Navigator) {
     val scope = rememberCoroutineScope()
-    val model = remember { MultiLiveModel(context, scope) }
-    LaunchedEffect(Unit) {
-        initial?.let { model.add(it) }
+    LaunchedEffect(model) {
+        if (!model.started) {
+            model.started = true
+            initial?.let { model.add(it) }
+        }
         model.loadSuggestions()
     }
-    DisposableEffect(Unit) { onDispose { model.release() } }
+    // Tuiles en pause sous un autre écran (connexion), reprises au retour.
+    DisposableEffect(model) {
+        model.playAll()
+        onDispose { model.pauseAll() }
+    }
     PauseInBackground(model)
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val audioLogin = model.tiles.getOrNull(model.audio)?.login

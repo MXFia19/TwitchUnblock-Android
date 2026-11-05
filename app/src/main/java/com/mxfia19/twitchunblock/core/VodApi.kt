@@ -106,13 +106,24 @@ object VodApi {
         return Master(links, emptyMap(), synthesizeMaster(links, emptyMap()))
     }
 
+    /** Chaîne d'une VOD : login, nom affiché, avatar. */
+    class Owner(val login: String, val name: String, val avatar: String?)
+
     /** Titre, chaîne, durée d'une VOD (lien collé, reprise). */
-    suspend fun meta(id: String): Vod? {
+    suspend fun meta(id: String): Vod? = metaWithOwner(id)?.first
+
+    /** Comme meta, avec sa chaîne : une VOD ouverte par lien ou par numéro
+     *  n'en a pas d'autre (avatar, « Voir la chaîne », historique). */
+    suspend fun metaWithOwner(id: String): Pair<Vod, Owner?>? {
         val d = Gql.request("query(\$id: ID!) { video(id: \$id) { id title lengthSeconds viewCount publishedAt " +
-                            "owner { login displayName } previewThumbnailURL(height: 180, width: 320) } }",
+                            "owner { login displayName profileImageURL(width: 150) } previewThumbnailURL(height: 180, width: 320) } }",
                             Gql.vars("id" to id)) ?: return null
         val v = d.obj("video") ?: return null
-        return Vod(v.str("id") ?: id, v.str("title") ?: "", v.str("previewThumbnailURL") ?: "",
-                   v.str("publishedAt") ?: "", v.int("lengthSeconds") ?: 0, v.int("viewCount") ?: 0)
+        val vod = Vod(v.str("id") ?: id, v.str("title") ?: "", v.str("previewThumbnailURL") ?: "",
+                      v.str("publishedAt") ?: "", v.int("lengthSeconds") ?: 0, v.int("viewCount") ?: 0)
+        val owner = v.obj("owner")?.let { o ->
+            o.str("login")?.takeIf { it.isNotEmpty() }?.let { Owner(it, o.str("displayName") ?: it, o.str("profileImageURL")) }
+        }
+        return Pair(vod, owner)
     }
 }

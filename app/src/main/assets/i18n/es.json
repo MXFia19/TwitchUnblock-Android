@@ -561,6 +561,8 @@
   "feedback_sub": "Un problema o una idea: tu mensaje llega directamente al desarrollador.",
   "fill_screen": "Rellenar la pantalla (horizontal)",
   "fill_screen_sub": "Amplía la imagen hasta los bordes en horizontal, a costa de la parte superior e inferior. Desactivado, se ve la imagen completa con franjas iguales a los lados. Sin efecto en vertical.",
+  "fl_cast_live_only": "El Chromecast solo reproduce directos: envío detenido",
+  "fl_dl_after_live": "Descargar: disponible cuando termine el directo",
   "fn_notif_blocked": "Android bloquea las notificaciones de la app: permítelas en sus ajustes para recibir avisos de directos.",
   "fn_notif_settings": "Abrir los ajustes de notificaciones",
   "fn_ntfy_failed": "No se pudo contactar con el servidor: inténtalo más tarde.",

@@ -96,13 +96,16 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
                  focusOnStart: Boolean = false, controls: Boolean = true) {
     // Chat posé sur l'image (paysage) : les commandes s'en écartent (ChatLayout.kt).
     val chatInset = LocalChatOverlayInset.current
-    // Remplir l'écran : en paysage seulement. Passages coupés de la VOD sur la barre.
-    val fill = PlayerPrefs.fillScreen.value && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    // Remplir l'écran : en paysage seulement, et pas l'image verticale (9:16
+    // étirée à la largeur, il n'en restait qu'un quart). Passages coupés de la VOD sur la barre.
+    val fill = PlayerPrefs.fillScreen.value && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+        !session.vertical.on
     val muted = PlayerUi.markers?.takeIf { it.id == session.vodId }?.muted.orEmpty()
     AndroidView(
         factory = { ctx ->
             GesturePlayerView(ctx).apply {
-                player = session.player
+                // Sans la vitesse dans la roue dentée : le menu ⋮ seul la règle (PlayerGestures.kt).
+                usePlayer(session.player)
                 setShowNextButton(false)
                 setShowPreviousButton(false)
                 setBackgroundColor(android.graphics.Color.BLACK)
@@ -114,7 +117,7 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
             }
         },
         update = { view ->
-            if (view.player !== session.player) view.player = session.player
+            view.usePlayer(session.player)
             // Écran allumé pendant la lecture seulement (pas en pause, à la fin
             // ni sur une erreur) ; relu à chaque changement.
             view.keepScreenOn = session.isPlaying
@@ -126,7 +129,7 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
             view.insetControls(chatInset)
         },
         // La session survit à l'écran : la vue retirée lâche le lecteur.
-        onRelease = { view -> view.player = null },
+        onRelease = { view -> view.usePlayer(null) },
         modifier = modifier.background(Color.Black),
     )
 }
@@ -152,15 +155,12 @@ fun PlayerOverlay(session: PlaybackSession, modifier: Modifier = Modifier) {
     }
 }
 
-fun sourceName(id: String): String = when (id) {
-    "as" -> "Luminous (Asie)"
-    "eu" -> "Luminous (Europe)"
-    "al" -> "Proxy (Albanie)"
-    "twitch" -> "Twitch"
-    "worker" -> "Worker"
-    "account" -> AppState.t("source_account")
-    "pp", "al2", "eu2", "custom" -> AppState.t("src_$id")
-    else -> id
+/** Nom d'une source dans la langue de l'app (src_as, src_twitch…, comme
+ *  l'iPhone) ; l'identifiant faute de texte. */
+fun sourceName(id: String): String {
+    val key = "src_$id"
+    val name = AppState.t(key)
+    return if (name == key) id else name
 }
 
 /** Minuterie : libellés des durées proposées (minutes). */
@@ -228,6 +228,16 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
     }
     // Android 12 et plus : passage automatique en image dans l'image tant que ça joue.
     LaunchedEffect(session.isPlaying) { (activity as? MainActivity)?.updatePip() }
+    // Format de l'image changé (image verticale, autre flux) : la fenêtre le suit.
+    DisposableEffect(session.player) {
+        val listener = object : androidx.media3.common.Player.Listener {
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                (activity as? MainActivity)?.updatePip()
+            }
+        }
+        session.player.addListener(listener)
+        onDispose { session.player.removeListener(listener) }
+    }
     val landscape = LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
     val pip = PipState.active
     // Plein écran en paysage : barres du système masquées (un glissement les rappelle).
@@ -391,9 +401,8 @@ private fun InfoBar(session: PlaybackSession, nav: Navigator) {
                 parts += "● " + Format.viewers(session.viewers)
                 Format.uptime(session.startedAt)?.let { parts += it }
             }
-            session.sleepAt?.let { at ->
-                parts += "⏾ " + Format.clock(maxOf(0L, (at - System.currentTimeMillis()) / 1000))
-            }
+            // Relu chaque seconde : le compte à rebours avance (PlayerAddons.kt).
+            sleepLeft(session)?.let { parts += "⏾ " + Format.clock(it) }
             Text(parts.joinToString(" · "), color = TU.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         Box {
@@ -521,7 +530,13 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                     val vod = session.vodId
                     if (vod != null && !session.isOffline && session.state is PlaybackSession.State.Ready) {
                         val saved = Downloads.find(vod)
-                        DropdownMenuItem(
+                        // Enregistrement d'un direct encore en cours (playlist sans
+                        // fin) : la copie serait partielle, lue hors ligne comme un direct figé.
+                        val p = session.player
+                        if (saved == null && p.isCurrentMediaItemDynamic && p.duration != C.TIME_UNSET) {
+                            DropdownMenuItem(text = { Text(AppState.t("fl_dl_after_live"), color = TU.muted, fontSize = 13.sp) },
+                                             onClick = {}, enabled = false)
+                        } else DropdownMenuItem(
                             text = { Text(if (saved != null) AppState.t("dl_section") + "  ✓" else AppState.t("dl_download")) },
                             onClick = { if (saved != null) { open = false; nav.tab(Screen.Library) } else page = 2 },
                         )
@@ -592,6 +607,7 @@ private fun liveLatency(session: PlaybackSession): Long {
 private fun startDownload(context: android.content.Context, session: PlaybackSession, quality: String) {
     val id = session.vodId ?: return
     val url = session.links[quality] ?: return
-    Downloads.start(context, id, session.title, session.channelName ?: "", session.thumbnail,
+    // Le login (relu hors ligne comme celui de la chaîne), pas le nom affiché.
+    Downloads.start(context, id, session.title, session.channelLogin ?: "", session.thumbnail,
                     downloadSeconds(session), quality, url)
 }

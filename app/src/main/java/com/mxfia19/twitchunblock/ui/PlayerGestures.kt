@@ -15,6 +15,7 @@ import android.view.ViewConfiguration
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.media3.common.C
+import androidx.media3.common.ForwardingPlayer
 import androidx.media3.common.Player
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.AspectRatioFrameLayout
@@ -75,6 +76,15 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
 
     private val touchSlop = ViewConfiguration.get(context).scaledTouchSlop
     private val doubleTapMs = ViewConfiguration.getDoubleTapTimeout().toLong()
+
+    /** Lecteur de la session, donné à la vue sans la vitesse (NoSpeedPlayer). */
+    private var source: Player? = null
+
+    fun usePlayer(p: Player?) {
+        if (p === source) return
+        source = p
+        player = p?.let { NoSpeedPlayer(it) }
+    }
 
     private val timeBar: View? = findViewById(androidx.media3.ui.R.id.exo_progress)
     private val mutedMarks: MutedMarks? = (timeBar as? DefaultTimeBar)?.let { MutedMarks(it) { player } }
@@ -331,6 +341,21 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
         // Autre format d'image (cadre changé) : décalage borné de nouveau.
         if (zoom > 1f) applyZoom()
     }
+}
+
+/**
+ * Le lecteur sans la commande de vitesse : la roue dentée de Media3 ne la
+ * propose plus. Elle la changeait sans PlayerSpeed : direct en 2× qui butait
+ * sur le bord, vitesse des VODs non retenue, ✓ du menu ⋮ faux. Le menu ⋮
+ * reste seul à la régler.
+ */
+@OptIn(UnstableApi::class)
+private class NoSpeedPlayer(player: Player) : ForwardingPlayer(player) {
+    override fun isCommandAvailable(command: Int): Boolean =
+        command != Player.COMMAND_SET_SPEED_AND_PITCH && super.isCommandAvailable(command)
+
+    override fun getAvailableCommands(): Player.Commands =
+        super.getAvailableCommands().buildUpon().remove(Player.COMMAND_SET_SPEED_AND_PITCH).build()
 }
 
 /**

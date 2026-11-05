@@ -134,9 +134,23 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Format de l'image lue (9:16 pour l'image verticale), borné aux limites
+     *  d'Android (de 1:2,39 à 2,39:1) ; 16:9 tant qu'il est inconnu. */
+    private fun pipRatio(): Rational {
+        val v = PlayerHolder.current?.player?.videoSize
+        val w = if (v != null) (v.width * v.pixelWidthHeightRatio).toInt() else 0
+        val h = v?.height ?: 0
+        if (w <= 0 || h <= 0) return Rational(16, 9)
+        return when {
+            w > h * 2.38f -> Rational(238, 100)
+            h > w * 2.38f -> Rational(100, 238)
+            else -> Rational(w, h)
+        }
+    }
+
     @RequiresApi(26)
     private fun pipParams(): PictureInPictureParams {
-        val b = PictureInPictureParams.Builder().setAspectRatio(Rational(16, 9))
+        val b = PictureInPictureParams.Builder().setAspectRatio(pipRatio())
         if (Build.VERSION.SDK_INT >= 31) {
             b.setAutoEnterEnabled(pipWanted())
             b.setSeamlessResizeEnabled(true)

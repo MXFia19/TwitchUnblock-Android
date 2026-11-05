@@ -561,6 +561,8 @@
   "feedback_sub": "Un problème, une idée : ton message arrive directement au développeur.",
   "fill_screen": "Remplir l'écran (paysage)",
   "fill_screen_sub": "Agrandit l'image jusqu'aux bords en paysage, au prix du haut et du bas. Désactivé, l'image reste entière et laisse des bandes égales sur les côtés. Sans effet en portrait.",
+  "fl_cast_live_only": "Le Chromecast ne lit que les directs : diffusion arrêtée",
+  "fl_dl_after_live": "Télécharger : possible à la fin du direct",
   "fn_notif_blocked": "Android bloque les notifications de l'app : autorise-les dans ses réglages pour être prévenu des lives.",
   "fn_notif_settings": "Ouvrir les réglages des notifications",
   "fn_ntfy_failed": "Impossible de joindre le serveur pour l'instant : réessaie plus tard.",

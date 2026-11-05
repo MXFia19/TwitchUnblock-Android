@@ -33,6 +33,7 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -166,9 +167,14 @@ fun PlayerVideoOverlay(session: PlaybackSession) {
     val controls = PlayerUi.controlsVisible
     val scrub = PlayerUi.scrubMs
     val start = if (session.isLive) null else markers?.broadcastStart
-    Box(Modifier.fillMaxSize()) {
+    // Chat posé sur l'image (paysage) : rien de ceci ne passe dessous.
+    val inset = LocalChatOverlayInset.current
+    Box(Modifier.fillMaxSize().padding(start = inset.start, end = inset.end)) {
         if (ready && controls && scrub == null) {
-            Column(Modifier.align(Alignment.TopStart).fillMaxWidth(0.7f).padding(10.dp),
+            // Bouton de l'image verticale en haut à gauche (StreamUi.kt) : le
+            // titre, cliquable et posé par-dessus, s'écarte pour le laisser toucher.
+            val edge = if (session.vertical.available) 52.dp else 10.dp
+            Column(Modifier.align(Alignment.TopStart).fillMaxWidth(0.7f).padding(start = edge, top = 10.dp, end = 10.dp, bottom = 10.dp),
                    verticalArrangement = Arrangement.spacedBy(5.dp)) {
                 // Paysage (pas de barre d'infos) : le titre, souvent coupé, ouvre sa fiche.
                 if (landscape) {
@@ -186,10 +192,13 @@ fun PlayerVideoOverlay(session: PlaybackSession) {
                         }
                     }
                 }
-                // Heure réelle de l'instant lu (archive) et vitesse, quand elle n'est pas 1×.
+                // Heure réelle de l'instant lu (archive) et vitesse, quand elle n'est pas 1× ;
+                // en paysage (pas de barre d'infos), la minuterie.
+                val sleep = if (landscape) sleepLeft(session) else null
                 val pills = listOfNotNull(
                     start?.let { "🕰 " + timeText(context, it + PlayerUi.positionMs) },
                     PlayerSpeed.current.takeIf { it != 1f }?.let { PlayerSpeed.label(it) },
+                    sleep?.let { "⏾ " + Format.clock(it) },
                 )
                 if (pills.isNotEmpty()) OverlayPill(pills.joinToString(" · "))
             }
@@ -247,6 +256,21 @@ private fun OverlayPill(text: String, modifier: Modifier = Modifier) {
     Text(text, color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
          modifier = modifier.clip(RoundedCornerShape(50)).background(Color(0x99000000))
              .padding(horizontal = 9.dp, vertical = 3.dp))
+}
+
+/** Temps restant de la minuterie (s), relu deux fois par seconde : calculé une
+ *  fois à l'affichage, le compte à rebours restait figé. null sans minuterie. */
+@Composable
+fun sleepLeft(session: PlaybackSession): Long? {
+    val at = session.sleepAt ?: return null
+    fun remaining() = maxOf(0L, (at - System.currentTimeMillis() + 999) / 1000)
+    val shown by produceState(remaining(), at) {
+        while (true) {
+            value = remaining()
+            delay(500)
+        }
+    }
+    return shown
 }
 
 @Composable
