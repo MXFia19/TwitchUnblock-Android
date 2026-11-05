@@ -92,6 +92,7 @@ object BotCommands {
         val ch = Http.encode(channel.lowercase())
         val sets = listOf(async { nightbot(ch) }, async { streamElements(ch) }, async { fossabot(ch) }, async { moobot(ch) })
             .mapNotNull { it.await() }
-        sets.map { s -> BotSet(s.bot, s.icon, s.commands.sortedBy { it.name.lowercase() }) }
+        // Un nom en double ferait planter la liste (clés) : le premier reste.
+        sets.map { s -> BotSet(s.bot, s.icon, s.commands.distinctBy { it.name }.sortedBy { it.name.lowercase() }) }
     }
 }
