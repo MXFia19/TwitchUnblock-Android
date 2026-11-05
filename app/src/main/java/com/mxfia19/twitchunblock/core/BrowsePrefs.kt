@@ -1,6 +1,8 @@
 package com.mxfia19.twitchunblock.core
 
 import com.mxfia19.twitchunblock.notify.NotifChannels
+import org.json.JSONArray
+import org.json.JSONObject
 
 /**
  * Réglages de la navigation (série 5) : chaînes épinglées, lives en liste,
@@ -68,6 +70,31 @@ object BrowsePrefs {
         tabOrder.set(list)
     }
 
+    /** Pour la sauvegarde (« android_customization ») : mêmes noms de champs
+     *  que « ios_customization » de l'iPhone. */
+    fun customizationJson(): JSONObject = JSONObject()
+        .put("tabOrder", JSONArray(tabs))
+        .put("hiddenTabs", JSONArray(hiddenTabs.value))
+        .put("launchTab", launchTab.value)
+        .put("hiddenHome", JSONArray(hiddenHome.value))
+        .put("pinnedByViewers", pinnedByViewers.value)
+        .put("compactFollowedCategories", compactCategories.value)
+        .put("followedCategoriesSort", categorySort.value)
+
+    /** Lue avec tolérance (celle de l'app, ou « ios_customization ») :
+     *  éléments inconnus ignorés, champ absent gardé tel quel. */
+    fun applyCustomization(o: JSONObject) {
+        o.arr("tabOrder")?.strings()?.let { tabOrder.set(merged(it, defaultTabs)) }
+        o.arr("hiddenTabs")?.strings()?.filter { it in defaultTabs }?.let { hidden ->
+            if (!defaultTabs.all { it in hidden }) hiddenTabs.set(hidden)
+        }
+        o.str("launchTab")?.takeIf { it in defaultTabs }?.let { launchTab.set(it) }
+        o.arr("hiddenHome")?.strings()?.filter { it in homeParts }?.let { hiddenHome.set(it) }
+        o.bool("pinnedByViewers")?.let { pinnedByViewers.set(it) }
+        o.bool("compactFollowedCategories")?.let { compactCategories.set(it) }
+        o.str("followedCategoriesSort")?.takeIf { it == "viewers" || it == "name" }?.let { categorySort.set(it) }
+    }
+
     /** « Rétablir la disposition d'origine » : onglets et accueil. */
     fun reset() {
         tabOrder.set(emptyList())
@@ -86,6 +113,14 @@ object Pins {
     fun isPinned(login: String) = login.lowercase() in BrowsePrefs.pinned.value
 
     fun rank(login: String): Int? = BrowsePrefs.pinned.value.indexOf(login.lowercase()).takeIf { it >= 0 }
+
+    /** Sauvegarde (« pinned », nom du site) : ajoutées après les nôtres ; nombre ajouté. */
+    fun merge(logins: List<String>): Int {
+        val before = BrowsePrefs.pinned.value
+        val added = logins.map { it.lowercase() }.filter { Links.isValidLogin(it) && it !in before }.distinct()
+        BrowsePrefs.pinned.set(before + added)
+        return BrowsePrefs.pinned.value.size - before.size
+    }
 
     fun toggle(login: String) {
         val l = login.lowercase()

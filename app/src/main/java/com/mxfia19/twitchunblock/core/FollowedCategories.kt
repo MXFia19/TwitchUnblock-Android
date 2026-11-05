@@ -40,9 +40,27 @@ object FollowedCategories {
         }.distinctBy { it.id }.take(200)
 
     private fun save() {
+        AppState.prefs.edit().putString("followed_categories", toJson().toString()).apply()
+    }
+
+    /** Sauvegarde (racine « followedCategories », format de l'iPhone). */
+    fun toJson(): JSONArray {
         val arr = JSONArray()
         local.forEach { arr.put(JSONObject().put("id", it.id).put("name", it.name).put("box", it.boxArt)) }
-        AppState.prefs.edit().putString("followed_categories", arr.toString()).apply()
+        return arr
+    }
+
+    /** Import : ajoutées après les nôtres (200 au plus) ; nombre ajouté. */
+    fun merge(arr: JSONArray?): Int {
+        val before = local.size
+        for (o in arr?.objects().orEmpty()) {
+            val id = o.str("id")?.takeIf { validId(it) } ?: continue
+            if (local.size >= 200 || local.any { it.id == id }) continue
+            val box = o.str("box") ?: ""
+            local.add(Category(id, (o.str("name") ?: "").take(100), if (box.startsWith("https://") && box.length <= 500) box else "", null))
+        }
+        if (local.size != before) save()
+        return local.size - before
     }
 
     fun validId(id: String) = id.isNotEmpty() && id.length <= 20 && id.all { it.isDigit() }
