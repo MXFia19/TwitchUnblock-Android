@@ -62,7 +62,16 @@ object Integrity {
     private suspend fun mint(webToken: String): Token? = withContext(Dispatchers.Main) {
         suspendCancellableCoroutine { cont ->
             val main = Handler(Looper.getMainLooper())
-            val web = WebView(app)
+            // WebView indisponible (mise à jour par le Play Store en cours,
+            // désactivée) : pas de jeton, plutôt qu'un plantage de l'app
+            // (lecteur compris), comme WebSession.clearCookies.
+            val web = try {
+                WebView(app)
+            } catch (e: Throwable) {
+                Logger.warn("INTEGRITY", "WebView indisponible", e.javaClass.simpleName)
+                cont.resume(null)
+                return@suspendCancellableCoroutine
+            }
             var finished = false
             var started = false
 
@@ -79,13 +88,20 @@ object Integrity {
                 if (cont.isActive) cont.resume(result)
             }
 
-            web.settings.javaScriptEnabled = true
-            web.settings.domStorageEnabled = true
-            web.settings.userAgentString = WebSession.UA
             // Pont visible de toutes les frames de la page (pubs, iframes
             // tierces) : seule compte la réponse qui porte le secret du script.
             val secret = java.util.UUID.randomUUID().toString()
-            web.addJavascriptInterface(IntegrityBridge(secret) { text -> main.post { finish(parse(text, webToken)) } }, "TUBridge")
+            try {
+                web.settings.javaScriptEnabled = true
+                web.settings.domStorageEnabled = true
+                web.settings.userAgentString = WebSession.UA
+                web.addJavascriptInterface(IntegrityBridge(secret) { text -> main.post { finish(parse(text, webToken)) } }, "TUBridge")
+            } catch (e: Throwable) {
+                // Même cas : WebView remplacée pendant son réglage.
+                Logger.warn("INTEGRITY", "WebView indisponible", e.javaClass.simpleName)
+                finish(null)
+                return@suspendCancellableCoroutine
+            }
 
             fun request() {
                 if (started || finished) return
