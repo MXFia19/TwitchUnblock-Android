@@ -539,10 +539,11 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                             session.open(PlayRequest.Live(back))
                         })
                     }
-                    if (session.isLive) {
+                    // Multi-live : le direct, ou la VOD (série 6, reprise à sa position).
+                    if (session.isLive || session.request is PlayRequest.Vod) {
                         HorizontalDivider()
                         DropdownMenuItem(text = { Text(AppState.t("multi_add")) },
-                                         onClick = { open = false; nav.multi(session.channelLogin) })
+                                         onClick = { open = false; nav.multi(if (session.isLive) session.channelLogin else session.vodId) })
                     }
                     // Chromecast (CastUi.kt) : choisir un appareil, ou arrêter la diffusion.
                     if (session.isLive && session.state is PlaybackSession.State.Ready) {
