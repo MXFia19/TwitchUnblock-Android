@@ -122,6 +122,11 @@ fun PhoneApp(nav: Navigator) {
     val session = remember(playing != null) { if (playing != null) PlaybackSession(context, scope) else null }
     DisposableEffect(session) { onDispose { session?.release() } }
     LaunchedEffect(session, playing) { if (session != null && playing != null) session.open(playing) }
+    // Multi-live, porté ici aussi : ses tuiles restent (en pause) sous la
+    // connexion ouverte depuis son chat, au lieu d'être perdues au retour.
+    val multiOpen = nav.stack.any { it is Screen.MultiLive }
+    val multi = remember(multiOpen) { if (multiOpen) MultiLiveModel(context, scope) else null }
+    DisposableEffect(multi) { onDispose { multi?.release() } }
 
     UpdatePrompt()
     BrowseEffects()
@@ -129,8 +134,8 @@ fun PhoneApp(nav: Navigator) {
         PlayerScreen(session, nav)
         return
     }
-    if (screen is Screen.MultiLive) {
-        Box(Modifier.fillMaxSize().background(TU.bg).statusBarsPadding()) { MultiLiveScreen(screen.first, nav) }
+    if (screen is Screen.MultiLive && multi != null) {
+        Box(Modifier.fillMaxSize().background(TU.bg).statusBarsPadding()) { MultiLiveScreen(multi, screen.first, nav) }
         return
     }
     val isTab = BrowseTabs.isTab(screen)
