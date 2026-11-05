@@ -539,6 +539,8 @@
   "feedback_sub": "Un problema o un’idea: il messaggio arriva direttamente allo sviluppatore.",
   "fill_screen": "Riempi lo schermo (orizzontale)",
   "fill_screen_sub": "Ingrandisce il video fino ai bordi in orizzontale, tagliando le parti superiore e inferiore. Se disattivato, mostra l’immagine intera con barre laterali uguali. Nessun effetto in verticale.",
+  "fl_cast_live_only": "Il Chromecast riproduce solo le dirette: trasmissione interrotta",
+  "fl_dl_after_live": "Scarica: disponibile alla fine della diretta",
   "follow": "Segui",
   "follow_failed": "Twitch non ha applicato la modifica al canale seguito.",
   "follow_hide_button": "Nascondi questo pulsante nel lettore",

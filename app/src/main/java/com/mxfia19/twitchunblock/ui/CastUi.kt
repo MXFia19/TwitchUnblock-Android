@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mxfia19.twitchunblock.cast.CastManager
 import com.mxfia19.twitchunblock.core.AppState
+import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.Quality
 import com.mxfia19.twitchunblock.player.PlaybackSession
 
@@ -70,8 +71,20 @@ fun BoxScope.CastOverlay(session: PlaybackSession) {
             session.player.pause()
         }
     }
+    // VOD ou clip lu sur le téléphone pendant la diffusion (Rembobiner, fiche
+    // chaîne) : le Chromecast ne lit que les directs. La diffusion s'arrête,
+    // au lieu de cacher la lecture sous le voile pendant que la TV continue
+    // l'ancien direct.
+    val phoneOnly = device != null && !session.isLive && session.state is PlaybackSession.State.Ready
+    LaunchedEffect(phoneOnly) {
+        if (phoneOnly) {
+            Logger.info("CAST", "VOD ou clip lu sur le téléphone : fin de la diffusion")
+            PlayerUi.flash(AppState.t("fl_cast_live_only"), 3_000)
+            CastManager.stop()
+        }
+    }
     if (CastManager.pickerOpen) CastPicker(item)
-    if (device == null && !CastManager.connecting) return
+    if ((device == null && !CastManager.connecting) || phoneOnly) return
     Box(Modifier.matchParentSize().background(Color(0xD9000000)).clickable(enabled = false) {}) {
         Column(Modifier.align(Alignment.Center).padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
             Text("📺 " + if (device != null) AppState.t("st_cast_playing").replace("{d}", device) else AppState.t("st_cast_connecting"),
@@ -95,6 +108,10 @@ fun BoxScope.CastOverlay(session: PlaybackSession) {
 /** Appareils du réseau Wi-Fi ; un toucher y envoie le direct. */
 @Composable
 private fun CastPicker(item: CastManager.Item?) {
+    // Image dans l'image : la fenêtre disparaît sans onDismissRequest. La
+    // recherche des appareils s'arrête avec elle, et la liste ne revient pas
+    // d'elle-même au retour (une rotation, elle, la garde).
+    DisposableEffect(Unit) { onDispose { if (PipState.active) CastManager.closePicker() } }
     AlertDialog(
         onDismissRequest = { CastManager.closePicker() },
         title = { Text(AppState.t("st_cast")) },

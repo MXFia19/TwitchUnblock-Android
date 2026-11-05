@@ -1,0 +1,23 @@
+{
+  "_indirect": {
+    "keys": ["src_as", "src_eu", "src_al", "src_twitch", "src_worker", "src_account"]
+  },
+  "fl_dl_after_live": {
+    "fr": "Télécharger : possible à la fin du direct",
+    "en": "Download: available once the stream ends",
+    "es": "Descargar: disponible cuando termine el directo",
+    "ru": "Скачать: станет доступно после окончания трансляции",
+    "it": "Scarica: disponibile alla fine della diretta",
+    "ja": "ダウンロード：配信の終了後に可能",
+    "zh-Hant": "下載：直播結束後才能下載"
+  },
+  "fl_cast_live_only": {
+    "fr": "Le Chromecast ne lit que les directs : diffusion arrêtée",
+    "en": "Chromecast only plays live streams: casting stopped",
+    "es": "El Chromecast solo reproduce directos: envío detenido",
+    "ru": "Chromecast показывает только прямые трансляции: вывод на устройство остановлен",
+    "it": "Il Chromecast riproduce solo le dirette: trasmissione interrotta",
+    "ja": "Chromecast はライブ配信のみ再生できます：キャストを停止しました",
+    "zh-Hant": "Chromecast 只能播放直播：已停止投放"
+  }
+}

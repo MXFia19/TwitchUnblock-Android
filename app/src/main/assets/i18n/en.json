@@ -561,6 +561,8 @@
   "feedback_sub": "A problem or an idea: your message goes straight to the developer.",
   "fill_screen": "Fill the screen (landscape)",
   "fill_screen_sub": "Zooms the picture to the edges in landscape, at the cost of the top and bottom. Left off, the whole picture shows with even bars on the sides. No effect in portrait.",
+  "fl_cast_live_only": "Chromecast only plays live streams: casting stopped",
+  "fl_dl_after_live": "Download: available once the stream ends",
   "follow": "Follow",
   "follow_failed": "Twitch didn't apply this follow change.",
   "follow_hide_button": "Hide this button in the player",

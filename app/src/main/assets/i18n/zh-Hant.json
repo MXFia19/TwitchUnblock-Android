@@ -539,6 +539,8 @@
   "feedback_sub": "遇到問題或有想法：你的訊息會直接送到開發者手上。",
   "fill_screen": "填滿畫面（橫向）",
   "fill_screen_sub": "橫向時把畫面放大到邊緣，代價是上下會被裁掉。關閉時完整畫面會顯示，兩側留等寬黑邊。直向無效。",
+  "fl_cast_live_only": "Chromecast 只能播放直播：已停止投放",
+  "fl_dl_after_live": "下載：直播結束後才能下載",
   "follow": "追隨",
   "follow_failed": "Twitch 未套用這次追隨變更。",
   "follow_hide_button": "在播放器中隱藏此按鈕",
