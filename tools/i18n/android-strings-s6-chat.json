@@ -1,0 +1,39 @@
+{
+  "c6_kbd_suggest_sub": {
+    "fr": "Correction automatique du clavier dans le champ du chat. Coupe-la si le clavier corrige tes emotes.",
+    "en": "Your keyboard's autocorrect in the chat box. Turn it off if the keyboard keeps correcting your emotes.",
+    "es": "Autocorrección del teclado en el campo del chat. Desactívala si el teclado corrige tus emotes.",
+    "ru": "Автоисправление клавиатуры в поле чата. Отключите, если клавиатура исправляет ваши эмоуты.",
+    "it": "Correzione automatica della tastiera nel campo della chat. Disattivala se la tastiera corregge le tue emote.",
+    "ja": "チャット入力欄でのキーボードの自動修正。キーボードがエモートを修正してしまう場合はオフにしてください。",
+    "zh-Hant": "聊天輸入欄中鍵盤的自動修正。如果鍵盤一直更正你的表情符號，請關閉。"
+  },
+  "c6_raid_incoming": {
+    "fr": "{u} lance un raid avec {n} spectateurs !",
+    "en": "{u} is raiding with {n} viewers!",
+    "es": "¡{u} hace una incursión con {n} espectadores!",
+    "ru": "Рейд от {u}: {n} зрителей!",
+    "it": "{u} sta facendo un raid con {n} spettatori!",
+    "ja": "{u} が {n} 人の視聴者とレイド中！",
+    "zh-Hant": "{u} 帶著 {n} 位觀眾突襲而來！"
+  },
+  "c6_raid_incoming_one": {
+    "fr": "{u} lance un raid avec {n} spectateur !",
+    "en": "{u} is raiding with {n} viewer!",
+    "es": "¡{u} hace una incursión con {n} espectador!",
+    "ru": "Рейд от {u}: {n} зритель!",
+    "it": "{u} sta facendo un raid con {n} spettatore!"
+  },
+  "c6_raid_incoming_few": {
+    "ru": "Рейд от {u}: {n} зрителя!"
+  },
+  "c6_chat_menu": {
+    "fr": "Menu du chat",
+    "en": "Chat menu",
+    "es": "Menú del chat",
+    "ru": "Меню чата",
+    "it": "Menu della chat",
+    "ja": "チャットメニュー",
+    "zh-Hant": "聊天室選單"
+  }
+}

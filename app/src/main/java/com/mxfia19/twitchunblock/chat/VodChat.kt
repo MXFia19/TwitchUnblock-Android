@@ -175,7 +175,9 @@ class VodChat(private val videoId: String, private val scope: CoroutineScope, pr
             val emote = f.obj("emote")
             val emoteId = emote?.str("emoteID") ?: emote?.str("id")?.substringBefore(";")
             if (!emoteId.isNullOrEmpty()) {
-                tokens += ChatToken.Emote(text.trim(), "https://static-cdn.jtvnw.net/emoticons/v2/$emoteId/default/dark/2.0")
+                // Id gardé : la fiche de l'emote retrouve son type et sa chaîne.
+                tokens += ChatToken.Emote(text.trim(), "https://static-cdn.jtvnw.net/emoticons/v2/$emoteId/default/dark/2.0",
+                                          twitchId = emoteId)
             } else if (text.isNotEmpty()) {
                 tokens += ChatText.tokens(text, null, channelId)
             }

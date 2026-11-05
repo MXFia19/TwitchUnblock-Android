@@ -7,7 +7,20 @@ sealed class ChatToken {
      *  id chez Twitch, son auteur s'il est connu, emote de la chaîne ou globale. */
     data class Emote(val name: String, val url: String, val ratio: Float = 1f, val zeroWidth: Boolean = false,
                      val source: String = "twitch", val twitchId: String? = null, val author: String? = null,
-                     val channel: Boolean = false) : ChatToken()
+                     val channel: Boolean = false,
+                     /** Son id chez 7TV, BTTV ou FFZ : lien vers sa page. */
+                     val sourceId: String? = null,
+                     /** Nom d'origine (7TV), quand la chaîne l'a renommée. */
+                     val original: String? = null,
+                     /** Emote personnelle d'un abonné BetterTTV Pro. */
+                     val personal: Boolean = false,
+                     /** Emote d'abonné que le compte n'a pas (sélecteur) : sa fiche, pas d'ajout. */
+                     val locked: Boolean = false) : ChatToken() {
+        /** Pas une emote : un badge touché (« badge », `url` son image) ou un
+         *  GIF du clavier GIF de Twitch (« gif », `name` son texte), qui
+         *  passent par la même fiche. */
+        val isInfoOnly: Boolean get() = source == "badge" || source == "gif"
+    }
     data class Mention(val name: String) : ChatToken()
     data class Link(val url: String) : ChatToken()
 }
@@ -37,6 +50,20 @@ data class ChatMessage(
     val accent: Int? = null,
     /** À la place de l'heure (chat d'une VOD : sa position dans la vidéo). */
     val timeLabel: String? = null,
+    /** Identifiant Twitch de l'auteur : ses emotes personnelles BTTV Pro. */
+    val userId: String? = null,
+    /** Réponse : à qui (pseudo affiché) et à quoi (texte du message d'origine). */
+    val replyTo: String? = null,
+    val replyBody: String? = null,
+    /** Message auquel celui-ci répond, et la racine de son fil. */
+    val parentId: String? = null,
+    val threadId: String? = null,
+    /** Premier message de la personne dans ce chat (tag first-msg). */
+    val firstMessage: Boolean = false,
+    /** Repêché dans l'historique (recent-messages) : marqué d'une horloge. */
+    val historical: Boolean = false,
+    /** Raid entrant : la chaîne qui arrive (lien vers elle). */
+    val raider: String? = null,
 )
 
 /** Ligne IRC lue : tags, préfixe, commande, paramètres, texte final. */

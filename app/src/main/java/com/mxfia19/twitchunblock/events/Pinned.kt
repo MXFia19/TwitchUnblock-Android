@@ -96,7 +96,8 @@ class PinnedWatcher(private val scope: CoroutineScope) {
             val c = f.obj("content")
             val emoteId = if (c != null && c.str("__typename") == "Emote") c.str("id") else null
             if (!emoteId.isNullOrEmpty()) {
-                tokens += ChatToken.Emote(ftext.trim(), "https://static-cdn.jtvnw.net/emoticons/v2/$emoteId/default/dark/2.0")
+                tokens += ChatToken.Emote(ftext.trim(), "https://static-cdn.jtvnw.net/emoticons/v2/$emoteId/default/dark/2.0",
+                                          twitchId = emoteId)
             } else if (ftext.isNotEmpty()) {
                 tokens += ChatText.tokens(ftext, null, cid)
             }

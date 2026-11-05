@@ -22,13 +22,20 @@ import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Emotes 7TV, BTTV et FFZ (globales et de la chaîne), par nom. Une chaîne
- * prime sur les globales ; 7TV, puis BTTV, puis FFZ. Comme EmoteService (iOS).
+ * prime sur les globales ; 7TV, puis BTTV, puis FFZ. Les emotes personnelles
+ * des abonnés BTTV Pro et celles ajoutées pendant le direct arrivent par
+ * BttvLive. Comme EmoteService (iOS).
  */
 object Emotes {
-    /** `source` : « 7tv », « bttv » ou « ffz » ; `author` : qui l'a créée (si
-     *  la source le dit) ; `channel` : emote de la chaîne (sinon globale). */
+    /** `source` : « 7tv », « bttv » ou « ffz » (« twitch » dans le sélecteur) ;
+     *  `author` : qui l'a créée (si la source le dit) ; `channel` : emote de la
+     *  chaîne (sinon globale) ; `id` : chez sa source ; `original` : nom
+     *  d'origine (7TV) ; `personal` : emote BTTV Pro d'une personne ;
+     *  `locked` : emote d'abonné que le compte n'a pas (sélecteur). */
     data class Emote(val name: String, val url: String, val ratio: Float = 1f, val zeroWidth: Boolean = false,
-                     val source: String = "", val author: String? = null, val channel: Boolean = false)
+                     val source: String = "", val author: String? = null, val channel: Boolean = false,
+                     val id: String? = null, val original: String? = null, val personal: Boolean = false,
+                     val locked: Boolean = false)
 
     private val global = ConcurrentHashMap<String, Emote>()
     private val channels = ConcurrentHashMap<String, Map<String, Emote>>()
@@ -39,17 +46,42 @@ object Emotes {
     private val mutex = Mutex()
     @Volatile
     private var globalLoaded = false
+    /** Emotes personnelles BTTV Pro, par identifiant Twitch de la personne ;
+     *  les 500 dernières annoncées seulement. */
+    private val personal = ConcurrentHashMap<String, Map<String, Emote>>()
+    private val personalOrder = ArrayDeque<String>()
     /** Augmenté à chaque chargement fini : le sélecteur et l'autocomplétion,
      *  ouverts avant, se refont (Emotes n'est pas un état Compose). */
     var version by mutableStateOf(0)
         private set
 
-    fun find(name: String, channelId: String?): Emote? =
-        (channelId?.let { channels[it]?.get(name) }) ?: global[name]
+    /** Chaîne d'abord, puis les emotes personnelles de l'auteur (BTTV Pro),
+     *  puis les globales. Comme resolve (iOS). */
+    fun find(name: String, channelId: String?, userId: String? = null): Emote? =
+        (channelId?.let { channels[it]?.get(name) })
+            ?: (userId?.let { personal[it]?.get(name) })
+            ?: global[name]
 
     /** Toutes les emotes connues pour une chaîne (sélecteur), chaîne d'abord. */
     fun all(channelId: String?): List<Emote> =
         (channelId?.let { channels[it]?.values?.toList() } ?: emptyList()) + global.values.sortedBy { it.name.lowercase() }
+
+    /** Emotes de la chaîne seule (onglet de la chaîne), par nom. */
+    fun channelOnly(channelId: String?): List<Emote> =
+        channelId?.let { channels[it]?.values?.sortedBy { e -> e.name.lowercase() } } ?: emptyList()
+
+    /** Globales d'une source (« 7tv », « bttv », « ffz »), par nom. */
+    fun globalOf(source: String): List<Emote> =
+        global.values.filter { it.source == source }.sortedBy { it.name.lowercase() }
+
+    /** Menu ⋯ du chat : tout est oublié, puis relu par le chat. */
+    fun reset() {
+        global.clear()
+        channels.clear()
+        channelsUntil.clear()
+        globalLoaded = false
+        version++
+    }
 
     suspend fun loadGlobal() = mutex.withLock {
         if (globalLoaded) return@withLock
@@ -101,6 +133,52 @@ object Emotes {
         }
     }
 
+    // ── BetterTTV en direct (BttvLive) ──
+
+    /** Emotes personnelles d'un abonné BTTV Pro ; vide : les siennes s'en vont. */
+    fun setPersonal(userId: String, list: List<JSONObject>) {
+        val map = HashMap<String, Emote>()
+        for (e in bttvList(list, false)) map[e.name] = e.copy(personal = true)
+        if (map.isEmpty()) {
+            removePersonal(userId)
+            return
+        }
+        if (!personal.containsKey(userId)) synchronized(personalOrder) {
+            personalOrder.addLast(userId)
+            while (personalOrder.size > 500) personal.remove(personalOrder.removeFirst())
+        }
+        personal[userId] = map
+    }
+
+    fun removePersonal(userId: String) {
+        if (personal.remove(userId) != null) synchronized(personalOrder) { personalOrder.remove(userId) }
+    }
+
+    /** Emote BTTV ajoutée ou renommée sur la chaîne pendant le direct. Une
+     *  emote 7TV du même nom garde la priorité. */
+    fun upsertChannelBttv(channelId: String, obj: JSONObject) {
+        val id = obj.str("id") ?: return
+        val map = HashMap(channels[channelId] ?: return)
+        val old = map.entries.firstOrNull { it.value.source == "bttv" && it.value.id == id }
+        val code = obj.str("code") ?: old?.key ?: return
+        if (code.isEmpty()) return
+        old?.let { map.remove(it.key) }
+        val existing = map[code]
+        if (existing != null && existing.source == "7tv") return
+        val author = obj.obj("user")?.let { it.str("displayName") ?: it.str("name") } ?: old?.value?.author
+        map[code] = Emote(code, "https://cdn.betterttv.net/emote/$id/2x", source = "bttv", author = author,
+                          channel = true, id = id)
+        channels[channelId] = map
+        version++
+    }
+
+    fun removeChannelBttv(channelId: String, emoteId: String) {
+        val current = channels[channelId] ?: return
+        val key = current.entries.firstOrNull { it.value.source == "bttv" && it.value.id == emoteId }?.key ?: return
+        channels[channelId] = HashMap(current).apply { remove(key) }
+        version++
+    }
+
     /** Corps de la réponse ; null si la source n'a pas répondu (réseau, 429, 5xx). */
     private suspend fun answer(url: String): String? =
         Http.get(url)?.takeIf { it.code < 500 && it.code != 429 }?.body
@@ -114,9 +192,12 @@ object Emotes {
         val w = file?.int("width") ?: 0
         val h = file?.int("height") ?: 0
         val owner = data.obj("owner")
+        // `name` : nom choisi par la chaîne ; `data.name` : nom d'origine.
+        val original = data.str("name")?.takeIf { it.isNotEmpty() && it != name }
         // Drapeau actif dans ce jeu d'emotes : 1 = superposée (zero-width).
         Emote(name, "https:$base/2x.webp", if (w > 0 && h > 0) w.toFloat() / h else 1f, ((o.int("flags") ?: 0) and 1) != 0,
-              "7tv", owner?.str("display_name") ?: owner?.str("username"), channel)
+              "7tv", owner?.str("display_name") ?: owner?.str("username"), channel,
+              id = o.str("id") ?: data.str("id"), original = original)
     }
 
     private fun bttvList(list: List<JSONObject>?, channel: Boolean): List<Emote> = list.orEmpty().mapNotNull { o ->
@@ -125,7 +206,7 @@ object Emotes {
         // Auteur : dit pour les emotes partagées seulement.
         val user = o.obj("user")
         Emote(code, "https://cdn.betterttv.net/emote/$id/2x", source = "bttv",
-              author = user?.str("displayName") ?: user?.str("name"), channel = channel)
+              author = user?.str("displayName") ?: user?.str("name"), channel = channel, id = id)
     }
 
     private fun ffzGlobal(json: JSONObject?): List<Emote> {
@@ -143,13 +224,17 @@ object Emotes {
             for (e in sets.obj(k)?.arr("emoticons")?.objects().orEmpty()) {
                 val name = e.str("name") ?: continue
                 val urls = e.obj("urls") ?: continue
-                var url = urls.str("2") ?: urls.str("1") ?: continue
+                // Emotes animées : dans `animated` (WebP) ; `urls` n'en garde
+                // qu'une image fixe.
+                val animated = e.obj("animated")
+                var url = animated?.str("2") ?: animated?.str("1") ?: urls.str("2") ?: urls.str("1") ?: continue
                 if (url.startsWith("//")) url = "https:$url"
                 val w = e.int("width") ?: 0
                 val h = e.int("height") ?: 0
                 val owner = e.obj("owner")
                 out += Emote(name, url, if (w > 0 && h > 0) w.toFloat() / h else 1f, e.bool("modifier") == true,
-                             "ffz", owner?.str("display_name") ?: owner?.str("name"), channel)
+                             "ffz", owner?.str("display_name") ?: owner?.str("name"), channel,
+                             id = e.int("id")?.toString())
             }
         }
         return out

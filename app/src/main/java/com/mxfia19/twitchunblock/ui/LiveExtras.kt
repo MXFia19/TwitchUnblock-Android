@@ -2,6 +2,7 @@ package com.mxfia19.twitchunblock.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -49,10 +50,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.mxfia19.twitchunblock.chat.ChatOptions
+import com.mxfia19.twitchunblock.chat.ChatToken
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Features
 import com.mxfia19.twitchunblock.core.Format
@@ -113,9 +117,13 @@ private fun ratioText(r: Double): String {
 }
 
 /**
- * Au-dessus du chat d'un direct : raid, message épinglé, sondage,
- * prédiction, hype train (chacun se ferme d'un ×), puis la barre des points
- * de chaîne. Comme LiveEventsBanner (iOS).
+ * Au-dessus du chat d'un direct : raid, message épinglé, carte des drops,
+ * sondage, prédiction, hype train, puis la barre d'état (série, points de
+ * chaîne, suivre). Le × d'un sondage, d'une prédiction ou d'un hype train les
+ * range dans une pastille de la barre d'état (un toucher les rouvre), celui
+ * du message épinglé dans sa pastille ; en paysage, « Masquer » les replie
+ * tous en une ligne d'icônes avec leurs comptes à rebours (choix gardé).
+ * Comme LiveEventsBanner et ChatView (iOS).
  */
 @Composable
 fun LiveExtras(
@@ -132,42 +140,87 @@ fun LiveExtras(
     val closed = events.closed
     val close = { key: String -> events.closed = events.closed + key }
     val now = rememberNow()
+    val landscape = LocalConfiguration.current.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    // Fiche d'une emote ou d'un badge du message épinglé.
+    var card by remember { mutableStateOf<ChatToken.Emote?>(null) }
+    val raid = raids.raid?.takeIf { Features.enableRaids.value && "raid:${it.id}" !in closed }
+    val pin = pinned.pinned?.takeIf { Features.showPinned.value }
+    val pinTucked = pin != null && "pin:${pin.id}" in closed
+    val drop = events.drops.shown
+    val showEvents = Features.showLiveEvents.value
+    val poll = events.poll?.takeIf { showEvents }
+    val pred = events.prediction?.takeIf { showEvents }
+    val hype = events.hype?.takeIf { showEvents }
+    val active = buildList {
+        if (pin != null) add(NoticeKind.PINNED)
+        if (drop != null) add(NoticeKind.DROPS)
+        if (poll != null) add(NoticeKind.POLL)
+        if (pred != null) add(NoticeKind.PREDICTION)
+        if (hype != null) add(NoticeKind.HYPE)
+        if (raid != null) add(NoticeKind.RAID)
+    }
+    // Fermés (×) mais encore là : leur pastille les rouvre.
+    val closedKinds = buildList {
+        if (poll != null && poll.noticeKey in closed) add(NoticeKind.POLL)
+        if (pred != null && pred.noticeKey in closed) add(NoticeKind.PREDICTION)
+        if (hype != null && hype.noticeKey in closed) add(NoticeKind.HYPE)
+    }
+    val ends = NoticeEnds(poll = poll?.takeIf { it.isActive }?.endsAt,
+                          prediction = pred?.takeIf { !it.locked && it.winnerId == null }?.closesAt,
+                          hype = hype?.endsAt)
+    val reopen = {
+        events.closed = events.closed.filterNot { k ->
+            k.startsWith("poll:") || k.startsWith("pred:") || k.startsWith("hype") || k.startsWith("pin:")
+        }.toSet()
+    }
+    val folded = landscape && ChatOptions.landscapeNoticesHidden.value && active.isNotEmpty()
     // Jamais plus de 40 % de la place (chat posé dans un coin en paysage,
     // prédiction ouverte) : le chat garde ses messages et son champ.
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val cap = if (constraints.hasBoundedHeight) minOf(340.dp, maxHeight * 0.4f) else 340.dp
         Column(Modifier.fillMaxWidth().heightIn(max = cap).verticalScroll(rememberScrollState())) {
-            val raid = raids.raid
-            if (raid != null && Features.enableRaids.value && "raid:${raid.id}" !in closed) {
-                Banner("🚀", Color(0xFFFF8A3D), onClose = { close("raid:${raid.id}") }) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("${AppState.t("raid_to")} ${raid.targetName} · ${Format.viewers(raid.viewers)}", color = TU.text,
-                             fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                        TextButton(onClick = { onJoinRaid(raid.targetLogin) }) { Text(AppState.t("tv_watch_live"), color = TU.primary, fontSize = 13.sp) }
+            if (folded) {
+                CollapsedNoticesBar(active, ends, now) {
+                    reopen()
+                    ChatOptions.landscapeNoticesHidden.set(false)
+                }
+            } else {
+                if (raid != null) {
+                    Banner("🚀", Color(0xFFFF8A3D), onClose = { close("raid:${raid.id}") }) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            // Raid rejoint avec la session web : le bonus de points est gagné.
+                            val bonus = if (raids.bonusRaidId == raid.id) " · 🎁 " + AppState.t("raid_bonus") else ""
+                            Text("${AppState.t("raid_to")} ${raid.targetName} · ${Format.viewers(raid.viewers)}$bonus", color = TU.text,
+                                 fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                            TextButton(onClick = { onJoinRaid(raid.targetLogin) }) { Text(AppState.t("tv_watch_live"), color = TU.primary, fontSize = 13.sp) }
+                        }
                     }
                 }
-            }
-            val pin = pinned.pinned
-            if (pin != null && Features.showPinned.value && "pin:${pin.id}" !in closed) {
-                Banner("📌", purple, onClose = { close("pin:${pin.id}") }) { PinnedCard(pin, now) }
-            }
-            if (Features.showLiveEvents.value) {
-                val poll = events.poll
+                if (pin != null && !pinTucked) {
+                    Banner("📌", purple, onClose = { close("pin:${pin.id}") }) { PinnedCard(pin, now) { card = it } }
+                }
+                if (drop != null) DropsCard(drop) { events.drops.dismiss(drop) }
                 if (poll != null && poll.noticeKey !in closed) {
                     Banner("📊", TU.primary, onClose = { close(poll.noticeKey) }) { PollCard(poll, events, now) }
                 }
-                val pred = events.prediction
                 if (pred != null && pred.noticeKey !in closed) {
                     Banner("🔮", purple, onClose = { close(pred.noticeKey) }) { PredictionCard(pred, events, points, now, onWebLogin) }
                 }
-                val hype = events.hype
                 if (hype != null && hype.noticeKey !in closed) {
                     Banner("🚄", TU.live, onClose = { close(hype.noticeKey) }) { HypeCard(hype, now) }
                 }
+                if (landscape && active.isNotEmpty()) NoticesHideStrip { ChatOptions.landscapeNoticesHidden.set(true) }
             }
-            PointsBar(points, events, onOpenRewards, onWebLogin)
+            PointsBar(points, events, onOpenRewards, onWebLogin, hasChips = !folded && (pinTucked || closedKinds.isNotEmpty())) {
+                // Repliés, tout se rouvre d'un toucher : pas de pastilles.
+                if (!folded) {
+                    if (pinTucked) PinnedChip { if (pin != null) events.closed = events.closed - "pin:${pin.id}" }
+                    if (closedKinds.isNotEmpty()) ClosedNoticesChip(closedKinds, ends, now) { reopen() }
+                }
+            }
         }
     }
+    card?.let { e -> EmoteCard(e) { card = null } }
 }
 
 @Composable
@@ -184,11 +237,11 @@ private fun Banner(icon: String, tint: Color, onClose: () -> Unit, content: @Com
 
 // ── Message épinglé ──
 @Composable
-private fun PinnedCard(pin: PinnedChat, now: Long) {
+private fun PinnedCard(pin: PinnedChat, now: Long, onEmote: (ChatToken.Emote) -> Unit) {
     var open by remember(pin.id) { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth().clickable { open = !open }) {
         if (open) {
-            ChatMessageRow(pin.message, fontSize = 13.sp, emoteSize = 20.sp)
+            ChatMessageRow(pin.message, fontSize = 13.sp, emoteSize = 20.sp, onEmote = onEmote)
         } else {
             Text("${pin.message.name}: ${pin.text}", color = TU.text, fontSize = 13.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
@@ -438,33 +491,44 @@ private fun HypeCard(h: LiveHype, now: Long) {
     }
 }
 
-// ── Points de chaîne ──
+// ── Barre d'état : série, points de chaîne, pastilles, suivre ──
 @Composable
-private fun PointsBar(points: ChannelPoints, events: LiveEvents, onOpenRewards: () -> Unit, onWebLogin: () -> Unit) {
+private fun PointsBar(points: ChannelPoints, events: LiveEvents, onOpenRewards: () -> Unit, onWebLogin: () -> Unit,
+                      hasChips: Boolean, chips: @Composable () -> Unit) {
     val scope = rememberCoroutineScope()
-    if (points.rewards.isEmpty() && !points.balanceKnown && !points.needsWebLogin) return
-    // « Sans compte Twitch » : pas de barre qui ne fait qu'inviter à se connecter.
-    if (points.needsWebLogin && com.mxfia19.twitchunblock.core.NoAccount.active) return
+    // « Sans compte Twitch » : pas de points qui ne font qu'inviter à se connecter.
+    val showPoints = (points.rewards.isNotEmpty() || points.balanceKnown || points.needsWebLogin) &&
+        !(points.needsWebLogin && com.mxfia19.twitchunblock.core.NoAccount.active)
+    val streak = Features.showWatchStreak.value && events.watchStreak > 0
+    // Bouton suivre (Réglages → Chat) : sur Twitch avec la session web, sinon l'appareil.
+    val follow = ChatOptions.followButton.value && events.follow.login.isNotEmpty()
+    if (!showPoints && !streak && !follow && !hasChips) return
     Row(Modifier.fillMaxWidth().background(TU.surface).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
-        if (Features.showWatchStreak.value && events.watchStreak > 0) {
-            Text("🔥 ${events.watchStreak}", color = TU.text, fontSize = 12.sp, fontWeight = FontWeight.Bold)
-            Spacer(Modifier.width(10.dp))
-        }
-        Row(Modifier.weight(1f).clip(RoundedCornerShape(6.dp)).clickable { onOpenRewards() }.padding(vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically) {
-            Text("◎ ", color = purple, fontSize = 14.sp, fontWeight = FontWeight.Bold)
-            when {
-                points.needsWebLogin -> Text(AppState.t("points_title"), color = TU.text, fontSize = 13.sp)
-                points.balanceKnown -> Text(ChannelPoints.format(points.balance) + " " + AppState.tn("points_unit", points.balance),
-                                            color = TU.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
-                else -> Text("…", color = TU.muted, fontSize = 13.sp)
+        Row(Modifier.weight(1f).horizontalScroll(rememberScrollState()), verticalAlignment = Alignment.CenterVertically) {
+            if (streak) {
+                Text("🔥 ${events.watchStreak}", color = TU.text, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.width(10.dp))
             }
-            if (points.lastGain > 0) {
-                Text("  +${points.lastGain}", color = TU.success, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+            if (showPoints) {
+                Row(Modifier.clip(RoundedCornerShape(6.dp)).clickable { onOpenRewards() }.padding(vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically) {
+                    Text("◎ ", color = purple, fontSize = 14.sp, fontWeight = FontWeight.Bold)
+                    when {
+                        points.needsWebLogin -> Text(AppState.t("points_title"), color = TU.text, fontSize = 13.sp)
+                        points.balanceKnown -> Text(ChannelPoints.format(points.balance) + " " + AppState.tn("points_unit", points.balance),
+                                                    color = TU.text, fontSize = 13.sp, fontWeight = FontWeight.SemiBold)
+                        else -> Text("…", color = TU.muted, fontSize = 13.sp)
+                    }
+                    if (points.lastGain > 0) {
+                        Text("  +${points.lastGain}", color = TU.success, fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                    }
+                }
             }
+            chips()
         }
-        when {
+        if (follow) FollowChip(events.follow)
+        if (showPoints) when {
             points.needsWebLogin -> TextButton(onClick = onWebLogin) {
                 Text(AppState.t(if (WebSession.expired) "web_reconnect" else "web_banner_btn"), color = TU.primary, fontSize = 13.sp)
             }
