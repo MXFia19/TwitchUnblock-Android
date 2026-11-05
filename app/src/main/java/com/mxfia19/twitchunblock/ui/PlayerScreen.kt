@@ -529,6 +529,15 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                         DropdownMenuItem(text = { Text(AppState.t("multi_add")) },
                                          onClick = { open = false; nav.multi(session.channelLogin) })
                     }
+                    // Chromecast (CastUi.kt) : choisir un appareil, ou arrêter la diffusion.
+                    if (session.isLive && session.state is PlaybackSession.State.Ready) {
+                        val casting = com.mxfia19.twitchunblock.cast.CastManager.device != null
+                        DropdownMenuItem(text = { Text(AppState.t(if (casting) "st_cast_stop" else "st_cast")) }, onClick = {
+                            open = false
+                            if (casting) com.mxfia19.twitchunblock.cast.CastManager.stop()
+                            else com.mxfia19.twitchunblock.cast.CastManager.openPicker(context)
+                        })
+                    }
                 }
             }
         }

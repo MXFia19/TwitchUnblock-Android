@@ -87,6 +87,8 @@ fun BoxScope.StreamVideoOverlay(session: PlaybackSession) {
              modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 64.dp).clip(RoundedCornerShape(16.dp))
                  .background(Color(0xB3000000)).padding(horizontal = 12.dp, vertical = 6.dp))
     }
+    // Chromecast (CastUi.kt) : par-dessus le reste pendant la diffusion.
+    CastOverlay(session)
 }
 
 /**
