@@ -65,8 +65,12 @@ class HomeModel(private val scope: CoroutineScope) {
     private var loadedAt = 0L
     private var loadedFor: String? = null
 
-    /** Le top sans les chaînes et catégories masquées (les suivis, eux, ne le sont jamais). */
-    val visibleTop: List<TwitchStream> get() = top.filter { Hidden.allows(it) }
+    /** Le top sans les chaînes et catégories masquées (les suivis, eux, ne le
+     *  sont jamais : même règle que le téléphone, BrowseRules). Rangée Top de la TV. */
+    val visibleTop: List<TwitchStream> get() {
+        val followedLogins = followed.map { it.login.lowercase() }.toHashSet()
+        return top.filter { Hidden.allows(it, followedLogins) }
+    }
 
     fun load(force: Boolean = false) {
         val who = (AppState.user?.id ?: AppState.localFollows.joinToString(",")) + "|" + TopLanguage.resolved()
