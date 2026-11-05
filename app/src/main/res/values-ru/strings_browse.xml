@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget des directs suivis (liste des widgets du lanceur). -->
+    <string name="br_widget_label">Каналы в эфире</string>
+    <string name="br_widget_desc">Отслеживаемые каналы, которые сейчас в эфире. Нажмите, чтобы смотреть.</string>
+</resources>

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget des directs suivis (liste des widgets du lanceur). -->
+    <string name="br_widget_label">Canali seguiti in diretta</string>
+    <string name="br_widget_desc">I canali che segui ora in diretta. Toccane uno per guardarlo.</string>
+</resources>

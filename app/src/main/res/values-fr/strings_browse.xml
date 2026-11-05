@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Widget des directs suivis (liste des widgets du lanceur). -->
+    <string name="br_widget_label">Chaînes suivies en direct</string>
+    <string name="br_widget_desc">Tes chaînes suivies en direct en ce moment. Touche-en une pour la regarder.</string>
+</resources>

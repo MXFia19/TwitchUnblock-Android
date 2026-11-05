@@ -74,7 +74,10 @@ fun LibraryScreen(nav: Navigator) {
     var confirm by remember { mutableStateOf<String?>(null) }
     val items = Downloads.items
     val history = History.vods
-    LazyColumn(Modifier.fillMaxSize()) {
+    // Onglet touché à nouveau : la liste remonte en haut.
+    val list = androidx.compose.foundation.lazy.rememberLazyListState()
+    TabTop.Listen(Screen.Library) { list.animateScrollToItem(0) }
+    LazyColumn(Modifier.fillMaxSize(), state = list) {
         // Dernières VODs lancées (synchronisées avec le compte), avec la reprise.
         if (history.isNotEmpty()) {
             item {

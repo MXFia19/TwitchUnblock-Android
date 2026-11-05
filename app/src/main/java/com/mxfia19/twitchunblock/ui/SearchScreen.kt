@@ -151,8 +151,12 @@ fun SearchScreen(model: SearchModel, nav: Navigator) {
             ),
             modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 6.dp),
         )
+        // Onglet touché à nouveau : la liste remonte en haut.
+        val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+        TabTop.Listen(Screen.Search) { grid.animateScrollToItem(0) }
         LazyVerticalGrid(
             columns = GridCells.Adaptive(110.dp),
+            state = grid,
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
