@@ -9,6 +9,7 @@ import android.os.Build
 import android.os.Bundle
 import android.util.Rational
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.annotation.RequiresApi
@@ -18,6 +19,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.lifecycleScope
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Auth
@@ -44,8 +47,14 @@ object PipState {
     var active by mutableStateOf(false)
 }
 
+/** Pile de navigation gardée quand l'activité est recréée (langue ou taille
+ *  du texte changées : absentes de configChanges). */
+class NavHolder : ViewModel() {
+    val navigator = Navigator()
+}
+
 class MainActivity : ComponentActivity() {
-    private val navigator = Navigator()
+    private val navigator: Navigator by lazy { ViewModelProvider(this)[NavHolder::class.java].navigator }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -56,11 +65,18 @@ class MainActivity : ComponentActivity() {
             finish()
             return
         }
-        enableEdgeToEdge()
+        // L'app n'a que des fonds sombres : icônes claires et barre de
+        // navigation sans voile, même avec le téléphone en thème clair.
+        enableEdgeToEdge(
+            statusBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+            navigationBarStyle = SystemBarStyle.dark(android.graphics.Color.TRANSPARENT),
+        )
         lifecycleScope.launch { Auth.restore() }
         // Session web vérifiée une fois au lancement (WebSessionCheck).
         com.mxfia19.twitchunblock.web.WebSession.checkSoon()
-        handleLink(intent)
+        // Lien reçu au lancement seulement : une activité recréée (Récents
+        // après la fin du processus, langue changée) ne le rejoue pas.
+        if (savedInstanceState == null) handleLink(intent)
         setContent {
             TUTheme {
                 val nav = remember { navigator }
@@ -88,6 +104,7 @@ class MainActivity : ComponentActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        setIntent(intent)
         handleLink(intent)
     }
 

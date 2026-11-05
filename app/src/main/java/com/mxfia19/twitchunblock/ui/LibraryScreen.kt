@@ -72,6 +72,8 @@ fun sizeText(bytes: Long): String {
 fun LibraryScreen(nav: Navigator) {
     val context = LocalContext.current
     var confirm by remember { mutableStateOf<String?>(null) }
+    // Historique effacé (et sur le compte, par CloudSync) seulement après confirmation, comme l'iPhone.
+    var confirmClear by remember { mutableStateOf(false) }
     val items = Downloads.items
     val history = History.vods
     // Onglet touché à nouveau : la liste remonte en haut.
@@ -83,7 +85,7 @@ fun LibraryScreen(nav: Navigator) {
             item {
                 Row(Modifier.fillMaxWidth().padding(end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
                     SectionTitle(AppState.t("history_vods_title"), Modifier.weight(1f))
-                    TextButton(onClick = { History.clear("vod") }) { Text(AppState.t("clear"), color = TU.muted) }
+                    TextButton(onClick = { confirmClear = true }) { Text(AppState.t("clear"), color = TU.muted) }
                 }
             }
             item {
@@ -173,6 +175,20 @@ fun LibraryScreen(nav: Navigator) {
             dismissButton = { TextButton(onClick = { confirm = null }) { Text(AppState.t("sleep_cancel"), color = TU.text) } },
             containerColor = TU.surface,
             titleContentColor = TU.text,
+        )
+    }
+    if (confirmClear) {
+        AlertDialog(
+            onDismissRequest = { confirmClear = false },
+            title = { Text(AppState.t("btn_clear")) },
+            text = { Text(AppState.t("confirm")) },
+            confirmButton = {
+                TextButton(onClick = { confirmClear = false; History.clear("vod") }) { Text(AppState.t("erase"), color = TU.danger) }
+            },
+            dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(AppState.t("cancel"), color = TU.text) } },
+            containerColor = TU.surface,
+            titleContentColor = TU.text,
+            textContentColor = TU.muted,
         )
     }
 }

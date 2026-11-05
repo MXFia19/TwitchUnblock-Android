@@ -64,6 +64,12 @@ class HomeModel(private val scope: CoroutineScope) {
         private set
     private var loadedAt = 0L
     private var loadedFor: String? = null
+    /** Suivis du compte ou de l'appareil pas lus (Twitch n'a pas répondu) :
+     *  l'ancienne liste reste, et le widget n'est pas réécrit. */
+    var followedFailed by mutableStateOf(false)
+        private set
+    /** À qui appartient `followed` (compte, ou appareil). */
+    private var followedFor: String? = null
 
     /** Le top sans les chaînes et catégories masquées (les suivis, eux, ne le
      *  sont jamais : même règle que le téléphone, BrowseRules). Rangée Top de la TV. */
@@ -79,7 +85,16 @@ class HomeModel(private val scope: CoroutineScope) {
         loading = true
         failed = false
         scope.launch {
-            followed = loadFollowed()
+            val owner = AppState.user?.id ?: ""
+            val fresh = loadFollowed()
+            if (fresh != null) {
+                followed = fresh
+                followedFor = owner
+            } else if (followedFor != owner) {
+                // Liste d'un autre compte : pas gardée.
+                followed = emptyList()
+            }
+            followedFailed = fresh == null
             val page = BrowseApi.topStreams(TopLanguage.resolved(), null)
             if (page != null) {
                 top.clear()
@@ -95,24 +110,26 @@ class HomeModel(private val scope: CoroutineScope) {
         }
     }
 
-    private suspend fun loadFollowed(): List<TwitchStream> {
-        if (AppState.token != null && AppState.user != null) {
-            try {
-                BrowseApi.followedStreams()?.let { return withLocal(it) }
-            } catch (e: AuthExpiredException) {
-                // Compte retiré par Auth.renew seulement si Twitch a refusé le
-                // renouvellement : un 401 de plus ne déconnecte pas.
-                Logger.warn("HOME", "Session Twitch refusée")
-            }
+    /** null : une partie (compte ou appareil) n'a pas été lue. Une liste
+     *  vide à la place ferait croire qu'aucune chaîne suivie n'est en direct. */
+    private suspend fun loadFollowed(): List<TwitchStream>? {
+        if (AppState.user == null) return withLocal(emptyList())
+        val account = try {
+            if (AppState.token != null) BrowseApi.followedStreams() else null
+        } catch (e: AuthExpiredException) {
+            // Compte retiré par Auth.renew seulement si Twitch a refusé le
+            // renouvellement : un 401 de plus ne déconnecte pas.
+            Logger.warn("HOME", "Session Twitch refusée")
+            null
         }
-        return withLocal(emptyList())
+        return account?.let { withLocal(it) }
     }
 
     /** Directs des chaînes suivies sur l'appareil, ajoutés à ceux du compte. */
-    private suspend fun withLocal(account: List<TwitchStream>): List<TwitchStream> {
+    private suspend fun withLocal(account: List<TwitchStream>): List<TwitchStream>? {
         val known = account.map { it.login.lowercase() }.toHashSet()
         val local = AppState.localFollows.filter { it !in known }
-        val extra = if (local.isEmpty()) emptyList() else BrowseApi.liveByLogins(local) ?: emptyList()
+        val extra = if (local.isEmpty()) emptyList() else BrowseApi.liveByLogins(local) ?: return null
         return (account + extra).distinctBy { it.login.lowercase() }.sortedByDescending { it.viewers }
     }
 
@@ -151,7 +168,7 @@ fun HomeScreen(model: HomeModel, nav: Navigator) {
     val followed = Pins.sortStreams(model.followed)
     // Seulement une liste lue (pas celle, vide, d'avant le chargement ou d'un échec).
     LaunchedEffect(model.followed, model.loading) {
-        if (!model.loading && !model.failed) com.mxfia19.twitchunblock.widget.LiveWidget.save(context, model.followed)
+        if (!model.loading && !model.failed && !model.followedFailed) com.mxfia19.twitchunblock.widget.LiveWidget.save(context, model.followed)
     }
     val followedLogins = model.followed.map { it.login.lowercase() }.toHashSet()
     val grid = rememberLazyGridState()

@@ -50,6 +50,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.app.NotificationManagerCompat
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import coil.compose.AsyncImage
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Format
@@ -207,6 +210,23 @@ private fun PollCard(p: News.Poll) {
     }
 }
 
+/** Réglages des notifications de l'app (Android 8 et plus), sinon sa fiche
+ *  dans les réglages d'Android. */
+private fun openNotificationSettings(context: android.content.Context) {
+    val intent = if (Build.VERSION.SDK_INT >= 26) {
+        android.content.Intent(android.provider.Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+            .putExtra(android.provider.Settings.EXTRA_APP_PACKAGE, context.packageName)
+    } else {
+        android.content.Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                               Uri.fromParts("package", context.packageName, null))
+    }
+    try {
+        context.startActivity(intent)
+    } catch (e: Exception) {
+        Logger.warn("NOTIF", "Réglages des notifications introuvables", e.message)
+    }
+}
+
 /** Réglages : notifications de live (natives et ntfy), comptage, mise à jour. */
 @Composable
 fun NotificationSettings() {
@@ -215,13 +235,39 @@ fun NotificationSettings() {
     val uri = LocalUriHandler.current
     var ntfyResult by remember { mutableStateOf<String?>(null) }
     var channelsOpen by remember { mutableStateOf(false) }
+    // Notifications de l'app permises par Android : relu au retour dans
+    // l'app (depuis ses réglages, par exemple).
+    var allowed by remember { mutableStateOf(NotificationManagerCompat.from(context).areNotificationsEnabled()) }
+    var refused by remember { mutableStateOf(false) }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) { allowed = NotificationManagerCompat.from(context).areNotificationsEnabled() }
     val permission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) LiveNotifier.setEnabled(context, true)
+        allowed = NotificationManagerCompat.from(context).areNotificationsEnabled()
+        if (granted) LiveNotifier.setEnabled(context, true) else refused = true
     }
     Group(AppState.t("notif_section")) {
         Toggle(AppState.t("notif_live"), AppState.t("notif_live_sub_android"), LiveNotifier.enabled) { on ->
-            if (on && Build.VERSION.SDK_INT >= 33 && !LiveNotifier.canNotify(context)) permission.launch(Manifest.permission.POST_NOTIFICATIONS)
-            else LiveNotifier.setEnabled(context, on)
+            when {
+                !on -> {
+                    refused = false
+                    LiveNotifier.setEnabled(context, false)
+                }
+                Build.VERSION.SDK_INT >= 33 && !LiveNotifier.canNotify(context) -> permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+                // Coupées dans les réglages (avant Android 13, aucune demande
+                // possible) : rien ne s'afficherait, la fonction reste éteinte.
+                !NotificationManagerCompat.from(context).areNotificationsEnabled() -> {
+                    allowed = false
+                    refused = true
+                }
+                else -> LiveNotifier.setEnabled(context, true)
+            }
+        }
+        // Refus (après deux, Android ne repose plus la question) ou
+        // notifications coupées ensuite : explication et lien vers les réglages.
+        if (!allowed && (refused || LiveNotifier.enabled)) {
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 4.dp)) {
+                Text(AppState.t("fn_notif_blocked"), color = TU.danger, fontSize = 12.sp)
+                TextButton(onClick = { openNotificationSettings(context) }) { Text(AppState.t("fn_notif_settings"), color = TU.primary) }
+            }
         }
         if (LiveNotifier.enabled) {
             TextButton(onClick = { LiveNotifier.test(context) }, modifier = Modifier.padding(start = 4.dp)) {
@@ -233,21 +279,22 @@ fun NotificationSettings() {
         }
         if (Ntfy.enabled) {
             Column(Modifier.padding(horizontal = 12.dp, vertical = 6.dp)) {
-                Text(if (Ntfy.synced) AppState.tn("ntfy_status", Ntfy.channels).replace("{n}", Ntfy.channels.toString())
+                Text(if (Ntfy.synced) AppState.tn("fn_ntfy_status", Ntfy.channels).replace("{n}", Ntfy.channels.toString())
                      else AppState.t("ntfy_pending"), color = TU.muted, fontSize = 12.sp)
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
                     OutlinedButton(onClick = { uri.openUri(Ntfy.subscribeUrl) }) { Text(AppState.t("ntfy_subscribe"), color = TU.text) }
                     OutlinedButton(onClick = {
                         scope.launch {
+                            // Texte gardé (et non sa clé) : clés vues par gen-i18n.
                             ntfyResult = when (Ntfy.test()) {
-                                "sent" -> "ntfy_test_sent"
-                                "limited" -> "ntfy_limited"
-                                else -> "ntfy_failed"
+                                "sent" -> AppState.t("fn_ntfy_test_sent")
+                                "limited" -> AppState.t("fn_ntfy_limited")
+                                else -> AppState.t("fn_ntfy_failed")
                             }
                         }
                     }) { Text(AppState.t("notif_test"), color = TU.text) }
                 }
-                ntfyResult?.let { Text(AppState.t(it), color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
+                ntfyResult?.let { Text(it, color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp)) }
             }
         }
         // Chaînes notifiées : les suivies, moins celles coupées (ici, par leur

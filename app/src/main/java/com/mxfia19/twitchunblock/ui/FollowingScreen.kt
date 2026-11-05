@@ -43,10 +43,13 @@ class FollowingModel(private val scope: CoroutineScope) {
         loading = true
         failed = false
         scope.launch {
-            val account = if (AppState.user != null) BrowseApi.followedLogins() ?: emptyList() else emptyList()
-            val logins = (AppState.localFollows + account.map { it.lowercase() }).distinct()
-            val briefs = BrowseApi.channelsByLogins(logins)
+            // Suivis du compte pas lus (réseau, jeton refusé) : un échec, pas
+            // « aucune chaîne suivie » avec les seuls suivis de l'appareil.
+            val account = if (AppState.user != null) BrowseApi.followedLogins() else emptyList()
+            val briefs = account?.let { BrowseApi.channelsByLogins((AppState.localFollows + it.map { l -> l.lowercase() }).distinct()) }
             if (briefs == null) {
+                // Liste d'un autre compte : pas gardée.
+                if (loadedFor?.substringBefore("|") != (AppState.user?.id ?: "")) channels = emptyList()
                 failed = channels.isEmpty()
             } else {
                 channels = briefs.distinctBy { it.login }.sortedWith(compareByDescending<ChannelBrief> { it.stream != null }
