@@ -430,15 +430,16 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
         if (main && login != null) com.mxfia19.twitchunblock.drops.DropsHeartbeat.start(login, pollSegments = src != "account")
     }
 
-    /** Qualité choisie dans le lecteur : retenue comme préférence. */
-    fun selectQuality(key: String) {
+    /** Qualité choisie dans le lecteur : retenue comme préférence. `remember`
+     *  faux : son seul en arrière-plan et son retour (série 6), pas retenus. */
+    fun selectQuality(key: String, remember: Boolean = true) {
         if (key == quality) return
         val held = liveHeldMs()
         val pos = if (isLive) -1L else player.currentPosition
         play(key, pos)
         held?.let { keepLiveDelay(it) }
         val pref = Quality.preferenceFor(key, master.links.keys, master.variants)
-        if (pref != null && !NetworkStatus.isCellular && main) AppState.updateQualityPref(pref)
+        if (remember && pref != null && !NetworkStatus.isCellular && main) AppState.updateQualityPref(pref)
         Logger.info("PLAYER", "Qualité choisie", key)
     }
 

@@ -80,6 +80,11 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
     /** Lecteur de la session, donné à la vue sans la vitesse (NoSpeedPlayer). */
     private var source: Player? = null
 
+    /** Série 6 : glissé vers le bas en portrait, le lecteur se réduit
+     *  (MiniPlayer.kt) ; null : pas de geste. */
+    var onPullDown: (() -> Unit)? = null
+    private var pulling = false
+
     fun usePlayer(p: Player?) {
         if (p === source) return
         source = p
@@ -169,6 +174,7 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
                 swallow = false
                 seekGesture = false
                 panning = false
+                pulling = false
                 downX = ev.x
                 downY = ev.y
                 lastX = ev.x
@@ -202,6 +208,15 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
                 streak = false
             }
             MotionEvent.ACTION_MOVE -> {
+                // Série 6 : glissé franc vers le bas (portrait, image entière) : réduire.
+                val dy = ev.y - downY
+                if (!swallow && onPullDown != null && zoom <= 1f && !downOnControl && ev.pointerCount == 1 &&
+                    resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT &&
+                    dy > touchSlop * 2 && dy > abs(ev.x - downX) * 1.5f) {
+                    cancelChildren(ev)
+                    swallow = true
+                    pulling = true
+                }
                 if (!swallow && zoom > 1f && !downOnControl && ev.pointerCount == 1 &&
                     (abs(ev.x - downX) > touchSlop || abs(ev.y - downY) > touchSlop)) {
                     // Image agrandie : un doigt la déplace.
@@ -218,6 +233,13 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
                 lastY = ev.y
             }
             MotionEvent.ACTION_UP -> {
+                if (pulling) {
+                    pulling = false
+                    swallow = false
+                    tapAt = 0L
+                    if (ev.y - downY > maxOf(height * 0.22f, 56f * resources.displayMetrics.density)) onPullDown?.invoke()
+                    return true
+                }
                 if (seekGesture) {
                     tapAt = ev.eventTime
                     tapSide = if (downX < width / 2f) -1 else 1
@@ -241,6 +263,7 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
                 }
             }
             MotionEvent.ACTION_CANCEL -> {
+                pulling = false
                 val was = swallow
                 swallow = false
                 seekGesture = false

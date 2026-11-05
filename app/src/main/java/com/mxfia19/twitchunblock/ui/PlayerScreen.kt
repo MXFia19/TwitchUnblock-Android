@@ -129,6 +129,10 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
             }
             view.bind(session, gestures = controls, fill = fill, muted = muted)
             view.insetControls(chatInset)
+            // Série 6 : chapitres sur la barre (PlayerControls.kt), glissé vers
+            // le bas pour réduire le lecteur (MiniPlayer.kt).
+            view.showChapterMarks(if (controls) session.chapters else emptyList())
+            view.onPullDown = if (controls) PlayerLeave.action else null
         },
         // La session survit à l'écran : la vue retirée lâche le lecteur.
         onRelease = { view -> view.usePlayer(null) },
@@ -353,6 +357,7 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
                 PlayerOverlay(session, Modifier.align(Alignment.Center))
                 StreamVideoOverlay(session)
                 PlayerVideoOverlay(session)
+                PlayerTopOverlay(session, nav, raids.raid)
             },
         ) { chatModifier, overlay ->
             if (chat != null) {
@@ -379,6 +384,7 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
             PlayerOverlay(session, Modifier.align(Alignment.Center))
             StreamVideoOverlay(session)
             PlayerVideoOverlay(session)
+            PlayerTopOverlay(session, nav, raids.raid)
         }
         BroadcastBar(session)
         InfoBar(session, nav)
@@ -470,15 +476,8 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             when (page) {
-                1 -> {
-                    for (m in sleepChoices) {
-                        DropdownMenuItem(text = { Text(sleepLabel(m)) }, onClick = { open = false; session.setSleepTimer(m) })
-                    }
-                    if (session.sleepAt != null) {
-                        DropdownMenuItem(text = { Text(AppState.t("sleep_cancel"), color = TU.danger) },
-                                         onClick = { open = false; session.setSleepTimer(null) })
-                    }
-                }
+                // Série 6 (SleepTimer.kt) : durées, autre durée, temps restant, +15 min.
+                1 -> SleepMenuItems(SessionSleep(session)) { open = false }
                 4 -> SpeedMenuPage(session) { open = false }
                 3 -> {
                     for (c in session.chapters) {

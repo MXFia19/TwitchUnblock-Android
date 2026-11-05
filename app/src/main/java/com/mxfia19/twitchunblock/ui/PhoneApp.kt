@@ -81,24 +81,37 @@ class Navigator {
     // Onglet au lancement : Personnaliser l'app (l'accueil par défaut).
     val stack = mutableStateListOf<Screen>(BrowseTabs.startScreen())
     val current: Screen get() = stack.last()
+    /** Série 6 : lecteur réduit (mini-lecteur), sorti de la pile ; sa lecture
+     *  continue sous les pages et les onglets (MiniPlayer.kt). */
+    private val miniState = androidx.compose.runtime.mutableStateOf<Screen.Player?>(null)
+    var mini: Screen.Player?
+        get() = miniState.value
+        set(v) { miniState.value = v }
+    /** Taille de la pile où le lecteur, réduit par une page ouverte depuis
+     *  lui, revient en grand (MiniPlayer.kt). */
+    var reopenAt: Int? = null
 
     fun push(s: Screen) {
+        minimizeUnder(s)
         stack.add(s)
     }
 
     fun pop(): Boolean {
         if (stack.size <= 1) return false
         stack.removeAt(stack.lastIndex)
+        reopenAfterPop()
         return true
     }
 
     fun tab(s: Screen) {
+        keepPlaying()
         stack.clear()
         stack.add(s)
     }
 
     /** Une lecture remplace celle en cours (un seul lecteur à la fois). */
     fun play(request: PlayRequest) {
+        dropMini()
         stack.removeAll { it is Screen.Player || it is Screen.MultiLive }
         stack.add(Screen.Player(request))
         // Même lecture redemandée (notification, widget) : la session reste la
@@ -112,6 +125,7 @@ class Navigator {
 
     /** Multi-live à la place de la lecture en cours. */
     fun multi(first: String?) {
+        dropMini()
         stack.removeAll { it is Screen.Player || it is Screen.MultiLive }
         stack.add(Screen.MultiLive(first))
     }
@@ -146,7 +160,7 @@ fun PhoneApp(nav: Navigator) {
     // continue sous une fiche chaîne, la connexion ou la session web, et
     // reprend telle quelle au retour (rembobinage compris). Arrêtée quand le
     // lecteur quitte la pile (fermé, onglet, multi-live).
-    val playing = nav.stack.filterIsInstance<Screen.Player>().lastOrNull()?.request
+    val playing = (nav.stack.filterIsInstance<Screen.Player>().lastOrNull() ?: nav.mini)?.request
     val session = remember(playing != null) { if (playing != null) PlaybackSession(context, scope) else null }
     DisposableEffect(session) { onDispose { session?.release() } }
     LaunchedEffect(session, playing) { if (session != null && playing != null) session.open(playing) }
@@ -158,6 +172,9 @@ fun PhoneApp(nav: Navigator) {
 
     UpdatePrompt()
     BrowseEffects()
+    // Série 6 (MiniPlayer.kt) : lecteur réduit, minuterie, son seul en
+    // arrière-plan, reprise au retour du réseau, fin du direct, faible latence.
+    if (MiniPlayerHost(session, nav)) return
     if (screen is Screen.Player && session != null) {
         PlayerScreen(session, nav)
         return
@@ -173,6 +190,9 @@ fun PhoneApp(nav: Navigator) {
         containerColor = TU.bg,
         topBar = { if (isTab) TopBar(screen, nav) },
         bottomBar = {
+          androidx.compose.foundation.layout.Column {
+            // Série 6 : lecture réduite, au-dessus des onglets (MiniPlayer.kt).
+            if (session != null && nav.mini != null) MiniPlayerBar(session, nav, tabsBelow = isTab && !wide)
             if (isTab && !wide) {
                 NavigationBar(containerColor = TU.surface) {
                     // Ordre et onglets masqués : Personnaliser l'app.
@@ -181,6 +201,7 @@ fun PhoneApp(nav: Navigator) {
                     }
                 }
             }
+          }
         },
     ) { padding ->
         Row(Modifier.padding(padding).fillMaxSize()) {
