@@ -37,7 +37,7 @@ object News {
     private const val REACTED = "news_reaction_"
 
     suspend fun refresh() {
-        val a = parseJson(Http.get("${Config.API_URL}/api/announcement", timeout = 10)?.body)?.obj("announcement")
+        val a = parseJson(Http.get("${CustomWorker.base}/api/announcement", timeout = 10)?.body)?.obj("announcement")
         announcement = a?.let {
             val id = it.str("id") ?: return@let null
             if (AppState.prefs.getString(DISMISSED, null) == id) return@let null
@@ -48,7 +48,7 @@ object News {
     }
 
     private suspend fun loadPoll() {
-        val r = Http.postJson("${Config.API_URL}/api/poll", JSONObject().put("device", AppState.installId).toString(), timeout = 10)
+        val r = Http.postJson("${CustomWorker.base}/api/poll", JSONObject().put("device", AppState.installId).toString(), timeout = 10)
         poll = parsePoll(parseJson(r?.body))
     }
 
@@ -84,7 +84,7 @@ object News {
         val body = JSONObject().put("id", AppState.installId).put("announcementId", a.id).put("emoji", emoji ?: JSONObject.NULL)
         var saved = false
         try {
-            val r = Http.postJson("${Config.API_URL}/api/announcement/react", body.toString(), timeout = 10)
+            val r = Http.postJson("${CustomWorker.base}/api/announcement/react", body.toString(), timeout = 10)
             if (r?.code == 200) {
                 AppState.prefs.edit().putString(REACTED + a.id, emoji).apply()
                 saved = true
@@ -101,7 +101,7 @@ object News {
         voting = true
         val body = JSONObject().put("device", AppState.installId).put("pollId", p.id).put("choices", JSONArray(choices))
         val r = try {
-            Http.postJson("${Config.API_URL}/api/poll/vote", body.toString(), timeout = 15)
+            Http.postJson("${CustomWorker.base}/api/poll/vote", body.toString(), timeout = 15)
         } finally {
             // Annulé (accueil quitté pendant l'envoi) : le bouton Voter ne
             // reste pas grisé jusqu'au redémarrage.

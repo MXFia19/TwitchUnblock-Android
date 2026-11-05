@@ -1,0 +1,68 @@
+{
+  "_indirect": {
+    "keys": ["ob_tour", "ob_start", "ob_next", "expert_ok", "expert_unreachable", "expert_quota", "expert_bad", "expert_http_android"]
+  },
+  "a6_vod_progress": {
+    "fr": "Reprendre les VODs",
+    "en": "Resume VODs",
+    "es": "Reanudar los VOD",
+    "ru": "Продолжать записи",
+    "it": "Riprendi i VOD",
+    "ja": "VOD を続きから再生",
+    "zh-Hant": "從上次位置繼續 VOD"
+  },
+  "a6_vod_progress_sub": {
+    "fr": "Retient où tu t'es arrêté dans chaque VOD : « Continuer à regarder » de l'accueil et barre de progression des vignettes. Coupé, aucune position n'est gardée sur cet appareil (ni envoyée à ton compte) et les VODs partent du début.",
+    "en": "Remembers where you stopped in each VOD: Continue watching on the home screen and the progress bar on thumbnails. Off, no position is kept on this device (or sent to your account) and VODs start from the beginning.",
+    "es": "Recuerda dónde te quedaste en cada VOD: «Seguir viendo» en la portada y la barra de progreso de las miniaturas. Desactivado, no se guarda ninguna posición en este dispositivo (ni se envía a tu cuenta) y los VOD empiezan desde el principio.",
+    "ru": "Запоминает, где вы остановились в каждой записи: «Продолжить просмотр» на главной и полоска прогресса на превью. Если выключить, на этом устройстве позиции не сохраняются (и не отправляются в аккаунт), а записи начинаются с начала.",
+    "it": "Ricorda dove ti sei fermato in ogni VOD: «Continua a guardare» nella home e la barra di avanzamento sulle miniature. Disattivato, nessuna posizione viene salvata su questo dispositivo (né inviata al tuo account) e i VOD partono dall'inizio.",
+    "ja": "各 VOD の停止位置を記憶します（ホームの「続きから見る」とサムネイルの進行バー）。オフにすると、この端末には位置が保存されず（アカウントにも送信されず）、VOD は最初から再生されます。",
+    "zh-Hant": "記住你在每部 VOD 停下的位置：首頁的「繼續觀看」與縮圖上的進度條。關閉後，這台裝置不會保留任何位置（也不會傳送到你的帳號），VOD 會從頭開始播放。"
+  },
+  "a6_activate_browser": {
+    "fr": "L'ouvrir plutôt dans mon navigateur",
+    "en": "Open it in my browser instead",
+    "es": "Abrirlo mejor en mi navegador",
+    "ru": "Открыть в моём браузере",
+    "it": "Aprila invece nel mio browser",
+    "ja": "ブラウザーで開く",
+    "zh-Hant": "改用我的瀏覽器開啟"
+  },
+  "a6_activate_in_app": {
+    "fr": "Autre compte ? L'ouvrir dans l'app (Twitch demandera le compte)",
+    "en": "Another account? Open it in the app (Twitch will ask which account)",
+    "es": "¿Otra cuenta? Abrirlo en la app (Twitch pedirá la cuenta)",
+    "ru": "Другой аккаунт? Открыть в приложении (Twitch спросит, какой аккаунт)",
+    "it": "Un altro account? Aprila nell'app (Twitch chiederà l'account)",
+    "ja": "別のアカウント？アプリ内で開く（Twitch がアカウントを確認します）",
+    "zh-Hant": "其他帳號？在 App 內開啟（Twitch 會詢問要用哪個帳號）"
+  },
+  "a6_activate_page_sub": {
+    "fr": "Page sans le compte de ton navigateur : connecte-toi avec le compte voulu, puis valide le code. L'app ne lit ni ne garde tes identifiants.",
+    "en": "A page without your browser's account: sign in with the account you want, then confirm the code. The app doesn't read or keep your credentials.",
+    "es": "Una página sin la cuenta de tu navegador: inicia sesión con la cuenta que quieras y confirma el código. La app no lee ni guarda tus credenciales.",
+    "ru": "Страница без аккаунта вашего браузера: войдите в нужный аккаунт и подтвердите код. Приложение не читает и не хранит ваши данные для входа.",
+    "it": "Una pagina senza l'account del tuo browser: accedi con l'account che vuoi, poi conferma il codice. L'app non legge né conserva le tue credenziali.",
+    "ja": "ブラウザーのアカウントを使わないページです。使いたいアカウントでログインし、コードを確認してください。アプリがログイン情報を読み取ったり保存したりすることはありません。",
+    "zh-Hant": "這個頁面不會沿用瀏覽器的帳號：請用想要的帳號登入，再確認代碼。App 不會讀取也不會保存你的登入資料。"
+  },
+  "a6_switch_account_sub": {
+    "fr": "Ce compte reste tant que l'autre n'est pas connecté : sur la page twitch.tv/activate ouverte dans l'app, Twitch demande le compte, connecte-toi avec l'autre. Celui-ci est gardé en dessous pour y revenir.",
+    "en": "This account stays until the other one is connected: on the twitch.tv/activate page opened in the app, Twitch asks for the account; sign in with the other one. This one is kept below so you can switch back.",
+    "es": "Esta cuenta se queda hasta que la otra esté conectada: en la página twitch.tv/activate abierta en la app, Twitch pide la cuenta; inicia sesión con la otra. Esta se guarda abajo para volver a ella.",
+    "ru": "Этот аккаунт остаётся, пока не подключён другой: на странице twitch.tv/activate, открытой в приложении, Twitch спросит аккаунт — войдите в другой. Этот сохранится ниже, чтобы можно было вернуться.",
+    "it": "Questo account resta finché l'altro non è collegato: nella pagina twitch.tv/activate aperta nell'app, Twitch chiede l'account; accedi con l'altro. Questo resta qui sotto per tornarci.",
+    "ja": "もう一方のアカウントが接続されるまで、このアカウントはそのまま残ります。アプリ内で開く twitch.tv/activate ページで Twitch がアカウントを尋ねるので、別のアカウントでログインしてください。このアカウントは下に保存され、いつでも戻せます。",
+    "zh-Hant": "在另一個帳號連線前，這個帳號會保留：在 App 內開啟的 twitch.tv/activate 頁面上，Twitch 會詢問帳號，請用另一個帳號登入。這個帳號會保存在下方，方便切換回來。"
+  },
+  "a6_ob_library_text": {
+    "fr": "Tes VODs téléchargées, à regarder hors ligne avec leur chat, et celles que tu as commencées.",
+    "en": "Your downloaded VODs, to watch offline with their chat, and the ones you've started.",
+    "es": "Tus VOD descargados, para ver sin conexión con su chat, y los que empezaste.",
+    "ru": "Скачанные записи — смотреть офлайн вместе с чатом — и те, что вы начали смотреть.",
+    "it": "I tuoi VOD scaricati, da guardare offline con la loro chat, e quelli che hai iniziato.",
+    "ja": "ダウンロードした VOD（チャット付きでオフライン再生できます）と、見始めた VOD。",
+    "zh-Hant": "你下載的 VOD（可連同聊天室離線觀看），以及你看到一半的 VOD。"
+  }
+}

@@ -56,6 +56,38 @@ object Updates {
         return newer
     }
 
+    /** Une version publiée, pour le journal des modifications. */
+    data class Release(val name: String, val code: Int, val date: Long?, val items: List<String>)
+
+    /** Journal des modifications : les versions publiées du même canal (TU
+     *  Test : pré-versions test-N ; sinon vX.Y.N), la plus récente d'abord,
+     *  avec leurs nouveautés (lignes des notes). null : illisibles. Comme
+     *  UpdateChecker.history (iOS), qui lit apps.json. */
+    suspend fun history(): List<Release>? {
+        val r = Http.get("https://api.github.com/repos/${Config.REPO}/releases?per_page=100",
+                         mapOf("Accept" to "application/vnd.github+json"), timeout = 20)
+        val list = parseJsonArray(r?.body)?.objects()
+        if (list == null) {
+            Logger.warn("UPDATE", "Versions illisibles", "HTTP ${r?.code ?: "réseau"}")
+            return null
+        }
+        val test = BuildConfig.CHANNEL == "test"
+        return list.asSequence()
+            .filter { it.bool("draft") != true && (it.bool("prerelease") == true) == test }
+            .mapNotNull { rel ->
+                val tag = rel.str("tag_name") ?: return@mapNotNull null
+                val code = Regex("(\\d+)$").find(tag)?.value?.toIntOrNull() ?: return@mapNotNull null
+                // Notes en liste (« - … ») : une nouveauté par ligne.
+                val items = (rel.str("body") ?: "").lines()
+                    .map { it.trim().removePrefix("- ").removePrefix("* ").removePrefix("• ").trim() }
+                    .filter { it.isNotEmpty() && !it.startsWith("#") }
+                Release(rel.str("name") ?: tag, code, Format.parseDate(rel.str("published_at")), items)
+            }
+            .distinctBy { it.code }
+            .sortedByDescending { it.code }
+            .toList()
+    }
+
     /** « Plus tard » : cette version n'est plus proposée d'elle-même. */
     fun skip(update: Update) {
         AppState.prefs.edit().putInt(SKIPPED, update.code).apply()

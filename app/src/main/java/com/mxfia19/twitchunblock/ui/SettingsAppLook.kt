@@ -59,6 +59,10 @@ fun AppLookSettings(nav: Navigator) {
         SettingsSync.toggled(it)
     }
     NoAccountRow()
+    // « Reprendre les VODs » (VodResume), comme le site.
+    Toggle(AppState.t("a6_vod_progress"), AppState.t("a6_vod_progress_sub"), com.mxfia19.twitchunblock.core.VodResume.enabled) {
+        com.mxfia19.twitchunblock.core.VodResume.set(it)
+    }
 }
 
 /** « Sans compte Twitch » : grisé tant qu'on est connecté (il ne
@@ -152,7 +156,7 @@ fun SavedAccountsRows(nav: Navigator) {
     if (AppState.user != null && AppState.token != null) {
         Column(Modifier.fillMaxWidth().focusCard({ nav.push(Screen.Login) }, RoundedCornerShape(0.dp)).padding(12.dp)) {
             Text(AppState.t("switch_account"), color = TU.primary, fontSize = 15.sp)
-            Text(AppState.t("ap_switch_account_sub"), color = TU.muted, fontSize = 12.sp)
+            Text(AppState.t("a6_switch_account_sub"), color = TU.muted, fontSize = 12.sp)
         }
     }
     val others = Accounts.others

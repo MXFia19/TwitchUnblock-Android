@@ -22,6 +22,8 @@ import org.json.JSONObject
  *   hidden : chaînes et catégories masquées (format de la sauvegarde) ;
  *   ios    : réglages de l'app iPhone ; Android n'y touche qu'à ceux qu'il
  *            a aussi (ios_autoClaimChest…), le reste est gardé tel quel ;
+ *            sa personnalisation (onglets, accueil, catégories suivies) va
+ *            dans « ios_customization », posée sur celle de l'iPhone ;
  *   pinned : chaînes épinglées, seulement si l'app en a (pinnedList).
  * Un envoi part toujours après une relecture : les clés que l'app ne
  * connaît pas (vitesse des VODs, personnalisation de l'iPhone…) repartent
@@ -55,6 +57,9 @@ object SettingsSync {
         /** Liste dont les plus récents sont à la fin (emotes) : la réunion
          *  garde la fin. */
         val unionKeepsEnd: Boolean = false,
+        /** Valeur envoyée, faite à partir de celle du serveur (personnalisation :
+         *  les champs de l'iPhone restent) ; null : `read`. */
+        val outgoing: ((Any?) -> Any)? = null,
     )
 
     /** Chaînes épinglées de l'app, branchées ici quand elle les a. */
@@ -91,9 +96,9 @@ object SettingsSync {
         entries += entry
     }
 
-    private fun bool(section: String, key: String, pref: BoolPref, default: Boolean) = register(Entry(
+    private fun bool(section: String, key: String, pref: BoolPref, default: Boolean, late: Boolean = false) = register(Entry(
         section, key, read = { pref.value }, write = { v -> (v as? Boolean)?.let { pref.set(it) } },
-        isDefault = { pref.value == default }))
+        isDefault = { pref.value == default }, late = late))
 
     private fun words(key: String, pref: WordsPref, max: Int) = register(Entry(
         "common", key, read = { JSONArray(pref.value) },
@@ -139,6 +144,18 @@ object SettingsSync {
         register(Entry("common", "vodSpeed", read = { PlayerPrefs.vodSpeed.value / 100.0 },
             write = { v -> (v as? Number)?.toDouble()?.takeIf { it in 0.25..2.0 }?.let { PlayerPrefs.vodSpeed.set(Math.round(it * 100).toInt()) } },
             isDefault = { PlayerPrefs.vodSpeed.value == 100 }))
+        // Série 6 : format de l'heure du chat (commun avec le site), zone
+        // d'envoi du chat et personnalisation (noms de l'iPhone). Ajoutés
+        // après coup : hors de l'empreinte tant qu'ils restent par défaut.
+        val chat = com.mxfia19.twitchunblock.chat.ChatPrefs
+        register(Entry("common", "timeFormat", read = { chat.timeFormat.value },
+            write = { v -> (v as? String)?.takeIf { it in listOf("auto", "12", "24") }?.let { chat.timeFormat.set(it) } },
+            isDefault = { chat.timeFormat.value == "auto" }, late = true))
+        bool("ios", "ios_chatShowInput", chat.showInput, true, late = true)
+        register(Entry("ios", "ios_customization", read = { BrowsePrefs.customizationJson() },
+            write = { v -> (v as? JSONObject)?.let { applyCustomization(it) } },
+            isDefault = { customizationIsDefault() }, late = true,
+            outgoing = { server -> customizationOver(server as? JSONObject) }))
         // Chaînes épinglées (accueil, Suivies, widget).
         pinnedList = object : PinnedList {
             override val logins: List<String> get() = BrowsePrefs.pinned.value
@@ -376,7 +393,7 @@ object SettingsSync {
     }
 
     private suspend fun fetch(t: Target): Map<String, Remote>? {
-        val r = Http.get("${Config.API_URL}/api/sync/prefs?userId=${Http.encode(t.userId)}",
+        val r = Http.get("${CustomWorker.base}/api/sync/prefs?userId=${Http.encode(t.userId)}",
                          mapOf("Authorization" to "Bearer ${t.token}"), timeout = 15)
         val json = if (r != null && r.code == 200) parseJson(r.body) else null
         if (json == null) {
@@ -388,7 +405,7 @@ object SettingsSync {
 
     private suspend fun push(t: Target, sections: JSONObject): JSONObject? {
         val body = JSONObject().put("userId", t.userId).put("sections", sections).toString()
-        val r = Http.postJson("${Config.API_URL}/api/sync/prefs", body, mapOf("Authorization" to "Bearer ${t.token}"), timeout = 20)
+        val r = Http.postJson("${CustomWorker.base}/api/sync/prefs", body, mapOf("Authorization" to "Bearer ${t.token}"), timeout = 20)
         val json = if (r != null && r.code in 200..299) parseJson(r.body) else null
         if (json == null) {
             // Toujours « à envoyer » : le prochain échange réessaie.
@@ -440,7 +457,7 @@ object SettingsSync {
     private fun outgoing(name: String, server: Any?): Any = when (name) {
         "common", "ios" -> {
             val out = (server as? JSONObject)?.let { JSONObject(it.toString()) } ?: JSONObject()
-            entries.filter { it.section == name }.forEach { out.put(it.key, it.read()) }
+            entries.filter { it.section == name }.forEach { e -> out.put(e.key, e.outgoing?.invoke(out.opt(e.key)) ?: e.read()) }
             out
         }
         else -> localData(name)
@@ -501,6 +518,59 @@ object SettingsSync {
                 .put("categories", JSONArray(categoriesOf(o).sortedBy { it.id }.map { "${it.id}|${it.name}|${it.box}|${it.at}" })))
         }
         return norm(a) == norm(b)
+    }
+
+    // ── Personnalisation ──
+
+    /** Onglets et parties de l'accueil de l'iPhone : le reste n'est qu'à Android. */
+    private val IOS_TABS = listOf("home", "discover", "search", "library")
+    private val IOS_HOME = listOf("followed", "top", "offline")
+
+    private fun customizationIsDefault(): Boolean = BrowsePrefs.tabs == BrowsePrefs.defaultTabs &&
+        BrowsePrefs.hiddenTabs.value.isEmpty() && BrowsePrefs.launchTab.value == "home" &&
+        BrowsePrefs.hiddenHome.value.isEmpty() && BrowsePrefs.pinnedByViewers.value &&
+        !BrowsePrefs.compactCategories.value && BrowsePrefs.categorySort.value == "viewers"
+
+    /** Personnalisation d'ici posée sur celle du compte : les champs de
+     *  l'iPhone restent (boutons du lecteur, onglets de chaîne…), et dans les
+     *  listes, ce qu'Android ne connaît pas (« offline » de l'accueil). */
+    private fun customizationOver(server: JSONObject?): JSONObject {
+        val out = server?.let { JSONObject(it.toString()) } ?: JSONObject()
+        val mine = BrowsePrefs.customizationJson()
+        fun keepUnknown(key: String, known: List<String>) {
+            val theirs = server?.arr(key)?.strings().orEmpty().filter { it !in known }
+            out.put(key, JSONArray((mine.arr(key)?.strings().orEmpty() + theirs).distinct()))
+        }
+        keepUnknown("tabOrder", BrowsePrefs.defaultTabs)
+        keepUnknown("hiddenTabs", BrowsePrefs.defaultTabs)
+        keepUnknown("hiddenHome", BrowsePrefs.homeParts)
+        for (k in listOf("launchTab", "pinnedByViewers", "compactFollowedCategories", "followedCategoriesSort")) {
+            out.put(k, mine.opt(k))
+        }
+        return out
+    }
+
+    /** Personnalisation du compte appliquée ici. Venue de l'iPhone (sans
+     *  l'onglet Suivies) : ce qu'Android a seul (Suivies, annonce, reprise,
+     *  catégories de l'accueil) garde sa place et son état d'ici, au lieu de
+     *  repartir à la fin ou d'être réaffiché. */
+    private fun applyCustomization(o: JSONObject) {
+        val c = JSONObject(o.toString())
+        val theirs = o.arr("tabOrder")?.strings()
+        if (theirs != null && "following" !in theirs) {
+            val onlyTabs = BrowsePrefs.defaultTabs.filter { it !in IOS_TABS }
+            val order = theirs.filter { it in BrowsePrefs.defaultTabs }.distinct().toMutableList()
+            for ((i, t) in BrowsePrefs.tabs.withIndex()) if (t !in order) order.add(minOf(i, order.size), t)
+            c.put("tabOrder", JSONArray(order))
+            c.put("hiddenTabs", JSONArray((o.arr("hiddenTabs")?.strings().orEmpty().filter { it !in onlyTabs } +
+                BrowsePrefs.hiddenTabs.value.filter { it in onlyTabs }).distinct()))
+            if (o.has("hiddenHome")) {
+                val onlyHome = BrowsePrefs.homeParts.filter { it !in IOS_HOME }
+                c.put("hiddenHome", JSONArray((o.arr("hiddenHome")?.strings().orEmpty().filter { it !in onlyHome } +
+                    BrowsePrefs.hiddenHome.value.filter { it in onlyHome }).distinct()))
+            }
+        }
+        BrowsePrefs.applyCustomization(c)
     }
 
     // ── Masquées ──

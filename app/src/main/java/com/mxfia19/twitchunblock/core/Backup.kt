@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -17,7 +18,9 @@ import java.util.TimeZone
  * « Continuer à regarder », au format du site et de l'app iPhone
  * (« twitchunblock-backup ») : un fichier de l'un s'importe dans l'autre.
  * Réglages communs sous les mêmes noms, ceux de l'app sous « android_… »
- * (ceux de l'iPhone qui existent ici sont repris aussi).
+ * (ceux de l'iPhone qui existent ici sont repris aussi). L'import demande
+ * « Tout » ou « Chaînes seulement » et dit ce qu'il a repris (Summary),
+ * comme l'iPhone.
  */
 object Backup {
     private const val FORMAT = "twitchunblock-backup"
@@ -61,7 +64,38 @@ object Backup {
         }
     }
 
-    fun export(): String {
+    /** Ce que reprend un import : tout, ou les chaînes seulement (suivies,
+     *  épinglées, masquées, et les catégories suivies). */
+    enum class Scope { ALL, CHANNELS_ONLY }
+
+    /** Ce qu'un import a repris, pour son résumé. */
+    class Summary {
+        var follows = 0
+        /** Laissées de côté : 300 chaînes suivies au plus sur l'appareil. */
+        var followsSkipped = 0
+        var categories = 0
+        var pinned = 0
+        /** Chaînes et catégories masquées ajoutées. */
+        var hidden = 0
+        var settings = 0
+        /** Réglages inconnus de cette version (ou propres au site), ou invalides. */
+        var settingsIgnored = 0
+        var continueWatching = 0
+    }
+
+    /** Sauvegarde lue et reconnue, en attente du choix « Tout » ou « Chaînes seulement ». */
+    class Pending internal constructor(internal val root: JSONObject)
+
+    /** Chaînes suivies par le compte, pour l'export (« accountFollows »,
+     *  comme l'iPhone) : relues sur Twitch, 10 s au plus ; vide sans compte
+     *  ou sans réponse. */
+    suspend fun accountFollows(): List<String> {
+        if (AppState.user == null || AppState.token == null) return emptyList()
+        val list = withTimeoutOrNull(10_000) { BrowseApi.followedLogins() } ?: return emptyList()
+        return list.map { it.lowercase() }.filter { Links.isValidLogin(it) }.distinct()
+    }
+
+    fun export(accountFollows: List<String> = emptyList()): String {
         val settings = JSONObject()
             .put("lang", AppState.lang.code)
             .put("topLang", Features.topLang?.replace("-", "_") ?: JSONObject.NULL)
@@ -89,6 +123,8 @@ object Backup {
             .put("android_autoPip", AppState.autoPip)
             .put("android_showChat", AppState.showChat)
             .put("android_downloadWifiOnly", Features.dlWifiOnly.value)
+            // « Reprendre les VODs », sous le nom du site.
+            .put("vodProgress", VodResume.enabled)
         // Séries 5 à 7 : sous les noms du site et de l'iPhone quand ils les ont ;
         // largeur et échelles du chat en facteur (0,32 ; 1,25), comme l'iPhone.
         val theme = com.mxfia19.twitchunblock.ui.AppTheme
@@ -137,7 +173,7 @@ object Backup {
             .put("platform", "android")
             .put("exportedAt", iso.format(Date()))
             .put("follows", JSONArray(AppState.localFollows.toList()))
-            .put("accountFollows", JSONArray())
+            .put("accountFollows", JSONArray(accountFollows))
             .put("followedCategories", FollowedCategories.toJson())
             .put("hidden", Hidden.toJson())
             .put("settings", settings)
@@ -165,8 +201,8 @@ object Backup {
     /** VODs entamées d'une sauvegarde (continueWatching, l'iPhone compris) :
      *  ajoutées à l'historique si elles n'y sont pas, position reprise si
      *  elle est plus avancée que celle d'ici. Valeurs bornées comme iOS. */
-    private fun importContinue(raw: JSONArray?) {
-        if (raw == null) return
+    private fun importContinue(raw: JSONArray?): Int {
+        if (raw == null) return 0
         val items = ArrayList<HistoryItem>()
         val incoming = HashMap<String, Long>()
         for (o in raw.objects().take(50)) {
@@ -180,24 +216,40 @@ object Backup {
             items += HistoryItem(id, "vod", title.ifEmpty { "VOD $id" }, thumb, streamer, added)
             incoming[id] = Math.round(position * 1000)
         }
-        if (items.isEmpty()) return
+        if (items.isEmpty()) return 0
         val known = History.items.map { it.key }.toHashSet()
         val list = History.items.toList() + items.filter { it.key !in known }
         // Tri stable : à date égale, l'ordre d'ici d'abord.
         History.replace(list.sortedByDescending { it.addedAt }.take(50))
         val positions = HashMap(AppState.vodPositions())
-        for ((id, ms) in incoming) if (ms > (positions[id] ?: 0L) + 1000) positions[id] = ms
+        var advanced = 0
+        for ((id, ms) in incoming) if (ms > (positions[id] ?: 0L) + 1000) {
+            positions[id] = ms
+            advanced++
+        }
         AppState.replaceVodPositions(positions)
         // Ajouts d'ici : partent sur le compte (synchro active).
         CloudSync.scheduleSoon()
+        // « Reprendre les VODs » coupé : aucune position reprise.
+        return if (VodResume.enabled) advanced else 0
     }
 
-    /** Fusionne une sauvegarde : (chaînes ajoutées, laissées de côté) ; null si le fichier n'en est pas une. */
-    fun import(text: String): Pair<Int, Int>? {
+    /** Lit une sauvegarde sans rien appliquer ; null si le fichier n'en est
+     *  pas une (app, iPhone ou site, toute version). */
+    fun read(text: String): Pending? {
         if (text.length > MAX_BYTES) return null
         val root = parseJson(text) ?: return null
         if (root.str("format") != FORMAT) return null
+        return Pending(root)
+    }
 
+    /** Applique une sauvegarde lue : chaînes suivies, épinglées et masquées,
+     *  catégories suivies, ajoutées aux nôtres (rien n'est retiré) ; pour
+     *  « Tout », en plus les réglages connus et valides (les autres sont
+     *  ignorés et comptés) et « Continuer à regarder ». */
+    fun apply(pending: Pending, scope: Scope): Summary {
+        val root = pending.root
+        val summary = Summary()
         val incoming = (root.arr("follows")?.strings().orEmpty() + root.arr("accountFollows")?.strings().orEmpty())
             .map { it.lowercase() }.filter { Links.isValidLogin(it) }
         val before = AppState.localFollows.size
@@ -205,22 +257,66 @@ object Backup {
         val room = maxOf(0, maxOf(300, before) - before)
         val added = fresh.take(room)
         added.reversed().forEach { AppState.toggleLocalFollow(it) }
-        Hidden.merge(root.obj("hidden"))
-        FollowedCategories.merge(root.arr("followedCategories"))
-        importContinue(root.arr("continueWatching"))
+        summary.follows = added.size
+        summary.followsSkipped = fresh.size - added.size
 
-        val s = root.obj("settings") ?: return Pair(added.size, fresh.size - added.size)
+        val hiddenChannels = Hidden.channels.map { it.login }.toSet()
+        val hiddenCategories = Hidden.categories.map { it.id }.toSet()
+        Hidden.merge(root.obj("hidden"))
+        summary.hidden = Hidden.channels.count { it.login !in hiddenChannels } +
+            Hidden.categories.count { it.id !in hiddenCategories }
+        summary.categories = FollowedCategories.merge(root.arr("followedCategories"))
+        val s = root.obj("settings")
+        // Épinglées : dans les réglages sous le nom du site, mais ce sont des chaînes.
+        s?.arr("pinned")?.strings()?.let { summary.pinned = Pins.merge(it) }
+        if (scope == Scope.CHANNELS_ONLY) return summary
+
+        summary.continueWatching = importContinue(root.arr("continueWatching"))
+        if (s != null) {
+            val (applied, ignored) = applySettings(s)
+            summary.settings = applied
+            summary.settingsIgnored = ignored
+        }
+        return summary
+    }
+
+    /** Réglages repris, chaque valeur validée ; ceux de l'iPhone (ios_…)
+     *  valent aussi quand Android n'a pas les siens. Rend le nombre de
+     *  réglages repris, et celui des clés ignorées (inconnues, propres au
+     *  site, invalides). */
+    private fun applySettings(s: JSONObject): Pair<Int, Int> {
+        val applied = HashSet<String>()
+        fun ok(k: String) { applied += k }
         fun bool(vararg keys: String, apply: (Boolean) -> Unit) {
-            for (k in keys) s.bool(k)?.let { apply(it); return }
+            for (k in keys) s.bool(k)?.let { apply(it); ok(k); return }
         }
         fun words(key: String, pref: WordsPref) {
-            s.arr(key)?.strings()?.let { pref.set(it) }
+            s.arr(key)?.strings()?.let { pref.set(it); ok(key) }
         }
-        s.str("lang")?.let { code -> Lang.of(code)?.let { AppState.updateLang(it) } }
-        if (s.isJsonNull("topLang")) Features.updateTopLang(null)
-        else s.str("topLang")?.let { t ->
-            val code = t.lowercase().replace("_", "-")
-            if (code in TopLanguage.codes) Features.updateTopLang(code)
+        /** Premier texte valable parmi `keys`. */
+        fun str(vararg keys: String, valid: (String) -> Boolean): String? {
+            for (k in keys) s.str(k)?.takeIf(valid)?.let { ok(k); return it }
+            return null
+        }
+        fun int(vararg keys: String): Int? {
+            for (k in keys) s.int(k)?.let { ok(k); return it }
+            return null
+        }
+        /** Facteur (0,32 ; 1,25) → pour cent, comme les réglages d'Android. */
+        fun percent(vararg keys: String): Int? {
+            for (k in keys) s.dbl(k)?.takeIf { it.isFinite() }?.let { ok(k); return Math.round(it * 100).toInt() }
+            return null
+        }
+        val chat = com.mxfia19.twitchunblock.chat.ChatPrefs
+        val emotes = com.mxfia19.twitchunblock.chat.EmoteLists
+
+        str("lang") { Lang.of(it) != null }?.let { code -> Lang.of(code)?.let { AppState.updateLang(it) } }
+        if (s.isJsonNull("topLang")) {
+            Features.updateTopLang(null)
+            ok("topLang")
+        } else {
+            str("topLang") { it.lowercase().replace("_", "-") in TopLanguage.codes }
+                ?.let { Features.updateTopLang(it.lowercase().replace("_", "-")) }
         }
         bool("timestamps") { Features.chatTimestamps.set(it) }
         bool("keepDeleted") { Features.chatKeepDeleted.set(it) }
@@ -245,78 +341,94 @@ object Backup {
         bool("android_downloadWifiOnly", "ios_downloadWifiOnly") {
             com.mxfia19.twitchunblock.download.Downloads.updateWifiOnly(it)
         }
-        (s.str("android_cellularQuality") ?: s.str("ios_cellularQuality"))?.let {
-            if (it in Quality.CELLULAR_PREFS) AppState.updateCellularQuality(it)
-        }
+        str("android_cellularQuality", "ios_cellularQuality") { it in Quality.CELLULAR_PREFS }?.let { AppState.updateCellularQuality(it) }
         // Taille du chat de l'iPhone : en points aussi (10 à 20), bornée par IntPref.
-        (s.int("android_chatFontSize") ?: s.dbl("ios_chatFontSize")?.takeIf { it.isFinite() }?.let { Math.round(it).toInt() })
+        (int("android_chatFontSize") ?: s.dbl("ios_chatFontSize")?.takeIf { it.isFinite() }?.let { ok("ios_chatFontSize"); Math.round(it).toInt() })
             ?.let { Features.chatFontSize.set(it) }
         s.str("qualityPref")?.let { q ->
-            when {
-                q in Quality.PREFS -> AppState.updateQualityPref(q)
+            val pref = when {
+                q in Quality.PREFS -> q
                 q.toIntOrNull() != null -> {
                     val h = q.toInt()
-                    val near = if (h > 1080) "source" else listOf(1080, 720, 480, 360, 160).minByOrNull { kotlin.math.abs(it - h) }.toString()
-                    if (near in Quality.PREFS) AppState.updateQualityPref(near)
+                    if (h > 1080) "source" else listOf(1080, 720, 480, 360, 160).minByOrNull { kotlin.math.abs(it - h) }.toString()
                 }
+                else -> null
+            }
+            if (pref != null && pref in Quality.PREFS) {
+                AppState.updateQualityPref(pref)
+                ok("qualityPref")
             }
         }
-        importLater(s)
-        return Pair(added.size, fresh.size - added.size)
-    }
 
-    /** Réglages des séries 5 à 7 : ceux de l'iPhone (ios_…) valent aussi
-     *  quand Android n'a pas les siens. Une valeur invalide est ignorée. */
-    private fun importLater(s: JSONObject) {
-        val chat = com.mxfia19.twitchunblock.chat.ChatPrefs
-        val emotes = com.mxfia19.twitchunblock.chat.EmoteLists
-        fun bool(vararg keys: String, apply: (Boolean) -> Unit) {
-            for (k in keys) s.bool(k)?.let { apply(it); return }
+        // Séries 5 à 7.
+        val accent = s.str("themeAccent")?.takeIf { id -> com.mxfia19.twitchunblock.ui.AccentTheme.entries.any { it.id == id } }
+        val background = s.str("themeBg")?.takeIf { id -> com.mxfia19.twitchunblock.ui.BackgroundTheme.entries.any { it.id == id } }
+        if (accent != null || background != null) {
+            com.mxfia19.twitchunblock.ui.AppTheme.applyBackup(accent, background)
+            accent?.let { ok("themeAccent") }
+            background?.let { ok("themeBg") }
         }
-        fun int(vararg keys: String): Int? = keys.firstNotNullOfOrNull { s.int(it) }
-        fun str(vararg keys: String): String? = keys.firstNotNullOfOrNull { s.str(it) }
-        /** Facteur (0,32 ; 1,25) → pour cent, comme les réglages d'Android. */
-        fun percent(vararg keys: String): Int? = keys.firstNotNullOfOrNull { s.dbl(it) }?.let { Math.round(it * 100).toInt() }
-
-        if (s.has("themeAccent") || s.has("themeBg")) {
-            com.mxfia19.twitchunblock.ui.AppTheme.applyBackup(s.str("themeAccent"), s.str("themeBg"))
+        if (s.isJsonNull("customSource")) {
+            StreamPrefs.setCustomSource("")
+            ok("customSource")
+        } else {
+            s.str("customSource")?.let { if (StreamPrefs.setCustomSource(it)) ok("customSource") }
         }
-        if (s.isJsonNull("customSource")) StreamPrefs.setCustomSource("")
-        else s.str("customSource")?.let { StreamPrefs.setCustomSource(it) }
-        s.arr("hiddenEmotes")?.strings()?.let { emotes.replaceHidden(it) }
-        s.arr("favoriteEmotes")?.strings()?.let { emotes.replaceFavorites(it) }
-        s.str("timeFormat")?.takeIf { it in listOf("auto", "12", "24") }?.let { chat.timeFormat.set(it) }
-        s.arr("pinned")?.strings()?.let { Pins.merge(it) }
+        s.arr("hiddenEmotes")?.strings()?.let { emotes.replaceHidden(it); ok("hiddenEmotes") }
+        s.arr("favoriteEmotes")?.strings()?.let { emotes.replaceFavorites(it); ok("favoriteEmotes") }
+        str("timeFormat") { it in listOf("auto", "12", "24") }?.let { chat.timeFormat.set(it) }
         bool("pinnedByViewers") { BrowsePrefs.pinnedByViewers.set(it) }
         bool("homeList") { BrowsePrefs.homeList.set(it) }
         bool("android_higherQualities") { StreamPrefs.higherQualities.set(it) }
         bool("android_preferVertical") { StreamPrefs.preferVertical.set(it) }
         bool("android_syncSettings", "ios_syncSettings") { SettingsSync.enabled.set(it) }
-        (s.bool("android_hideAccount") ?: s.obj("ios_customization")?.bool("hideAccount"))?.let { NoAccount.pref.set(it) }
+        (s.bool("android_hideAccount")?.also { ok("android_hideAccount") } ?: s.obj("ios_customization")?.bool("hideAccount"))
+            ?.let { NoAccount.pref.set(it) }
         bool("android_chatSync", "ios_chatSync") { chat.sync.set(it) }
         int("android_chatSyncNudge", "ios_chatSyncNudge")?.let { chat.syncNudge.set(it) }
         bool("android_chatShowInput", "ios_chatShowInput") { chat.showInput.set(it) }
-        str("android_landscapeChat", "ios_landscapeChat")?.takeIf { it in listOf("column", "overlay", "hidden") }?.let { chat.landscape.set(it) }
-        str("android_chatOverlayLayout", "ios_chatOverlayLayout")
-            ?.takeIf { Regex("(left|right)-(full|top|bottom)").matches(it) }?.let { chat.overlay.set(it) }
+        str("android_landscapeChat", "ios_landscapeChat") { it in listOf("column", "overlay", "hidden") }?.let { chat.landscape.set(it) }
+        str("android_chatOverlayLayout", "ios_chatOverlayLayout") { Regex("(left|right)-(full|top|bottom)").matches(it) }
+            ?.let { chat.overlay.set(it) }
         percent("android_chatWidthRatio", "ios_chatWidthRatio")?.let { chat.widthPercent.set(it) }
         int("android_chatSpacing", "ios_chatSpacing")?.let { chat.spacing.set(it) }
         percent("android_chatBadgeScale", "ios_chatBadgeScale")?.let { chat.badgeScale.set(it) }
         percent("android_chatEmoteScale", "ios_chatEmoteScale")?.let { chat.emoteScale.set(it) }
-        (s.obj("android_customization") ?: s.obj("ios_customization"))?.let { BrowsePrefs.applyCustomization(it) }
+        for (k in listOf("android_customization", "ios_customization")) {
+            val c = s.obj(k) ?: continue
+            BrowsePrefs.applyCustomization(c)
+            ok(k)
+            break
+        }
         // Vitesse des VODs : un facteur de 0,25 à 2 chez le site et l'iPhone.
-        s.dbl("vodSpeed")?.takeIf { it in 0.25..2.0 }?.let { PlayerPrefs.vodSpeed.set(Math.round(it * 100).toInt()) }
+        s.dbl("vodSpeed")?.takeIf { it in 0.25..2.0 }?.let { PlayerPrefs.vodSpeed.set(Math.round(it * 100).toInt()); ok("vodSpeed") }
         bool("audioCompressor") { PlayerPrefs.setCompressor(it) }
         bool("android_fillScreen", "ios_fillScreen") { PlayerPrefs.fillScreen.set(it) }
         bool("android_dropsProgress", "ios_dropsProgress") { Features.dropsProgress.set(it) }
         bool("android_autoClaimDrops", "ios_autoClaimDrops") { Features.dropsAutoClaim.set(it) }
         bool("android_dropsNotify", "ios_dropsNotify") { Features.dropsNotify.set(it) }
         bool("android_cloudSync") { Features.cloudSync.set(it) }
+        bool("vodProgress") { VodResume.set(it) }
         // Source du direct : celle d'Android, sinon la première connue de
         // l'ordre de l'iPhone et du site (« as » en tête : l'ordre automatique).
-        val source = s.str("android_liveSource")?.takeIf { it in Config.LIVE_SOURCE_CHOICES }
+        val source = str("android_liveSource") { it in Config.LIVE_SOURCE_CHOICES }
             ?: s.arr("liveSourceOrder")?.strings()?.firstOrNull { it in Config.LIVE_SOURCES }
                 ?.let { if (it == Config.LIVE_SOURCES.first()) "auto" else it }
-        source?.let { AppState.updateLiveSource(it) }
+        if (source != null) {
+            AppState.updateLiveSource(source)
+            // L'ordre complet sert aussi (première source connue).
+            if (s.has("liveSourceOrder")) ok("liveSourceOrder")
+        }
+
+        // Ignorées : ni reprises, ni lues ailleurs (épinglées), ni doublon
+        // d'un réglage repris sous l'autre nom (android_… / ios_…).
+        fun twin(k: String): String? = when {
+            k.startsWith("android_") -> "ios_" + k.removePrefix("android_")
+            k.startsWith("ios_") -> "android_" + k.removePrefix("ios_")
+            else -> null
+        }
+        val keys = s.keys().asSequence().toList()
+        val ignored = keys.count { k -> k !in applied && k != "pinned" && twin(k)?.let { it in applied } != true }
+        return Pair(applied.size, ignored)
     }
 }

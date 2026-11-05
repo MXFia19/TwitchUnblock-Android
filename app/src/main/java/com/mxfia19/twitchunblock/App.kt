@@ -35,6 +35,8 @@ class App : Application(), ImageLoaderFactory {
         Usage.init()
         Ntfy.init()
         Feedback.init()
+        // Avis internes : premier plan suivi (bandeau ou notification).
+        com.mxfia19.twitchunblock.notify.InAppNotices.init(this)
         LiveNotifier.init(this)
         NetworkStatus.start(this)
         Logger.info("APP", "Lancement", "${BuildConfig.VERSION_NAME} (${BuildConfig.CHANNEL}) · Android ${Build.VERSION.RELEASE}")

@@ -71,7 +71,8 @@ object CloudSync {
         val user = AppState.user ?: return null
         val token = AppState.token ?: return null
         pending?.cancel()
-        val snapshot = Snapshot(History.items.toList(), AppState.vodPositions().mapValues { it.value / 1000.0 }, loadBase(user.id))
+        val snapshot = Snapshot(History.items.toList(), AppState.vodPositions().mapValues { it.value / 1000.0 },
+                                loadBase(user.id, CustomWorker.base))
         return scope.launch { mutex.withLock { exchange(user, token, true, snapshot) } }
     }
 
@@ -80,7 +81,9 @@ object CloudSync {
     private suspend fun exchange(user: TwitchUser, token: String, push: Boolean, snapshot: Snapshot?): Boolean {
         val live = snapshot == null
         val headers = mapOf("Authorization" to "Bearer $token")
-        val r = Http.get("${Config.API_URL}/api/sync/get?userId=${user.id}", headers, timeout = 15)
+        // Worker de la synchro : le personnel avec « Tout passer par ce Worker ».
+        val api = CustomWorker.base
+        val r = Http.get("$api/api/sync/get?userId=${user.id}", headers, timeout = 15)
         val json = if (r != null && r.code == 200) parseJson(r.body) else null
         if (json == null) {
             Logger.warn("SYNC", "Relecture impossible", r?.code?.let { "HTTP $it" } ?: "réseau")
@@ -98,7 +101,7 @@ object CloudSync {
                 if (v.isFinite() && v > 0) remoteProgress[id] = minOf(v, 7 * 24 * 3600.0)
             }
         }
-        val base = if (snapshot != null) snapshot.base else loadBase(user.id)
+        val base = if (snapshot != null) snapshot.base else loadBase(user.id, api)
         val merged = mergeHistory(snapshot?.history ?: History.items.toList(), remoteHistory, base?.first)
         val localProgress = snapshot?.progress ?: AppState.vodPositions().mapValues { it.value / 1000.0 }
         val progress = mergeProgress(localProgress, remoteProgress, base?.second)
@@ -108,7 +111,7 @@ object CloudSync {
             val known = History.items.map { it.key }.toHashSet()
             History.replace(merged)
             AppState.replaceVodPositions(progress.mapValues { (it.value * 1000).toLong() })
-            saveBase(user.id, remoteHistory, remoteProgress)
+            saveBase(user.id, remoteHistory, remoteProgress, api)
             val added = merged.count { it.key !in known }
             if (added > 0) Logger.info("SYNC", "Historique relu", "+$added")
         }
@@ -129,7 +132,7 @@ object CloudSync {
         val prog = JSONObject()
         sent.forEach { (id, t) -> prog.put(id, t) }
         val body = JSONObject().put("userId", user.id).put("data", JSONObject().put("history", hist).put("progress", prog))
-        val post = Http.postJson("${Config.API_URL}/api/sync/post", body.toString(), headers, timeout = 20)
+        val post = Http.postJson("$api/api/sync/post", body.toString(), headers, timeout = 20)
         if (post == null || post.code !in 200..299) {
             Logger.warn("SYNC", "Envoi refusé", post?.code?.let { "HTTP $it" } ?: "réseau")
             if (live) failed = true
@@ -142,11 +145,11 @@ object CloudSync {
         if (!live) {
             // Toujours déconnecté : sa base suit ce dernier envoi (reprise s'il revient).
             if (AppState.token == null && parseJson(AppState.prefs.getString("sync_base", null))?.str("user") == user.id) {
-                saveBase(user.id, merged, nextProgress)
+                saveBase(user.id, merged, nextProgress, api)
             }
             return true
         }
-        saveBase(user.id, merged, nextProgress)
+        saveBase(user.id, merged, nextProgress, api)
         if (History.revision != revision) scheduleSoon()
         lastSync = System.currentTimeMillis()
         failed = false
@@ -188,10 +191,13 @@ object CloudSync {
         return out
     }
 
-    /** Ce que le serveur avait au dernier échange de ce compte : dates des éléments, progression. */
-    private fun loadBase(userId: String): Pair<Map<String, Double>, Map<String, Double>>? {
+    /** Ce que le serveur avait au dernier échange de ce compte : dates des
+     *  éléments, progression. Celle d'un autre Worker ne vaut rien ici (sans
+     *  « worker » : le principal, seul utilisé avant) : réunion simple. */
+    private fun loadBase(userId: String, api: String): Pair<Map<String, Double>, Map<String, Double>>? {
         val o = parseJson(AppState.prefs.getString("sync_base", null)) ?: return null
         if (o.str("user") != userId) return null
+        if ((o.str("worker") ?: Config.API_URL) != api) return null
         fun map(name: String): Map<String, Double> {
             val m = HashMap<String, Double>()
             val obj = o.obj(name) ?: return m
@@ -205,11 +211,21 @@ object CloudSync {
         return Pair(map("history"), map("progress"))
     }
 
-    private fun saveBase(userId: String, history: List<HistoryItem>, progress: Map<String, Double>) {
+    private fun saveBase(userId: String, history: List<HistoryItem>, progress: Map<String, Double>, api: String) {
         val h = JSONObject()
         history.forEach { h.put(it.key, it.addedAt) }
         val p = JSONObject()
         progress.forEach { (k, v) -> p.put(k, v) }
-        AppState.prefs.edit().putString("sync_base", JSONObject().put("user", userId).put("history", h).put("progress", p).toString()).apply()
+        AppState.prefs.edit().putString("sync_base", JSONObject().put("user", userId).put("worker", api)
+            .put("history", h).put("progress", p).toString()).apply()
+    }
+
+    /** « Reprendre les VODs » rallumé : la base oublie les positions, pour
+     *  que celles du compte reviennent au prochain échange (sinon prises
+     *  pour des suppressions faites ici). */
+    fun forgetProgressBase() {
+        val o = parseJson(AppState.prefs.getString("sync_base", null)) ?: return
+        o.put("progress", JSONObject())
+        AppState.prefs.edit().putString("sync_base", o.toString()).apply()
     }
 }

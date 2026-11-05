@@ -32,6 +32,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -64,6 +65,7 @@ import com.mxfia19.twitchunblock.feedback.Feedback
 import com.mxfia19.twitchunblock.notify.LiveNotifier
 import com.mxfia19.twitchunblock.notify.NotifChannels
 import com.mxfia19.twitchunblock.notify.Ntfy
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Ouvre un lien. Sans app pour l'ouvrir (la plupart des TV n'ont pas de
@@ -344,7 +346,18 @@ fun FeedbackScreen(nav: Navigator) {
             adding = false
         }
     }
-    LaunchedEffect(Unit) { Feedback.refresh() }
+    // Liste à jour toute seule tant qu'elle est affichée (états, réponses).
+    LaunchedEffect(Unit) {
+        while (true) {
+            Feedback.refresh(force = true)
+            delay(30_000)
+        }
+    }
+    // À l'écran, une réponse s'y voit : pas de bandeau par-dessus.
+    DisposableEffect(Unit) {
+        Feedback.inboxViewers++
+        onDispose { Feedback.inboxViewers-- }
+    }
     Column(Modifier.fillMaxSize()) {
         PageHeader(AppState.t("feedback"), nav)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 12.dp).imePadding()) {
@@ -450,9 +463,21 @@ fun FeedbackThreadScreen(id: String, nav: Navigator) {
             adding = false
         }
     }
+    // Discussion relue toute seule tant qu'elle est ouverte ; terminée, elle
+    // n'est lue qu'à l'ouverture (une réponse d'ici la remet au suivi).
     LaunchedEffect(id) {
-        Feedback.refresh()
         Feedback.markSeen(id)
+        var opening = true
+        while (true) {
+            Feedback.refresh(force = true, including = if (opening) setOf(id) else emptySet())
+            opening = false
+            Feedback.markSeen(id)
+            delay(20_000)
+        }
+    }
+    DisposableEffect(id) {
+        Feedback.inboxViewers++
+        onDispose { Feedback.inboxViewers-- }
     }
     if (report == null) {
         Column(Modifier.fillMaxSize()) {

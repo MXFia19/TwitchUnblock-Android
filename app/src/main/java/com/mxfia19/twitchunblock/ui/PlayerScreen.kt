@@ -591,6 +591,8 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                             else com.mxfia19.twitchunblock.cast.CastManager.openPicker(context)
                         })
                     }
+                    // Signaler un bug ou une idée depuis le lecteur, comme l'iPhone ; il reste dessous.
+                    DropdownMenuItem(text = { Text(AppState.t("feedback")) }, onClick = { open = false; nav.push(Screen.Feedback) })
                 }
             }
         }

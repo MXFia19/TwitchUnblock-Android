@@ -1,4 +1,11 @@
 {
+  "a6_activate_browser": "Open it in my browser instead",
+  "a6_activate_in_app": "Another account? Open it in the app (Twitch will ask which account)",
+  "a6_activate_page_sub": "A page without your browser's account: sign in with the account you want, then confirm the code. The app doesn't read or keep your credentials.",
+  "a6_ob_library_text": "Your downloaded VODs, to watch offline with their chat, and the ones you've started.",
+  "a6_switch_account_sub": "This account stays until the other one is connected: on the twitch.tv/activate page opened in the app, Twitch asks for the account; sign in with the other one. This one is kept below so you can switch back.",
+  "a6_vod_progress": "Resume VODs",
+  "a6_vod_progress_sub": "Remembers where you stopped in each VOD: Continue watching on the home screen and the progress bar on thumbnails. Off, no position is kept on this device (or sent to your account) and VODs start from the beginning.",
   "about": "About",
   "about_channel": "About {u}",
   "about_desc": "Watch Twitch VODs and live streams without a subscription, at full quality. Nothing to set up.",

@@ -81,6 +81,8 @@ class MainActivity : ComponentActivity() {
             TUTheme {
                 val nav = remember { navigator }
                 PhoneApp(nav)
+                // Bandeau des avis internes et visite guidée, par-dessus (AppOverlays.kt).
+                AppOverlays(nav)
             }
         }
     }
@@ -110,6 +112,8 @@ class MainActivity : ComponentActivity() {
 
     /** twitchunblock://live/<chaîne> (notification touchée) ; pseudo validé. */
     private fun handleLink(intent: Intent?) {
+        // Avis touché (réponse à un signalement, drop) : sa page.
+        if (openFromNotice(intent, navigator)) return
         val login = Links.liveLink(intent?.data) ?: return
         // « Regarder » ne ferme pas la notification d'elle-même.
         NotificationManagerCompat.from(this).cancel(LiveNotifier.notificationId(login))
