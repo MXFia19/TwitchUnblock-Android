@@ -3,7 +3,9 @@ package com.mxfia19.twitchunblock.chat
 import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.Gql
 import com.mxfia19.twitchunblock.core.Logger
+import com.mxfia19.twitchunblock.core.arr
 import com.mxfia19.twitchunblock.core.obj
+import com.mxfia19.twitchunblock.core.objects
 import com.mxfia19.twitchunblock.core.str
 import java.util.concurrent.ConcurrentHashMap
 
@@ -19,8 +21,12 @@ object ChatProfiles {
     class Profile(val login: String, val name: String, val avatar: String?, val createdAt: Long?)
 
     /** `type` : GLOBALS, SMILIES, SUBSCRIPTIONS, CHANNEL_POINTS… (tel que
-     *  Twitch le donne) ; `tier` : niveau d'une emote d'abonné ; `owner` : sa chaîne. */
-    class TwitchEmote(val type: String?, val tier: Int?, val owner: String?)
+     *  Twitch le donne) ; `tier` : niveau d'une emote d'abonné ; `owner` : sa
+     *  chaîne (nom affiché), `ownerLogin`, son avatar et si elle est en direct ;
+     *  `sameTier` : emotes d'abonné du même niveau (id, nom), celle-ci comprise. */
+    class TwitchEmote(val type: String?, val tier: Int?, val owner: String?, val ownerLogin: String? = null,
+                      val ownerAvatar: String? = null, val ownerLive: Boolean = false,
+                      val sameTier: List<Pair<String, String>> = emptyList())
 
     private val profiles = ConcurrentHashMap<String, Profile>()
     private val emotes = ConcurrentHashMap<String, TwitchEmote>()
@@ -63,10 +69,21 @@ object ChatProfiles {
     /** null : emote inconnue, ou Twitch n'a pas répondu. */
     suspend fun twitchEmote(id: String): TwitchEmote? {
         emotes[id]?.let { return it }
-        val q = "query(\$id: ID!) { emote(id: \$id) { type subscriptionTier owner { displayName } } }"
+        val q = "query(\$id: ID!) { emote(id: \$id) { type subscriptionTier owner { login displayName " +
+            "profileImageURL(width: 70) stream { id } subscriptionProducts { tier emotes { id token } } } } }"
         val e = Gql.request(q, Gql.vars("id" to id))?.obj("emote") ?: return null
         // « TIER_1 » → 1.
         val tier = e.str("subscriptionTier")?.removePrefix("TIER_")?.toIntOrNull()
-        return TwitchEmote(e.str("type"), tier, e.obj("owner")?.str("displayName")).also { emotes[id] = it }
+        val o = e.obj("owner")
+        // Emotes d'abonné du même niveau (les produits disent « 1000 »).
+        val same = if (tier == null) emptyList() else o?.arr("subscriptionProducts")?.objects().orEmpty()
+            .firstOrNull { it.opt("tier")?.toString() == "${tier}000" }
+            ?.arr("emotes")?.objects().orEmpty().mapNotNull { x ->
+                val xid = x.str("id")?.takeIf { it.isNotEmpty() } ?: return@mapNotNull null
+                Pair(xid, x.str("token") ?: "")
+            }
+        return TwitchEmote(e.str("type"), tier, o?.str("displayName"), o?.str("login"),
+                           o?.str("profileImageURL")?.takeIf { it.startsWith("https://") },
+                           o?.obj("stream") != null, same).also { emotes[id] = it }
     }
 }

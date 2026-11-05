@@ -174,57 +174,15 @@ fun sleepLabel(minutes: Int): String = when (minutes) {
     else -> "$minutes ${AppState.t("sleep_minutes")}"
 }
 
-/** Chat rejoué d'une VOD : suit la position de lecture. */
+/** Chat rejoué d'une VOD, ou d'un clip (sa VOD d'origine) : suit la position
+ *  de lecture (ChatReplay.kt). */
 @Composable
-fun rememberVodChat(session: PlaybackSession, show: Boolean): VodChat? {
-    val scope = rememberCoroutineScope()
-    val id = if (show && session.state is PlaybackSession.State.Ready) session.vodId else null
-    val offline = session.isOffline
-    val chat = remember(id, offline) {
-        id?.let { VodChat(it, scope, if (offline) Downloads.chatFile(it) else null) }
-    }
-    LaunchedEffect(chat) {
-        val c = chat ?: return@LaunchedEffect
-        c.start()
-        while (true) {
-            c.update(session.player.currentPosition / 1000.0)
-            delay(500)
-        }
-    }
-    return chat
-}
+fun rememberVodChat(session: PlaybackSession, show: Boolean): VodChat? = rememberReplayChat(session, show)
 
-/** Messages du chat rejoué (lecture seule), qui suivent le bas. `background` :
- *  transparent quand il est posé sur l'image (paysage). Sans `fontSize` :
- *  tailles, espacement et heure des réglages du chat, comme ChatPanel (la TV
- *  passe les siennes). */
+/** Messages du chat rejoué (ChatReplay.kt) : la TV passe ses tailles. */
 @Composable
 fun VodChatList(chat: VodChat, modifier: Modifier = Modifier, emoteSize: Int? = null, fontSize: Int? = null,
-                background: Color = TU.bg) {
-    val list = rememberLazyListState()
-    // Dernier message en clé : la liste plafonnée (200) garde la même taille.
-    LaunchedEffect(chat.messages.size, chat.messages.lastOrNull()?.id) {
-        if (chat.messages.isNotEmpty()) list.scrollToItem(chat.messages.size - 1)
-    }
-    val settings = fontSize == null
-    val font = fontSize ?: Features.chatFontSize.value
-    val emote = emoteSize?.sp ?: (font * 1.7f * ChatPrefs.emoteScale.value / 100f).sp
-    val badge = if (settings) (font * 1.19f * ChatPrefs.badgeScale.value / 100f).sp else TextUnit.Unspecified
-    val vPad = if (settings) (ChatPrefs.spacing.value / 2f).dp else 3.dp
-    // Heure : la position du message dans la VOD (VodChat).
-    val timestamp = settings && Features.chatTimestamps.value
-    Box(modifier.background(background)) {
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
-            items(chat.messages, key = { it.id }) { m ->
-                ChatMessageRow(m, emoteSize = emote, fontSize = font.sp, timestamp = timestamp, badgeSize = badge, vPad = vPad)
-            }
-        }
-        if (chat.messages.isEmpty()) {
-            Text(AppState.t(if (chat.error) "chat_unreachable" else "tv_chat_waiting"), color = TU.muted, fontSize = 13.sp,
-                 modifier = Modifier.align(Alignment.Center).padding(16.dp))
-        }
-    }
-}
+                background: Color = TU.bg) = ReplayChatList(chat, modifier, emoteSize, fontSize, background)
 
 /** Écran du lecteur ; la session est portée par PhoneApp (elle survit à un
  *  écran ouvert par-dessus). */

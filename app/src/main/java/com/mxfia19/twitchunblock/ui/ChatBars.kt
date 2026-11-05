@@ -245,9 +245,10 @@ fun UsernameColorRow() {
     if (open) UsernameColorDialog { open = false }
 }
 
-/** Les couleurs nommées de Twitch ; un toucher l'applique (Helix). */
+/** Les couleurs nommées de Twitch ; un toucher l'applique (Helix). Aussi
+ *  dans le menu ⋯ du chat (ChatMenu.kt). */
 @Composable
-private fun UsernameColorDialog(onClose: () -> Unit) {
+internal fun UsernameColorDialog(onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
     var pending by remember { mutableStateOf<String?>(null) }
     var applied by remember { mutableStateOf<String?>(null) }

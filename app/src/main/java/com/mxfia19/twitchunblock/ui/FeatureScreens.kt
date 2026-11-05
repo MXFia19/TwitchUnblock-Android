@@ -251,6 +251,8 @@ fun PointsTrackerScreen(nav: Navigator) {
 @Composable
 private fun TrackerList(nav: Navigator) {
     Column(Modifier.fillMaxSize()) {
+        // PointsNow.kt : les chaînes qui rapportent en ce moment.
+        PointsNowCard()
         Text(AppState.t("points_tracker_total").replace("{m}", Format.duration(PointsTracker.totalMinutes * 60))
                  .replace("{p}", ChannelPoints.format(PointsTracker.totalPoints)),
              color = TU.text, fontSize = 14.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))

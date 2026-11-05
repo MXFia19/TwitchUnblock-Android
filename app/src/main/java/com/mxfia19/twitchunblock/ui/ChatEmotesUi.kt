@@ -84,20 +84,27 @@ fun favoriteEmotes(all: List<Emotes.Emote>, codes: List<String>): List<Emotes.Em
 }
 
 /** Emote du sélecteur en jeton de message (pour sa fiche). */
-fun Emotes.Emote.asToken(): ChatToken.Emote =
-    ChatToken.Emote(name, url, ratio, zeroWidth, source.ifEmpty { "twitch" }, author = author, channel = channel)
+fun Emotes.Emote.asToken(): ChatToken.Emote {
+    val twitch = source.isEmpty() || source == "twitch"
+    return ChatToken.Emote(name, url, ratio, zeroWidth, if (twitch) "twitch" else source, twitchId = if (twitch) id else null,
+                           author = author, channel = channel, sourceId = if (twitch) null else id, original = original,
+                           personal = personal, locked = locked)
+}
 
 /** Case du sélecteur : toucher, l'ajouter au message ; appui long, sa fiche,
- *  les favoris ou copier son nom. */
+ *  les favoris ou copier son nom. Verrouillée (emote d'abonné que le compte
+ *  n'a pas) : grisée avec un cadenas, le toucher ouvre sa fiche (appelant). */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun PickerEmote(e: Emotes.Emote, onInfo: (ChatToken.Emote) -> Unit, onPick: () -> Unit) {
     var menu by remember { mutableStateOf(false) }
     val clipboard = LocalClipboardManager.current
-    Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).combinedClickable(onClick = onPick, onLongClick = { menu = true })
+    Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).lockedEmote(e.locked)
+            .combinedClickable(onClick = onPick, onLongClick = { menu = true })
             .padding(4.dp),
         contentAlignment = Alignment.Center) {
-        AsyncImage(model = e.url, contentDescription = e.name, modifier = Modifier.fillMaxSize())
+        AsyncImage(model = e.url, contentDescription = e.name, alpha = if (e.locked) 0.35f else 1f, modifier = Modifier.fillMaxSize())
+        if (e.locked) LockBadge(Modifier.align(Alignment.BottomEnd))
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(text = { Text(AppState.t("chat_info_open")) }, onClick = {
                 menu = false

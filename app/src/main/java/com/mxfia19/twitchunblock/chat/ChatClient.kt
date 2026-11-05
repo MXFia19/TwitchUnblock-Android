@@ -8,6 +8,7 @@ import androidx.compose.ui.text.input.TextFieldValue
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Auth
 import com.mxfia19.twitchunblock.core.Features
+import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.Gql
 import com.mxfia19.twitchunblock.core.Http
 import com.mxfia19.twitchunblock.core.Logger
@@ -60,6 +61,16 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
      *  badges arrivés après eux) : le chat se recolle en bas. */
     var assetsRevision by mutableStateOf(0)
         private set
+    /** Personnes présentes (liste NAMES puis JOIN/PART de l'IRC) : Twitch ne
+     *  les envoie que sur les chaînes de taille modeste. */
+    private val present = HashSet<String>()
+    var chattersVersion by mutableStateOf(0)
+        private set
+    /** Twitch a envoyé au moins une liste de noms pour ce salon. */
+    var presenceSupported by mutableStateOf(false)
+        private set
+    /** Chaîne suivie en direct par BetterTTV (emotes ajoutées, BTTV Pro). */
+    private var bttvChannel: String? = null
 
     /** État : le sélecteur d'emotes suit l'identifiant donné par ROOMSTATE. */
     private var channelId by mutableStateOf<String?>(null)
@@ -115,7 +126,10 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
             Badges.loadGlobal()
             refreshAssets()
         }
-        channelIdHint?.let { loadChannelAssets(it) }
+        channelIdHint?.let {
+            loadChannelAssets(it)
+            followBttv(it)
+        }
         if (Features.chatLoadHistory.value) scope.launch { loadHistory() }
         // Règles et modes : utiles seulement à qui peut écrire.
         if (AppState.user != null) scope.launch { loadChatSettings() }
@@ -124,6 +138,8 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
 
     fun stop() {
         stopped = true
+        bttvChannel?.let { BttvLive.leave(it) }
+        bttvChannel = null
         reconnectJob?.cancel()
         rejoinJob?.cancel()
         releaseJob?.cancel()
@@ -143,6 +159,48 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         attempts = 0
         Logger.info("CHAT", "Nouvel essai avec le compte", "#$channel")
         reconnectNow()
+    }
+
+    /** Menu ⋯ : « Reconnecter le chat », sans quitter le direct. */
+    fun reconnect() {
+        if (stopped) return
+        attempts = 0
+        Logger.info("CHAT", "Reconnexion demandée", "#$channel")
+        reconnectNow()
+    }
+
+    /** Menu ⋯ : emotes et badges oubliés puis relus ; les messages déjà là
+     *  sont refaits avec eux. */
+    fun reloadAssets() {
+        if (stopped) return
+        Emotes.reset()
+        Badges.reset()
+        TwitchEmotes.reset()
+        scope.launch {
+            Emotes.loadGlobal()
+            refreshAssets()
+        }
+        scope.launch {
+            Badges.loadGlobal()
+            refreshAssets()
+        }
+        channelId?.let { loadChannelAssets(it) }
+        Logger.success("CHAT", "Emotes et badges rechargés", "#$channel")
+    }
+
+    /** Personnes présentes, par ordre alphabétique. */
+    fun chatters(): List<String> = present.sorted()
+
+    /** Fil de réponses dont la racine est `rootId`, du plus ancien au plus récent. */
+    fun threadMessages(rootId: String): List<ChatMessage> =
+        messages.filter { it.id == rootId || it.threadId == rootId }.sortedBy { it.time }
+
+    /** Emotes BetterTTV en direct de cette chaîne (une seule à la fois). */
+    private fun followBttv(id: String) {
+        if (stopped || bttvChannel == id) return
+        bttvChannel?.let { BttvLive.leave(it) }
+        bttvChannel = id
+        BttvLive.join(id)
     }
 
     private fun readOnlyKey(): String? {
@@ -201,7 +259,7 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         val id = channelId
         fun redo(m: ChatMessage): ChatMessage {
             if (m.login.isEmpty()) return m
-            val tokens = ChatText.retokenize(m.tokens, id)
+            val tokens = ChatText.retokenize(m.tokens, id, m.userId)
             val badges = m.badgeIds.mapNotNull { Badges.url(it, id) }
             return if (tokens == m.tokens && badges == m.badges) m else m.copy(tokens = tokens, badges = badges)
         }
@@ -275,6 +333,9 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         attempts++
         val wait = minOf(30_000L, 1000L shl minOf(attempts - 1, 5))
         Logger.warn("CHAT", "Connexion perdue", "$why · nouvel essai dans ${wait / 1000} s")
+        // Troisième échec d'affilée (VPN, réseau filtré…) : dit dans le chat,
+        // avec « Reconnecter le chat » du menu ⋯, au lieu de rester figé.
+        if (attempts == 3) add(system(AppState.t("chat_unreachable")))
         reconnectJob?.cancel()
         reconnectJob = scope.launch {
             delay(wait)
@@ -322,6 +383,25 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
                     line.tags["color"]?.let { myColor = ChatColors.parse(it, AppState.user?.login ?: "") }
                     line.tags["badges"]?.let { b -> myBadges = b.split(',').filter { it.contains('/') } }
                     line.tags["display-name"]?.takeIf { it.isNotEmpty() }?.let { myName = it }
+                    // Jeux d'emotes du compte : « Mes emotes », emotes d'abonné
+                    // verrouillées, écho de nos messages.
+                    val login = AppState.user?.login
+                    val sets = line.tags["emote-sets"]?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() }?.toSet()
+                    if (login != null && usedToken != null && !sets.isNullOrEmpty()) {
+                        scope.launch { TwitchEmotes.setUserSets(sets, login) }
+                    }
+                }
+                "353" -> {
+                    // Liste des présents à l'arrivée : « = #salon :nom1 nom2… ».
+                    line.trailing?.split(' ')?.filter { it.isNotEmpty() }?.let { names ->
+                        present.addAll(names.map { it.lowercase() })
+                        presenceSupported = true
+                        chattersVersion++
+                    }
+                }
+                "366" -> presenceSupported = true
+                "JOIN" -> (line.tags["login"] ?: line.nick)?.lowercase()?.let { who ->
+                    if (present.add(who)) chattersVersion++
                 }
                 "ROOMSTATE" -> {
                     roomState(line.tags)
@@ -335,6 +415,7 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
                             loadChannelAssets(id)
                             refreshAssets()
                         }
+                        followBttv(id)
                     }
                 }
                 "NOTICE" -> handleNotice(line)
@@ -344,6 +425,7 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
                     val who = (line.tags["login"] ?: line.nick)?.lowercase()
                     val me = AppState.user?.login?.lowercase()
                     if (who != null && who == me && usedToken != null && !readOnly) rejoinWithAccount("PART")
+                    else if (who != null && present.remove(who)) chattersVersion++
                 }
                 "RECONNECT" -> reconnectNow()
             }
@@ -541,15 +623,28 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
      *  de la personne s'il y en a un. Annonce (/announce) : system-msg vide, le
      *  message mis en avant dans sa couleur, comme buildNotice (iOS). Partagé
      *  par le direct et l'historique. */
-    private fun noticeMessage(line: IrcLine): ChatMessage? {
-        val announce = line.tags["msg-id"] == "announcement"
-        val systemText = if (announce) null else line.tags["system-msg"]?.takeIf { it.isNotBlank() }
-        val base = build(line)
+    private fun noticeMessage(line: IrcLine, historical: Boolean = false): ChatMessage? {
+        val kind = line.tags["msg-id"]
+        val announce = kind == "announcement"
+        var systemText = if (announce) null else line.tags["system-msg"]?.takeIf { it.isNotBlank() }
+        var raider: String? = null
+        if (kind == "raid") {
+            // Raid entrant : la chaîne qui arrive (lien vers elle) et le nombre
+            // de spectateurs mis en forme, dans la langue de l'app.
+            raider = line.tags["msg-param-login"]?.lowercase()?.takeIf { Regex("^[a-z0-9_]{1,25}$").matches(it) }
+            val who = line.tags["msg-param-displayName"]?.takeIf { it.isNotBlank() } ?: raider
+            val count = line.tags["msg-param-viewerCount"]?.toIntOrNull()
+            if (who != null && count != null) {
+                systemText = AppState.tn("c6_raid_incoming", count).replace("{u}", who).replace("{n}", Format.viewers(count))
+            }
+        }
+        val built = build(line, historical)
+        val base = if (raider != null) built?.copy(raider = raider) else built
         if (base == null || base.tokens.isEmpty()) {
             // Sans texte de la personne (abonnement offert, raid) : la notice
             // seule ; chatLine n'écrit pas de « Pseudo : » vide dessous.
-            if (systemText == null) return null
-            return (base ?: system(systemText)).copy(notice = systemText)
+            val notice = systemText ?: return null
+            return (base ?: system(notice)).copy(notice = notice, historical = historical, raider = raider)
         }
         if (announce) return base.copy(accent = announceColor(line.tags["msg-param-color"]))
         return base.copy(notice = systemText)
@@ -578,7 +673,7 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         }
     }
 
-    private fun build(line: IrcLine): ChatMessage? {
+    private fun build(line: IrcLine, historical: Boolean = false): ChatMessage? {
         val login = line.tags["login"] ?: line.nick ?: return null
         var text = line.trailing ?: ""
         var action = false
@@ -589,7 +684,9 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         }
         if (text.isEmpty() && line.command == "PRIVMSG") return null
         val me = AppState.user?.login?.lowercase()
-        val tokens = if (text.isEmpty()) emptyList() else ChatText.tokens(text, line.tags["emotes"], channelId)
+        val userId = line.tags["user-id"]?.takeIf { it.isNotEmpty() }
+        val tokens = if (text.isEmpty()) emptyList()
+                     else ChatText.tokens(text, line.tags["emotes"], channelId, userId, line.tags["gifs"])
         val highlight = me != null && login != me && mention(me).containsMatchIn(text.lowercase())
         val badgeIds = (line.tags["badges"] ?: "").split(',').filter { it.contains('/') }
         return ChatMessage(
@@ -603,32 +700,60 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
             highlight = highlight,
             time = line.tags["tmi-sent-ts"]?.toLongOrNull() ?: System.currentTimeMillis(),
             badgeIds = badgeIds,
+            userId = userId,
+            replyTo = line.tags["reply-parent-display-name"]?.takeIf { it.isNotEmpty() }
+                ?: line.tags["reply-parent-user-login"]?.takeIf { it.isNotEmpty() },
+            replyBody = line.tags["reply-parent-msg-body"]?.takeIf { it.isNotEmpty() },
+            parentId = line.tags["reply-parent-msg-id"]?.takeIf { it.isNotEmpty() },
+            threadId = (line.tags["reply-thread-parent-msg-id"] ?: line.tags["reply-parent-msg-id"])?.takeIf { it.isNotEmpty() },
+            firstMessage = line.tags["first-msg"] == "1",
+            historical = historical,
         )
     }
 
-    /** Envoie un message (compte connecté). true s'il est parti. */
-    fun send(input: String): Boolean {
+    /** Envoie un message (compte connecté). true s'il est parti. `replyTo` :
+     *  le message auquel il répond (fil de réponse, comme sur Twitch). */
+    fun send(input: String, replyTo: ChatMessage? = null): Boolean {
         val ws = socket ?: return false
         val text = input.replace('\n', ' ').trim()
-        if (text.isEmpty() || !canSend) return false
-        if (!ws.send("PRIVMSG #$channel :$text")) return false
+        if (text.isEmpty() || text.length > 500 || !canSend) return false
+        // Identifiant venu des tags IRC : vérifié, un retour à la ligne y
+        // ajouterait une commande IRC.
+        val parent = replyTo?.id?.takeIf { id -> id.isNotEmpty() && id.all { it.isLetterOrDigit() || it == '-' } }
+        val line = if (parent != null) "@reply-parent-msg-id=$parent PRIVMSG #$channel :$text" else "PRIVMSG #$channel :$text"
+        if (!ws.send(line)) return false
         val me = AppState.user ?: return true
         // Twitch ne renvoie pas nos messages : écho local (les commandes
         // « / » autres que /me n'en ont pas).
         if (text.startsWith("/") && !text.startsWith("/me ")) return true
         val action = text.startsWith("/me ")
         val body = if (action) text.removePrefix("/me ") else text
+        val room = channelId
+        val parentMsg = if (parent != null) replyTo else null
         add(ChatMessage(
             id = "local-${System.nanoTime()}",
             login = me.login,
             name = myName ?: me.displayName,
             color = myColor ?: ChatColors.parse(null, me.login),
             badges = myBadges.mapNotNull { Badges.url(it, channelId) },
-            tokens = ChatText.tokens(body, null, channelId),
+            // Sans tag emotes : les emotes Twitch retrouvées par leur nom
+            // (vues dans ce chat, ou celles du compte).
+            tokens = ChatText.tokens(body, null, room, twitchLookup = { w -> TwitchEmotes.byName(w, room) }),
             action = action,
             badgeIds = myBadges,
+            replyTo = parentMsg?.name,
+            replyBody = parentMsg?.tokens?.joinToString("") { textOf(it) }?.take(200),
+            parentId = parent,
+            threadId = parentMsg?.let { it.threadId ?: it.id },
         ))
         return true
+    }
+
+    private fun textOf(t: ChatToken): String = when (t) {
+        is ChatToken.Text -> t.text
+        is ChatToken.Emote -> t.name
+        is ChatToken.Mention -> t.name
+        is ChatToken.Link -> t.url
     }
 
     /** 50 derniers messages (recent-messages.robotty.de), placés avant ceux reçus
@@ -651,7 +776,7 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
             val line = Irc.parse(raw) ?: continue
             when (line.command) {
                 "PRIVMSG" -> {
-                    val m = build(line) ?: continue
+                    val m = build(line, historical = true) ?: continue
                     // Supprimé depuis par la modération (marqué par le service).
                     if (line.tags["rm-deleted"] == "1") {
                         if (keep) old += m.copy(deleted = true)
@@ -659,7 +784,7 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
                         old += m
                     }
                 }
-                "USERNOTICE" -> noticeMessage(line)?.let { old += it }
+                "USERNOTICE" -> noticeMessage(line, historical = true)?.let { old += it }
                 "CLEARMSG" -> line.tags["target-msg-id"]?.let { id -> moderate { it.id == id } }
                 "CLEARCHAT" -> {
                     val target = line.trailing?.lowercase()
@@ -722,7 +847,11 @@ object ChatColors {
 /** Découpe d'un message en morceaux : emotes Twitch (tag « emotes », par
  *  points de code), emotes 7TV/BTTV/FFZ par mot, mentions, liens. */
 object ChatText {
-    fun tokens(text: String, emotesTag: String?, channelId: String?): List<ChatToken> {
+    /** `userId` : l'auteur (ses emotes BTTV Pro) ; `gifsTag` : GIF du clavier
+     *  GIF de Twitch ; `twitchLookup` : emote Twitch d'un mot sans tag emotes
+     *  (écho de nos messages). */
+    fun tokens(text: String, emotesTag: String?, channelId: String?, userId: String? = null, gifsTag: String? = null,
+               twitchLookup: ((String) -> ChatToken.Emote?)? = null): List<ChatToken> {
         val cps = text.codePoints().toArray()
         // Plages des emotes Twitch : début → (fin, id).
         val ranges = HashMap<Int, Pair<Int, String>>()
@@ -736,19 +865,38 @@ object ChatText {
                 }
             }
         }
+        // GIF : « début-fin|id|adresse », positions en points de code comme
+        // les emotes ; GIPHY seulement (règle de Twitch).
+        val gifs = HashMap<Int, Pair<Int, String>>()
+        if (!gifsTag.isNullOrEmpty()) {
+            for (m in gifRe.findAll(gifsTag)) {
+                val a = m.groupValues[1].toIntOrNull() ?: continue
+                val b = m.groupValues[2].toIntOrNull() ?: continue
+                val url = m.groupValues[3]
+                val host = try { java.net.URI(url).host?.lowercase() } catch (e: Exception) { null } ?: continue
+                if (host != "giphy.com" && !host.endsWith(".giphy.com")) continue
+                if (a in 0..b && b < cps.size) gifs[a] = Pair(b, url)
+            }
+        }
         val out = mutableListOf<ChatToken>()
         val segment = StringBuilder()
         fun flushSegment() {
             if (segment.isEmpty()) return
-            words(segment.toString(), channelId, out)
+            words(segment.toString(), channelId, out, userId, twitchLookup)
             segment.setLength(0)
         }
         var i = 0
         while (i < cps.size) {
             val r = ranges[i]
-            if (r != null) {
+            val g = gifs[i]
+            if (g != null) {
+                flushSegment()
+                out += ChatToken.Emote(String(cps, i, g.first - i + 1).trim(), g.second, ratio = 1.5f, source = "gif")
+                i = g.first + 1
+            } else if (r != null) {
                 flushSegment()
                 val name = String(cps, i, r.first - i + 1)
+                TwitchEmotes.register(r.second, name)
                 out += ChatToken.Emote(name, "https://static-cdn.jtvnw.net/emoticons/v2/${r.second}/default/dark/2.0",
                                        twitchId = r.second)
                 i = r.first + 1
@@ -764,17 +912,17 @@ object ChatText {
     /** Message déjà découpé, refait avec les emotes 7TV/BTTV/FFZ connues
      *  maintenant (chargées après lui, ou d'une autre chaîne) ; celles de
      *  Twitch (tag « emotes ») restent. Les morceaux recollés redonnent le texte. */
-    fun retokenize(tokens: List<ChatToken>, channelId: String?): List<ChatToken> {
+    fun retokenize(tokens: List<ChatToken>, channelId: String?, userId: String? = null): List<ChatToken> {
         val out = mutableListOf<ChatToken>()
         val segment = StringBuilder()
         fun flushSegment() {
             if (segment.isEmpty()) return
-            words(segment.toString(), channelId, out)
+            words(segment.toString(), channelId, out, userId, null)
             segment.setLength(0)
         }
         for (t in tokens) {
             when (t) {
-                is ChatToken.Emote -> if (t.source == "twitch") {
+                is ChatToken.Emote -> if (t.source == "twitch" || t.source == "gif") {
                     flushSegment()
                     out += t
                 } else {
@@ -789,15 +937,21 @@ object ChatText {
         return merge(out)
     }
 
-    private fun words(s: String, channelId: String?, out: MutableList<ChatToken>) {
+    private val gifRe = Regex("""(\d+)-(\d+)\|[^|]*\|(https://[^,]+?)(?=,\d+-\d+\||$)""")
+
+    private fun words(s: String, channelId: String?, out: MutableList<ChatToken>, userId: String?,
+                      twitchLookup: ((String) -> ChatToken.Emote?)?) {
         val parts = s.split(' ')
         for ((index, w) in parts.withIndex()) {
             if (index > 0) out += ChatToken.Text(" ")
             if (w.isEmpty()) continue
-            val emote = Emotes.find(w, channelId)
+            val emote = Emotes.find(w, channelId, userId)
+            val twitch = if (emote == null && twitchLookup != null) twitchLookup(w) else null
             when {
                 emote != null -> out += ChatToken.Emote(emote.name, emote.url, emote.ratio, emote.zeroWidth, emote.source,
-                                                        author = emote.author, channel = emote.channel)
+                                                        author = emote.author, channel = emote.channel, sourceId = emote.id,
+                                                        original = emote.original, personal = emote.personal)
+                twitch != null -> out += twitch
                 w.startsWith("@") && w.length > 1 -> out += ChatToken.Mention(w)
                 w.startsWith("http://") || w.startsWith("https://") -> out += ChatToken.Link(w)
                 else -> out += ChatToken.Text(w)

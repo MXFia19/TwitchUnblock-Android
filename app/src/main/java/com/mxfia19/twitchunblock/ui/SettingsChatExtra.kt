@@ -10,6 +10,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.mxfia19.twitchunblock.chat.ChatOptions
 import com.mxfia19.twitchunblock.chat.ChatPrefs
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Features
@@ -20,8 +21,9 @@ import kotlin.math.abs
 import kotlin.math.roundToInt
 
 /** Réglages du chat ajoutés depuis la série 5 (groupe Chat) : synchro avec
- *  la vidéo, zone d'envoi, tailles avec aperçu, chat en paysage, emotes
- *  masquées, couleur du pseudo. */
+ *  la vidéo, zone d'envoi et suggestions du clavier, tailles avec aperçu,
+ *  chat en paysage, bandeaux du direct (drops, Special Events, suivre,
+ *  repliés en paysage), emotes masquées, couleur du pseudo. */
 @Composable
 fun ChatExtraSettings() {
     Toggle(AppState.t("cfg_chat_sync"), AppState.t("cfg_chat_sync_sub"), ChatPrefs.sync.value) {
@@ -36,6 +38,32 @@ fun ChatExtraSettings() {
     Toggle(AppState.t("cfg_chat_input"), AppState.t("cfg_chat_input_sub"), ChatPrefs.showInput.value) {
         ChatPrefs.showInput.set(it)
         Logger.info("CHAT", "Zone d'envoi du chat", if (it) "affichée" else "masquée")
+    }
+    // Coupées : le clavier ne corrige plus les emotes (« KEKW », « OMEGALUL »).
+    Toggle(AppState.t("cfg_kbd_suggest"), AppState.t("c6_kbd_suggest_sub"), ChatOptions.keyboardSuggestions.value) {
+        ChatOptions.keyboardSuggestions.set(it)
+        Logger.info("CHAT", "Suggestions du clavier", if (it) "activées" else "désactivées")
+    }
+
+    // Bandeaux au-dessus du chat (série 6).
+    SubTitle(AppState.t("cust_chat"))
+    Toggle(AppState.t("cfg_drops_notice"), AppState.t("cfg_drops_notice_sub"), ChatOptions.dropsCard.value) {
+        ChatOptions.dropsCard.set(it)
+        Logger.info("CHAT", "Carte des drops de la chaîne", if (it) "affichée" else "masquée")
+    }
+    if (ChatOptions.dropsCard.value) {
+        Toggle(AppState.t("cust_special_events"), AppState.t("cust_special_events_foot"), ChatOptions.specialEvents.value) {
+            ChatOptions.specialEvents.set(it)
+            Logger.info("CHAT", "Cartes Special Events", if (it) "affichées" else "masquées")
+        }
+    }
+    Toggle(AppState.t("cfg_follow"), AppState.t("cfg_follow_sub"), ChatOptions.followButton.value) {
+        ChatOptions.followButton.set(it)
+        Logger.info("CHAT", "Bouton suivre au-dessus du chat", if (it) "affiché" else "masqué")
+    }
+    Toggle(AppState.t("cfg_land_notices"), AppState.t("cfg_land_notices_sub"), ChatOptions.landscapeNoticesHidden.value) {
+        ChatOptions.landscapeNoticesHidden.set(it)
+        Logger.info("CHAT", "Bandeaux repliés en paysage", if (it) "oui" else "non")
     }
 
     // Tailles : un aperçu en direct évite l'aller-retour entre réglages et chat.

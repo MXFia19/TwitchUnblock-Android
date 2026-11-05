@@ -17,9 +17,14 @@ import org.json.JSONObject
  */
 object PointsTracker {
     data class Stat(val login: String, val minutes: Int, val points: Int, val chests: Int, val last: Long)
+    /** Ce que rapporte une chaîne regardée en ce moment, depuis son ouverture. */
+    data class Session(val login: String, val start: Long, val minutes: Int = 0, val points: Int = 0)
 
     /** Les chaînes, la plus récente d'abord. Fil principal. */
     val stats = mutableStateListOf<Stat>()
+    /** Chaînes qui rapportent en ce moment (plusieurs en multi-live), dans
+     *  l'ordre d'ouverture. Pas gardées sur l'appareil. */
+    val sessions = mutableStateListOf<Session>()
 
     /** Gain de prédiction attendu par chaîne (points, fin de validité) : pas
      *  des points gagnés en regardant. Comme payouts (iOS). */
@@ -33,13 +38,26 @@ object PointsTracker {
         }
     }
 
-    fun begin(login: String) = touch(login) { it }
-
-    fun end(login: String) {
-        // Rien à clore : chaque minute et chaque gain sont gardés dès qu'ils arrivent.
+    /** Présence lancée sur une chaîne : sa séance repart de zéro. */
+    fun begin(login: String) {
+        val l = login.lowercase()
+        if (l.isEmpty()) return
+        sessions.removeAll { it.login == l }
+        sessions += Session(l, System.currentTimeMillis())
+        touch(l) { it }
     }
 
-    fun addMinute(login: String) = touch(login) { it.copy(minutes = it.minutes + 1) }
+    /** Chat de la chaîne fermé : plus de séance en cours. Les minutes et les
+     *  gains, eux, sont gardés dès qu'ils arrivent. */
+    fun end(login: String) {
+        val l = login.lowercase()
+        sessions.removeAll { it.login == l }
+    }
+
+    fun addMinute(login: String) {
+        touch(login) { it.copy(minutes = it.minutes + 1) }
+        session(login) { it.copy(minutes = it.minutes + 1) }
+    }
 
     /** Hausse du solde : comptée, moins un gain de prédiction attendu. */
     fun addGain(points: Int, login: String) {
@@ -48,7 +66,16 @@ object PointsTracker {
         payouts.remove(login.lowercase())?.let { (expected, until) ->
             if (until > System.currentTimeMillis()) gain = maxOf(0, points - expected)
         }
-        if (gain > 0) touch(login) { it.copy(points = it.points + gain) }
+        if (gain > 0) {
+            touch(login) { it.copy(points = it.points + gain) }
+            session(login) { it.copy(points = it.points + gain) }
+        }
+    }
+
+    private fun session(login: String, change: (Session) -> Session) {
+        val l = login.lowercase()
+        val i = sessions.indexOfFirst { it.login == l }
+        if (i >= 0) sessions[i] = change(sessions[i])
     }
 
     /** Prédiction gagnée (ou annulée, mise rendue) sur cette chaîne : retiré

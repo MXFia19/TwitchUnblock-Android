@@ -109,6 +109,13 @@ class LiveEvents(private val scope: CoroutineScope) {
     /** Bandeaux fermés (×) de LiveExtras, par clé : gardés ici pour ne pas
      *  revenir à la rotation ni après le panneau des récompenses. */
     var closed by mutableStateOf<Set<String>>(emptySet())
+    /** Carte des drops de la chaîne et bouton suivre au-dessus du chat :
+     *  lancés et arrêtés avec le reste du direct (ils survivent à la rotation). */
+    val drops = ChannelDrops(scope)
+    val follow = ChannelFollow(scope)
+    /** Chaîne du direct en cours (vide à l'arrêt). */
+    var channelLogin by mutableStateOf("")
+        private set
 
     private var login = ""
     private var channelId = ""
@@ -125,6 +132,9 @@ class LiveEvents(private val scope: CoroutineScope) {
         stop()
         this.login = login.lowercase()
         this.channelId = channelId
+        channelLogin = this.login
+        drops.start(channelId)
+        follow.load(this.login)
         tokenRefused = false
         cachedViewer = null
         jobs.add(scope.launch {
@@ -150,6 +160,9 @@ class LiveEvents(private val scope: CoroutineScope) {
     fun stop() {
         jobs.forEach { it.cancel() }
         jobs.clear()
+        drops.stop()
+        follow.stop()
+        channelLogin = ""
         hypeGen++
         watchStreak = 0
         poll = null

@@ -320,9 +320,11 @@ class ChannelPoints(private val scope: CoroutineScope) {
                 .put("player", "site")
                 .put("live", true)))
         val b64 = Base64.encodeToString(payload.toString().toByteArray(Charsets.UTF_8), Base64.NO_WRAP)
-        val r = Http.postForm(spade, mapOf("data" to b64), timeout = 15)
-        if (r != null && r.code in 200..299) PointsTracker.addMinute(channelLogin)
-        else Logger.debug("POINTS", "minute-watched non compté", r?.code?.let { "HTTP $it" } ?: "réseau")
+        // En direct, ou par le Worker quand un bloqueur coupe l'adresse (Spade).
+        val login = channelLogin
+        val sent = Spade.send(spade, b64) ?: return
+        if (sent.first in 200..299) PointsTracker.addMinute(login)
+        else Logger.debug("POINTS", "minute-watched non compté", "HTTP ${sent.first}" + if (sent.second) " · par le Worker" else "")
     }
 
     private suspend fun fetchViewerId(): String? = auth("{ currentUser { id } }")?.obj("currentUser")?.str("id")
