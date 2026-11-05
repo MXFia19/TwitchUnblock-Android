@@ -90,6 +90,44 @@ installable à côté de l'autre.
   TV et les textes complets en italien, japonais et chinois traditionnel. Effacer l'historique des VODs ou le suivi
   des points demande confirmation.
 
+- **Série 6** (fonctions encore absentes après l'analyse du 5 novembre, menée en six parties en parallèle) :
+  - *Lecteur* : mini-lecteur (Retour, glisser l'image vers le bas ou ⌄ réduisent le lecteur en barre au-dessus des
+    onglets ; un toucher le remet en grand sans recharger ; une fiche chaîne ou la connexion ouverte depuis le lecteur
+    garde la vidéo en bas) et « PiP en quittant le lecteur » ; son seul en arrière-plan ; « Direct · −45 s » et latence
+    affichée ; faible latence côté lecteur (jamais sous 4 s de retard, par petits sauts) ; reprise seule au retour du
+    réseau ; écran de fin de direct (raid à suivre, Voir les VODs) ; minuterie (autre durée, temps restant, +15 min,
+    multi-live) ; chapitres sur la barre ; haut-parleur et Recharger.
+  - *Média* : sources du direct dans l'ordre choisi (Réglages → Lecteur) et choisies depuis le menu de qualité ;
+    « Source » avec sa résolution ; son d'origine des passages coupés tant que Twitch l'a ; clips : « Voir dans la
+    VOD » et « Télécharger le clip » ; téléchargement d'une partie (d'ici, 10 min, d'un instant à un autre, par
+    chapitre), qualité préférée d'abord, export en un fichier, reprise au retour du réseau app fermée (par une
+    notification depuis Android 12) ; multi-live avec des VODs, ⇄, ouvrir une tuile dans le lecteur, Réessayer /
+    Revoir, relance au retour du réseau, chat en paysage, lien à partager, appui long sur une carte pour l'ajouter.
+  - *Chat* : répondre à un message (fil, copier) ; sélecteur d'emotes en onglets (favorites, Mes emotes, la chaîne
+    avec les emotes d'abonné verrouillées) ; fiches complètes des emotes, badges et GIF, aussi dans le chat des VODs
+    et des clips ; BetterTTV en direct, FFZ animées ; menu ⋯ (reconnecter, recharger, présents, commandes des bots,
+    chat seul) et échecs de connexion dits ; carte des drops ; raids rejoints avec la session web (bonus) ; minute
+    regardée relayée par le Worker quand spade est bloqué ; points « en ce moment » ; bandeaux rangés en pastilles ;
+    bouton suivre au-dessus du chat ; chat d'origine des clips ; premier message mis en avant, historique marqué ;
+    correction automatique du clavier réglable.
+  - *Navigation* : recherche en onglets (Chaînes, Catégories, En direct, VODs, avec leurs nombres), 10 dernières
+    recherches, masqués signalés ; page d'une chaîne : Temps forts, Playlists avec « Tout lire », filtre des VODs,
+    commandes des bots, suivi refusé expliqué, onglets réglables ; catégories : langue et tri ; accueil : Top « ma
+    langue » ou « Monde », cartes « Se connecter » et « Session web », ordre des parties ; tirer pour actualiser ;
+    listes longues par le compte Twitch quand Twitch refuse la suite ; Top complété ; streamers récents retirables ;
+    tags sous chaque live.
+  - *App* : Worker perso vérifié et « Tout passer par ce Worker » ; comptage effacé côté serveur ; « Reprendre les
+    VODs » ; avis dans l'app (drops, réponses aux signalements, relues chaque minute et en arrière-plan) et signaler
+    depuis le lecteur ; journal exportable (traduit en anglais) ; import « Tout » ou « Chaînes seulement » avec un
+    résumé ; synchro du format de l'heure, de la zone d'envoi et de la personnalisation ; twitch.tv/activate dans
+    l'app pour changer de compte ; visite guidée et journal des modifications (Réglages → À propos).
+  - *Android TV* : bandeau des pauses pub ; chat posé sur l'image, place retenue par chaîne ; Suivies relues
+    seules ; masquer une chaîne ou une catégorie (appui long) et les réafficher ; « Voir la chaîne » et touche
+    Lecture ; clips par période et collections ; qualité retenue ; rangée « Reprendre » réglable. Icône adaptative,
+    avec sa version monochrome pour les icônes à thème d'Android 13.
+  - Sauvegarde : les nouveaux réglages y sont (ordre des sources, son d'origine, réglages du chat, langue des
+    catégories, chat et rangée « Reprendre » de la TV, lecteur).
+
 ## Construire
 
 Le projet (Kotlin, Jetpack Compose, Media3) se construit avec la CI GitHub (`.github/workflows/build.yml`) :
