@@ -234,7 +234,7 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav, back: TvRet
     // masquée (Compte), comme l'Apple TV ; retirées d'ici : cachées tout de suite.
     val place = TvHomePrefs.resumePlace
     var removed by remember { mutableStateOf(emptySet<String>()) }
-    val resume = if (place == "hidden") emptyList() else ContinueWatching.items().filter { it.id !in removed }
+    val resume = if (place == "hidden") emptyList<ContinueWatching.Entry>() else ContinueWatching.items().filter { it.id !in removed }
     LaunchedEffect(History.vods.joinToString(",") { it.term }) { ContinueWatching.load() }
     // Appui long : masquer une chaîne ou une catégorie, reprendre ou retirer une VOD.
     val menus = remember { TvMenus() }

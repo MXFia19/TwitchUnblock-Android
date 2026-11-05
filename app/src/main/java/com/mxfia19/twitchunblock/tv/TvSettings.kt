@@ -1,5 +1,6 @@
 package com.mxfia19.twitchunblock.tv
 
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -7,9 +8,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -47,26 +51,37 @@ fun TvMoreSettings() {
                listOf("full" to AppState.t("tv_chat_full"), "top" to AppState.t("tv_chat_top"), "bottom" to AppState.t("tv_chat_bottom")),
                place.height) { TvChatPrefs.setDefaultPlace(place.copy(height = it)) }
         val own = TvChatPrefs.ownCount
-        if (own > 0) LinkRow(AppState.t("tv_chat_forget") + " ($own)") { TvChatPrefs.forgetAll() }
+        val focus = LocalFocusManager.current
+        if (own > 0) LinkRow(AppState.t("tv_chat_forget") + " ($own)") {
+            // La ligne disparaît : le focus remonte d'abord.
+            focus.moveFocus(FocusDirection.Up)
+            TvChatPrefs.forgetAll()
+        }
         Text(AppState.t("tv_chat_layout_hint"), color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(12.dp))
     }
+    // Repère du focus quand la liste des masquées se vide (plus rien dessous).
+    val anchor = remember { FocusRequester() }
     Group(AppState.t("tab_home")) {
-        Choice(AppState.t("tv_resume_place"),
-               listOf("top" to AppState.t("tv_resume_top"), "bottom" to AppState.t("tv_resume_bottom"),
-                      "hidden" to AppState.t("tv_resume_hidden")),
-               TvHomePrefs.resumePlace) { TvHomePrefs.setResumePlace(it) }
+        Box(Modifier.focusRequester(anchor)) {
+            Choice(AppState.t("tv_resume_place"),
+                   listOf("top" to AppState.t("tv_resume_top"), "bottom" to AppState.t("tv_resume_bottom"),
+                          "hidden" to AppState.t("tv_resume_hidden")),
+                   TvHomePrefs.resumePlace) { TvHomePrefs.setResumePlace(it) }
+        }
     }
-    HiddenGroup()
+    HiddenGroup(anchor)
 }
 
 /** Chaînes et catégories masquées (appui long sur une carte du top ou d'une
  *  catégorie) : un appui les réaffiche. */
 @Composable
-private fun HiddenGroup() {
+private fun HiddenGroup(anchor: FocusRequester) {
     val focus = LocalFocusManager.current
-    // La ligne réaffichée disparaît : le focus passe d'abord à une voisine.
+    // La ligne réaffichée disparaît : le focus passe d'abord à une voisine,
+    // ou au-dessus du groupe pour la dernière (la liste disparaît avec elle).
     fun leave() {
-        if (!focus.moveFocus(FocusDirection.Down)) focus.moveFocus(FocusDirection.Up)
+        if (Hidden.channels.size + Hidden.categories.size <= 1) runCatching { anchor.requestFocus() }
+        else if (!focus.moveFocus(FocusDirection.Down)) focus.moveFocus(FocusDirection.Up)
     }
     Group(AppState.t("hidden_title")) {
         Text(AppState.t("hidden_sub"), color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(12.dp))
@@ -74,13 +89,13 @@ private fun HiddenGroup() {
             Text(AppState.t("tv_hidden_hint"), color = TU.muted, fontSize = 13.sp,
                  modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 12.dp))
         } else {
-            HiddenList(::leave)
+            HiddenList(::leave, anchor)
         }
     }
 }
 
 @Composable
-private fun HiddenList(leave: () -> Unit) {
+private fun HiddenList(leave: () -> Unit, anchor: FocusRequester) {
     if (Hidden.channels.isNotEmpty()) {
         Label(AppState.t("hidden_channels_n").replace("{n}", "${Hidden.channels.size}"))
         Hidden.channels.toList().forEach { c ->
@@ -99,9 +114,8 @@ private fun HiddenList(leave: () -> Unit) {
             }
         }
     }
-    val focus = LocalFocusManager.current
     LinkRow(AppState.t("unhide_all")) {
-        focus.moveFocus(FocusDirection.Up)
+        runCatching { anchor.requestFocus() }
         Hidden.channels.map { it.login }.forEach { Hidden.unhideChannel(it) }
         Hidden.categories.map { it.id }.forEach { Hidden.unhideCategory(it) }
     }
