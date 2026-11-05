@@ -70,9 +70,9 @@ class RewritingFactory(private val upstream: DataSource.Factory) : DataSource.Fa
 /**
  * Les playlists du CDN des VODs listent les passages coupés (droits d'auteur)
  * en « N-unmuted.ts », que le CDN refuse (403) : la lecture s'arrêtait au
- * premier. Seul « N-muted.ts » (son coupé) se lit : chaque playlist .m3u8 est
- * lue en entier puis réécrite. Seulement « -unmuted.ts » : en fMP4,
- * « -unmuted.mp4 » est servi avec le son.
+ * premier. Chaque playlist .m3u8 est lue en entier puis réécrite par
+ * VodUnmute : son d'origine « N.ts » tant que le CDN le sert, sinon
+ * « N-muted.ts » (son coupé) ; en fMP4, « -unmuted.mp4 » est servi avec le son.
  */
 @OptIn(UnstableApi::class)
 private class PlaylistRewritingDataSource(private val upstream: DataSource) : DataSource {
@@ -93,7 +93,9 @@ private class PlaylistRewritingDataSource(private val upstream: DataSource) : Da
         }
         val out = ByteArrayOutputStream()
         try {
-            upstream.open(dataSpec)
+            // Fragment d'un téléchargement (« #tu=… », DownloadPart) : pour nous seuls.
+            upstream.open(if (dataSpec.uri.fragment == null) dataSpec
+                          else dataSpec.buildUpon().setUri(Uri.parse(dataSpec.uri.toString().substringBefore('#'))).build())
             val chunk = ByteArray(16 * 1024)
             while (true) {
                 val n = upstream.read(chunk, 0, chunk.size)
@@ -104,8 +106,9 @@ private class PlaylistRewritingDataSource(private val upstream: DataSource) : Da
             upstream.close()
         }
         val text = out.toString("UTF-8")
-        val bytes = if (text.contains("-unmuted.ts")) text.replace("-unmuted.ts", "-muted.ts").toByteArray(Charsets.UTF_8)
-                    else out.toByteArray()
+        // Passages coupés (son d'origine tant que le CDN l'a) et partie d'une VOD : VodUnmute.kt.
+        val rewritten = VodUnmute.rewrite(text, dataSpec.uri)
+        val bytes = if (rewritten !== text) rewritten.toByteArray(Charsets.UTF_8) else out.toByteArray()
         buffer = bytes
         position = 0
         return bytes.size.toLong()

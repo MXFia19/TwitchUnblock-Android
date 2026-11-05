@@ -296,7 +296,7 @@ fun ChannelScreen(login: String, nav: Navigator) {
                 }
             } else if (tab == 0) {
                 items(model.videos, key = { "v-" + it.id }) { v ->
-                    VodCard(v) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
+                    VodCard(v, onLongClick = multiVodToggle(v.id, v.title, v.thumbnail, login)) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
                 }
                 when {
                     model.videosLoading -> item(span = FullSpan) { LoadingBox() }

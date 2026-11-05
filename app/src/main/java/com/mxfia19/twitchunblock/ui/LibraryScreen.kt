@@ -47,6 +47,7 @@ import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.History
 import com.mxfia19.twitchunblock.core.HistoryItem
 import com.mxfia19.twitchunblock.core.Lang
+import com.mxfia19.twitchunblock.download.DownloadExport
 import com.mxfia19.twitchunblock.download.Downloads
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.material.icons.filled.Close
@@ -111,7 +112,8 @@ fun LibraryScreen(nav: Navigator) {
         }
         items(items, key = { it.vodId }) { d ->
             Row(
-                Modifier.fillMaxWidth().focusCard({ if (d.completed) nav.play(PlayRequest.Download(d.vodId)) })
+                Modifier.fillMaxWidth().focusCard({ if (d.completed) nav.play(PlayRequest.Download(d.vodId)) },
+                                                  onLongClick = multiVodToggle(d.vodId, d.title, d.thumbnail, d.channel))
                     .padding(horizontal = 12.dp, vertical = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -124,8 +126,16 @@ fun LibraryScreen(nav: Navigator) {
                 Column(Modifier.weight(1f)) {
                     Text(d.title, color = TU.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 2,
                          overflow = TextOverflow.Ellipsis)
-                    Text(listOf(d.channel, qualityName(d.quality), sizeText(d.bytes)).filter { it.isNotEmpty() }.joinToString(" · "),
+                    Text(listOf(d.channel, qualityName(d.quality, d), sizeText(d.bytes)).filter { it.isNotEmpty() }.joinToString(" · "),
                          color = TU.muted, fontSize = 12.sp, maxLines = 1)
+                    // Partie de la VOD (série 6) : d'où à où dans la VOD.
+                    if (d.isPart) {
+                        val end = if (d.to > 0) d.to else d.from + d.lengthSeconds
+                        Text("⏱ " + Format.clock(d.from.toLong()) + " – " + Format.clock(end.toLong()), color = TU.muted, fontSize = 12.sp)
+                    }
+                    DownloadExport.progress[d.vodId]?.let { p ->
+                        Text(AppState.t("m6_exporting").replace("{p}", (p * 100).toInt().toString()), color = TU.primary, fontSize = 12.sp)
+                    }
                     val status = when (d.state) {
                         Download.STATE_COMPLETED -> null
                         Download.STATE_FAILED -> AppState.t("dl_failed")
@@ -155,6 +165,8 @@ fun LibraryScreen(nav: Navigator) {
                 val resumable = d.state == Download.STATE_STOPPED || (d.state == Download.STATE_QUEUED && Downloads.paused)
                 if (d.failed) {
                     TextButton(onClick = { Downloads.retry(context, d.vodId) }) { Text(AppState.t("retry"), color = TU.primary) }
+                } else if (d.completed && !DownloadExport.progress.containsKey(d.vodId)) {
+                    TextButton(onClick = { DownloadExport.export(context, d) }) { Text(AppState.t("export_data"), color = TU.primary) }
                 } else if (resumable) {
                     TextButton(onClick = { Downloads.resume(context, d.vodId) }) { Text(AppState.t("dl_resume"), color = TU.primary) }
                 }
@@ -197,7 +209,8 @@ fun LibraryScreen(nav: Navigator) {
 @Composable
 private fun HistoryVodCard(h: HistoryItem, nav: Navigator) {
     val resume = AppState.vodPosition(h.term)
-    Column(Modifier.width(200.dp).focusCard({ nav.play(PlayRequest.Vod(h.term, h.display, h.streamer)) })) {
+    Column(Modifier.width(200.dp).focusCard({ nav.play(PlayRequest.Vod(h.term, h.display, h.streamer)) },
+                                            onLongClick = multiVodToggle(h.term, h.display, h.thumb, h.streamer ?: ""))) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(8.dp)).background(TU.surfaceHi)) {
             if (h.thumb != null) {
                 AsyncImage(model = h.thumb, contentDescription = null, contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
@@ -214,6 +227,6 @@ private fun HistoryVodCard(h: HistoryItem, nav: Navigator) {
     }
 }
 
-/** Nom de la qualité d'un téléchargement. */
-private fun qualityName(key: String): String =
-    if (key.isEmpty()) "" else com.mxfia19.twitchunblock.core.Quality.label(key, AppState.lang)
+/** Nom de la qualité d'un téléchargement, « 1080p60 (Source) » quand sa hauteur est connue. */
+private fun qualityName(key: String, d: Downloads.Item): String =
+    if (key.isEmpty()) "" else com.mxfia19.twitchunblock.core.Quality.label(key, AppState.lang, d.variants)

@@ -41,7 +41,7 @@ object LiveApi {
         val tokenTask = async { accessToken(login, live = true) }
         // En même temps que le reste : 6 s au plus (jeton d'intégrité compris).
         val accountTask = async {
-            if (account && Features.subAdFree.value) com.mxfia19.twitchunblock.web.AccountPlayback.forLaunch(login)
+            if (account && Features.subAdFree.value && !LiveSources.skipsAccount(login)) com.mxfia19.twitchunblock.web.AccountPlayback.forLaunch(login)
             else com.mxfia19.twitchunblock.web.AccountPlayback.Result.Unavailable
         }
         val gql = gqlTask.await()
@@ -95,7 +95,7 @@ object LiveApi {
             }
             else -> {}
         }
-        val steps = StreamApi.steps(AppState.liveSourceSteps())
+        val steps = LiveSources.steps()
         Logger.info("LIVE", "Ordre des sources", steps.joinToString(" → ").uppercase())
         for (src in steps) {
             if (!found.isEmpty) break

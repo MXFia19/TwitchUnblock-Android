@@ -237,7 +237,7 @@ private fun MainMenu(session: PlaybackSession, hasChat: Boolean, first: FocusReq
                      onDone: () -> Unit, onSleep: () -> Unit) {
         Text(AppState.t("quality"), color = TU.muted, fontSize = 14.sp)
         session.qualities.forEachIndexed { i, q ->
-            TvButton(Quality.label(q, AppState.lang) + if (q == session.quality) "  ✓" else "",
+            TvButton(Quality.label(q, AppState.lang, session.currentMaster.variants) + if (q == session.quality) "  ✓" else "",
                      selected = q == session.quality,
                      modifier = (if (i == 0) Modifier.focusRequester(first) else Modifier).fillMaxWidth()) {
                 session.selectQuality(q)

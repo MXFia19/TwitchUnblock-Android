@@ -277,9 +277,10 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                 setChannel(req.channel, req.channel)
                 game = ""
                 source = null
-                // Téléchargée : lue sur le téléphone, sans chercher de source.
+                // Téléchargée : lue sur le téléphone, sans chercher de source
+                // (pas une partie seulement : la VOD entière reste en ligne).
                 val saved = Downloads.find(req.id)
-                if (saved != null && saved.completed) {
+                if (saved != null && saved.completed && !saved.isPart) {
                     open(PlayRequest.Download(req.id))
                     return
                 }
@@ -346,8 +347,10 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                 lengthSeconds = item.lengthSeconds
                 source = null
                 isClip = false
-                start(Master(mapOf(item.quality.ifEmpty { "Source" } to item.uri)), AppState.vodPosition(req.vodId))
-                tickJob = scope.launch { trackProgress(req.vodId) }
+                // Partie d'une VOD : lue depuis son début, sans toucher à la reprise de la VOD entière.
+                start(Master(mapOf(item.quality.ifEmpty { "Source" } to item.uri), item.variants),
+                      if (item.isPart) 0L else AppState.vodPosition(req.vodId))
+                if (!item.isPart) tickJob = scope.launch { trackProgress(req.vodId) }
             }
             is PlayRequest.Recovered -> {
                 val st = req.stream
@@ -546,7 +549,7 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
 
     private fun saveProgress() {
         val id = vodId
-        if (id != null && state is State.Ready) {
+        if (id != null && state is State.Ready && !(isOffline && Downloads.find(id)?.isPart == true)) {
             AppState.saveVodPosition(id, player.currentPosition, player.duration)
         }
     }

@@ -1,0 +1,79 @@
+{
+  "_indirect": {
+    "keys": ["multi_add", "multi_remove", "multi_full", "multi_added", "multi_removed",
+             "multi_vod_failed", "multi_offline", "multi_failed", "multi_play", "multi_pause", "multi_replay",
+             "src_as", "src_pp", "src_al", "src_al2", "src_eu", "src_eu2", "src_twitch", "src_custom", "src_account", "src_worker"]
+  },
+  "m6_restore_muted_sub": {
+    "fr": "Twitch coupe le son des passages avec de la musique protégée. Un jour ou deux après le live, l'original est encore disponible : l'app le remet quand elle peut, en lecture comme dans les téléchargements.",
+    "en": "Twitch mutes parts with copyrighted music. For a day or two after the stream the original is still available: the app puts it back when it can, when playing and in downloads.",
+    "es": "Twitch silencia las partes con música protegida. Uno o dos días después del directo, el original aún está disponible: la app lo restaura cuando puede, al reproducir y en las descargas.",
+    "ru": "Twitch отключает звук во фрагментах с защищённой музыкой. В течение дня-двух после трансляции оригинал ещё доступен — приложение возвращает его, когда может, при просмотре и в загрузках.",
+    "it": "Twitch silenzia le parti con musica protetta da copyright. Per uno o due giorni dopo la diretta l’originale è ancora disponibile: l’app lo ripristina quando possibile, in riproduzione e nei download.",
+    "ja": "Twitch は著作権のある音楽を含む部分をミュートします。配信後 1～2 日は元の音声が残っているため、可能な場合はアプリが再生時とダウンロード時に元に戻します。",
+    "zh-Hant": "Twitch 會將含版權音樂的部分消音。直播結束後一兩天內原始檔仍在：App 會盡可能還原，播放與下載皆適用。"
+  },
+  "m6_multi_chat_sub": {
+    "fr": "Le chat de la vidéo qui a le son (rejoué pour une VOD), à droite de la mosaïque en paysage.",
+    "en": "The chat of the video you hear (replayed for a VOD), next to the mosaic in landscape.",
+    "es": "El chat del vídeo que se oye (reproducido para un VOD), junto al mosaico en horizontal.",
+    "ru": "Чат видео со звуком (для VOD — воспроизводимый), справа от мозаики в горизонтальной ориентации.",
+    "it": "La chat del video che senti (riprodotta per un VOD), accanto al mosaico in orizzontale.",
+    "ja": "音声が出ている動画のチャット（VOD は再生されたチャット）を、横向き時にモザイクの横に表示します。",
+    "zh-Hant": "橫向時，在拼貼畫面旁顯示正在播放聲音的影片的聊天室（VOD 則為重播的聊天）。"
+  },
+  "m6_clip_saved": {
+    "fr": "Clip enregistré",
+    "en": "Clip saved",
+    "es": "Clip guardado",
+    "ru": "Клип сохранён",
+    "it": "Clip salvata",
+    "ja": "クリップを保存しました",
+    "zh-Hant": "已儲存剪輯"
+  },
+  "m6_export_failed": {
+    "fr": "Impossible d'exporter ce téléchargement",
+    "en": "Couldn't export this download",
+    "es": "No se pudo exportar esta descarga",
+    "ru": "Не удалось экспортировать эту загрузку",
+    "it": "Impossibile esportare questo download",
+    "ja": "このダウンロードを書き出せませんでした",
+    "zh-Hant": "無法匯出這個下載項目"
+  },
+  "m6_exporting": {
+    "fr": "Export… {p} %",
+    "en": "Exporting… {p}%",
+    "es": "Exportando… {p} %",
+    "ru": "Экспорт… {p} %",
+    "it": "Esportazione… {p}%",
+    "ja": "書き出し中… {p}%",
+    "zh-Hant": "匯出中… {p}%"
+  },
+  "m6_dl_resume_notif": {
+    "fr": "La connexion est revenue : touche pour reprendre tes téléchargements.",
+    "en": "The connection is back: tap to resume your downloads.",
+    "es": "La conexión ha vuelto: toca para reanudar tus descargas.",
+    "ru": "Соединение восстановлено: нажмите, чтобы продолжить загрузки.",
+    "it": "La connessione è tornata: tocca per riprendere i download.",
+    "ja": "接続が戻りました。タップしてダウンロードを再開します。",
+    "zh-Hant": "連線已恢復：輕觸以繼續下載。"
+  },
+  "m6_dl_range_bad": {
+    "fr": "La fin doit venir après le début.",
+    "en": "The end must come after the start.",
+    "es": "El final debe ir después del inicio.",
+    "ru": "Конец должен быть позже начала.",
+    "it": "La fine deve venire dopo l’inizio.",
+    "ja": "終了は開始より後にしてください。",
+    "zh-Hant": "結束時間必須在開始之後。"
+  },
+  "m6_save_unavailable": {
+    "fr": "Aucune app pour enregistrer le fichier sur cet appareil.",
+    "en": "No app to save the file on this device.",
+    "es": "No hay ninguna app para guardar el archivo en este dispositivo.",
+    "ru": "На этом устройстве нет приложения для сохранения файла.",
+    "it": "Nessuna app per salvare il file su questo dispositivo.",
+    "ja": "この端末にはファイルを保存できるアプリがありません。",
+    "zh-Hant": "這部裝置上沒有可儲存檔案的 App。"
+  }
+}

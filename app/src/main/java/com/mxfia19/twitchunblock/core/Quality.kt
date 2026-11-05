@@ -106,15 +106,25 @@ object Quality {
         return listOf(1080, 720, 480, 360, 160).minByOrNull { kotlin.math.abs(it - h) }?.toString()
     }
 
-    /** Nom dans les menus : « Source », « Audio seul », « 720p » pour
+    /** Nom dans les menus : « Source » (avec sa résolution quand la liste
+     *  maîtresse la donne : `variants`), « Audio seul », « 720p » pour
      *  « 720p30 », « 1080p » pour « 1920x1080 ». */
-    fun label(key: String, lang: Lang): String {
+    fun label(key: String, lang: Lang, variants: Map<String, Variant> = emptyMap()): String {
         if (isAuto(key)) return I18n.t("q_auto_short", lang)
-        if (isSource(key)) return "Source"
+        if (isSource(key)) return sourceLabel(variants[key])
         if (isAudio(key)) return I18n.t("q_audio", lang)
         if (key.endsWith("p30")) return key.dropLast(2)
         if (Regex("^\\d+x\\d+$").matches(key)) nameHeight(key)?.let { return "${it}p" }
         return key
+    }
+
+    /** « 1080p60 (Source) », « 1440p (Source) » : la cadence seulement au-delà
+     *  de 30 i/s, comme le nom des autres qualités ; « Source » sans hauteur
+     *  connue. Comme qualityText (iOS), cadence aberrante comprise. */
+    fun sourceLabel(v: Variant?): String {
+        if (v == null || v.height <= 0) return "Source"
+        val rate = if (v.fps.isFinite() && v.fps > 30 && v.fps < 1000) Math.round(v.fps).toInt() else 0
+        return "${v.height}p" + (if (rate > 30) "$rate" else "") + " (Source)"
     }
 
     /** Libellé d'une préférence (réglages). */

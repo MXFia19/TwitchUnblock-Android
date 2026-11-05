@@ -22,12 +22,15 @@ object StreamPrefs {
      *  l'ancienne reste) ; vide = retirée. */
     fun setCustomSource(raw: String): Boolean {
         val trimmed = raw.trim()
+        val was = customSourceHost()
         if (trimmed.isEmpty()) {
             customSource.set("")
-            return true
+        } else {
+            val base = customSourceBase(trimmed) ?: return false
+            customSource.set(base)
         }
-        val base = customSourceBase(trimmed) ?: return false
-        customSource.set(base)
+        // Ordre des sources rangé : Ma source y entre en tête, ou en sort.
+        if (customSourceHost() != was) LiveSources.onCustomChanged()
         return true
     }
 
