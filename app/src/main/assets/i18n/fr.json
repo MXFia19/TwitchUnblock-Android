@@ -1057,6 +1057,8 @@
   "src_twitch": "Twitch officiel (pubs)",
   "src_up": "Monter",
   "src_worker": "Serveur TwitchUnblock",
+  "st_custom_sub": "Adresse de ton propre serveur luminous-ttv (https://…) : il est essayé avant toutes les autres sources. Vide : pas de source perso.",
+  "st_hq_sub": "1440p et plus, parfois en HEVC ou AV1, sur les chaînes qui diffusent en Enhanced Broadcasting. Twitch ne les donne qu'à un compte connecté : sur Android, seulement quand ton compte regarde la chaîne sans pub (abonnement ou Turbo, avec la session web et « Regarder sans pub avec mon abonnement »). Décodés par cet appareil : {c}. S'applique au prochain direct lancé.",
   "streams": "Streams",
   "sub_adfree": "Regarder sans pub avec mon abonnement",
   "sub_adfree_connect": "Connecter la session web",

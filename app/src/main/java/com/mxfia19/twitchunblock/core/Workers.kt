@@ -38,8 +38,9 @@ object Workers {
     }
 
     /** JSON d'une route ; une erreur du Worker lui-même (404…) n'est pas une
-     *  panne : un autre répondrait pareil, on s'arrête là. */
-    suspend fun json(path: String): JSONObject? {
+     *  panne : un autre répondrait pareil, on s'arrête là. `refused` : le
+     *  corps de ce refus (direct bloqué par pays…). */
+    suspend fun json(path: String, refused: ((String) -> Unit)? = null): JSONObject? {
         val bases = ordered()
         val unreachable = mutableListOf<String>()
         for (base in bases) {
@@ -56,7 +57,10 @@ object Workers {
             }
             for (b in unreachable) downUntil[b] = System.currentTimeMillis() + 30 * 60_000L
             if (base != bases.first()) Logger.info("WORKER", "Réponse d'un autre Worker", base)
-            if (r.code != 200) return null
+            if (r.code != 200) {
+                refused?.invoke(r.body)
+                return null
+            }
             return parseJson(r.body)
         }
         return null

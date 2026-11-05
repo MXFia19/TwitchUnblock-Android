@@ -997,6 +997,8 @@
   "src_twitch": "Twitch ufficiale (pubblicità)",
   "src_up": "Sposta su",
   "src_worker": "Server TwitchUnblock",
+  "st_custom_sub": "Indirizzo del tuo server luminous-ttv (https://…): viene provato prima di tutte le altre fonti. Vuoto: nessuna fonte personale.",
+  "st_hq_sub": "1440p e oltre, a volte in HEVC o AV1, sui canali che trasmettono con Enhanced Broadcasting. Twitch le fornisce solo a un account connesso: su Android, solo quando il tuo account guarda il canale senza pubblicità (abbonamento o Turbo, con la sessione web e «Guarda senza pubblicità con il mio abbonamento»). Decodificati da questo dispositivo: {c}. Si applica alla prossima diretta aperta.",
   "streams": "Dirette",
   "sub_adfree": "Guarda senza pubblicità con il mio abbonamento",
   "sub_adfree_connect": "Connetti la sessione web",
