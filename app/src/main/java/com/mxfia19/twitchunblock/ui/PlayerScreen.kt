@@ -58,6 +58,7 @@ import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
@@ -69,6 +70,7 @@ import androidx.media3.common.C
 import androidx.media3.common.util.UnstableApi
 import androidx.media3.ui.PlayerView
 import com.mxfia19.twitchunblock.chat.ChatClient
+import com.mxfia19.twitchunblock.chat.ChatPrefs
 import com.mxfia19.twitchunblock.chat.VodChat
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Format
@@ -193,18 +195,29 @@ fun rememberVodChat(session: PlaybackSession, show: Boolean): VodChat? {
 }
 
 /** Messages du chat rejoué (lecture seule), qui suivent le bas. `background` :
- *  transparent quand il est posé sur l'image (paysage). */
+ *  transparent quand il est posé sur l'image (paysage). Sans `fontSize` :
+ *  tailles, espacement et heure des réglages du chat, comme ChatPanel (la TV
+ *  passe les siennes). */
 @Composable
-fun VodChatList(chat: VodChat, modifier: Modifier = Modifier, emoteSize: Int = 24, fontSize: Int = 14,
+fun VodChatList(chat: VodChat, modifier: Modifier = Modifier, emoteSize: Int? = null, fontSize: Int? = null,
                 background: Color = TU.bg) {
     val list = rememberLazyListState()
     // Dernier message en clé : la liste plafonnée (200) garde la même taille.
     LaunchedEffect(chat.messages.size, chat.messages.lastOrNull()?.id) {
         if (chat.messages.isNotEmpty()) list.scrollToItem(chat.messages.size - 1)
     }
+    val settings = fontSize == null
+    val font = fontSize ?: Features.chatFontSize.value
+    val emote = emoteSize?.sp ?: (font * 1.7f * ChatPrefs.emoteScale.value / 100f).sp
+    val badge = if (settings) (font * 1.19f * ChatPrefs.badgeScale.value / 100f).sp else TextUnit.Unspecified
+    val vPad = if (settings) (ChatPrefs.spacing.value / 2f).dp else 3.dp
+    // Heure : la position du message dans la VOD (VodChat).
+    val timestamp = settings && Features.chatTimestamps.value
     Box(modifier.background(background)) {
         LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
-            items(chat.messages, key = { it.id }) { m -> ChatMessageRow(m, emoteSize = emoteSize.sp, fontSize = fontSize.sp) }
+            items(chat.messages, key = { it.id }) { m ->
+                ChatMessageRow(m, emoteSize = emote, fontSize = font.sp, timestamp = timestamp, badgeSize = badge, vPad = vPad)
+            }
         }
         if (chat.messages.isEmpty()) {
             Text(AppState.t(if (chat.error) "chat_unreachable" else "tv_chat_waiting"), color = TU.muted, fontSize = 13.sp,
@@ -243,10 +256,15 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
         onDispose { controller?.show(WindowInsetsCompat.Type.systemBars()) }
     }
 
-    val chatLogin = if (session.isLive) session.channelLogin else null
+    // Chat de la chaîne demandée dès l'ouverture : pas celui de la chaîne
+    // d'avant le temps de la résolution (VOD de X puis direct de Y).
+    val chatLogin = (session.request as? PlayRequest.Live)?.login?.lowercase()?.takeIf { it.isNotBlank() }
     val chat = remember(chatLogin) { chatLogin?.let { ChatClient(it, scope) } }
     DisposableEffect(chat) {
-        chat?.start(session.channelId)
+        // Identifiant sûr seulement une fois ce direct résolu (une VOD ou un
+        // clip ne le change pas) ; sinon le ROOMSTATE de Twitch le donne.
+        val resolved = session.state is PlaybackSession.State.Ready && session.channelLogin.equals(chatLogin, ignoreCase = true)
+        chat?.start(if (resolved) session.channelId else null)
         onDispose { chat?.stop() }
     }
     // ChatBars.kt : le chat du direct attend l'image (lecteur principal seulement).

@@ -4,8 +4,10 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.text.input.TextFieldValue
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Auth
+import com.mxfia19.twitchunblock.core.Features
 import com.mxfia19.twitchunblock.core.Gql
 import com.mxfia19.twitchunblock.core.Http
 import com.mxfia19.twitchunblock.core.Logger
@@ -51,8 +53,16 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     /** Chat du lecteur principal : les messages reçus attendent que l'image
      *  les rejoigne (ChatSync). Faux en multi-live et sur la TV. */
     var syncsWithPlayer by mutableStateOf(false)
+    /** Message en cours d'écriture : gardé ici, il survit à la rotation et au
+     *  panneau des récompenses (ChatPanel y est appelé ailleurs dans l'arbre). */
+    var draft by mutableStateOf(TextFieldValue(""))
+    /** Augmenté quand les messages déjà affichés sont refaits (emotes et
+     *  badges arrivés après eux) : le chat se recolle en bas. */
+    var assetsRevision by mutableStateOf(0)
+        private set
 
-    private var channelId: String? = null
+    /** État : le sélecteur d'emotes suit l'identifiant donné par ROOMSTATE. */
+    private var channelId by mutableStateOf<String?>(null)
     /** Identifiant de la chaîne (emotes), connu au plus tard à ROOMSTATE. */
     val roomId: String? get() = channelId
     private var socket: WebSocket? = null
@@ -95,12 +105,18 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
             readOnly = true
             anonymous = true
         }
+        // Emotes et badges en parallèle, sans retarder l'historique ni l'IRC :
+        // les messages arrivés avant eux sont refaits à chaque chargement fini.
         scope.launch {
             Emotes.loadGlobal()
+            refreshAssets()
+        }
+        scope.launch {
             Badges.loadGlobal()
+            refreshAssets()
         }
         channelIdHint?.let { loadChannelAssets(it) }
-        if (com.mxfia19.twitchunblock.core.Features.chatLoadHistory.value) scope.launch { loadHistory() }
+        if (Features.chatLoadHistory.value) scope.launch { loadHistory() }
         // Règles et modes : utiles seulement à qui peut écrire.
         if (AppState.user != null) scope.launch { loadChatSettings() }
         connect()
@@ -169,8 +185,37 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     private fun loadChannelAssets(id: String) {
         scope.launch {
             Emotes.loadChannel(id)
-            Badges.loadChannel(id)
+            if (id == channelId) refreshAssets()
         }
+        scope.launch {
+            Badges.loadChannel(id)
+            if (id == channelId) refreshAssets()
+        }
+    }
+
+    /** Emotes 7TV/BTTV/FFZ et badges des messages déjà là (historique,
+     *  premiers reçus, file de la synchro), refaits avec ce qui est chargé
+     *  et l'identifiant de la chaîne en cours. */
+    private fun refreshAssets() {
+        if (stopped) return
+        val id = channelId
+        fun redo(m: ChatMessage): ChatMessage {
+            if (m.login.isEmpty()) return m
+            val tokens = ChatText.retokenize(m.tokens, id)
+            val badges = m.badgeIds.mapNotNull { Badges.url(it, id) }
+            return if (tokens == m.tokens && badges == m.badges) m else m.copy(tokens = tokens, badges = badges)
+        }
+        var changed = false
+        for (i in messages.indices) {
+            val m = messages[i]
+            val next = redo(m)
+            if (next !== m) {
+                messages[i] = next
+                changed = true
+            }
+        }
+        for (p in pending) p.message = redo(p.message)
+        if (changed) assetsRevision++
     }
 
     private fun connect() {
@@ -281,9 +326,14 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
                 "ROOMSTATE" -> {
                     roomState(line.tags)
                     line.tags["room-id"]?.takeIf { it.isNotEmpty() }?.let { id ->
-                        if (channelId == null) {
+                        // Twitch fait foi : l'identifiant donné à l'ouverture
+                        // peut être celui d'une autre chaîne (session passée
+                        // d'une VOD à un direct) ; emotes et badges refaits.
+                        if (channelId != id) {
+                            if (channelId != null) Logger.warn("CHAT", "Identifiant de #$channel corrigé", "$channelId → $id")
                             channelId = id
                             loadChannelAssets(id)
+                            refreshAssets()
                         }
                     }
                 }
@@ -340,8 +390,11 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     private fun clearChat(line: IrcLine) {
         val target = line.trailing?.lowercase()
         if (target == null) {
-            // Purge du salon : les messages qui attendaient l'image partent avec.
+            // Purge du salon (/clear) : la liste est vidée, même avec « garder
+            // les messages supprimés » (comme l'iPhone) ; les messages qui
+            // attendaient l'image partent avec.
             pending.clear()
+            messages.clear()
             add(system(AppState.t("chat_cleared")))
             return
         }
@@ -480,12 +533,36 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         tokens = emptyList(), notice = text,
     )
 
-    /** Abonnement, raid, cadeau… : le texte du système, et le message de la personne s'il y en a un. */
     private fun notice(line: IrcLine) {
-        val systemText = line.tags["system-msg"]?.takeIf { it.isNotEmpty() } ?: return
-        val base = build(line)
-        publish((base ?: system(systemText)).copy(notice = systemText))
+        noticeMessage(line)?.let { publish(it) }
     }
+
+    /** Abonnement, raid, cadeau, annonce… : le texte du système, et le message
+     *  de la personne s'il y en a un. Annonce (/announce) : system-msg vide, le
+     *  message mis en avant dans sa couleur, comme buildNotice (iOS). Partagé
+     *  par le direct et l'historique. */
+    private fun noticeMessage(line: IrcLine): ChatMessage? {
+        val announce = line.tags["msg-id"] == "announcement"
+        val systemText = if (announce) null else line.tags["system-msg"]?.takeIf { it.isNotBlank() }
+        val base = build(line)
+        if (base == null || base.tokens.isEmpty()) {
+            // Sans texte de la personne (abonnement offert, raid) : la notice
+            // seule ; chatLine n'écrit pas de « Pseudo : » vide dessous.
+            if (systemText == null) return null
+            return (base ?: system(systemText)).copy(notice = systemText)
+        }
+        if (announce) return base.copy(accent = announceColor(line.tags["msg-param-color"]))
+        return base.copy(notice = systemText)
+    }
+
+    /** Couleur d'une annonce (msg-param-color), comme l'iPhone et le site. */
+    private fun announceColor(name: String?): Int = when (name?.uppercase()) {
+        "BLUE" -> 0xFF387AFF
+        "GREEN" -> 0xFF00C853
+        "ORANGE" -> 0xFFFF9A00
+        "PURPLE" -> 0xFFBF94FF
+        else -> 0xFF9146FF
+    }.toInt()
 
     /** Mention de notre pseudo : expression compilée une fois par pseudo, et
      *  non à chaque message. */
@@ -514,16 +591,18 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         val me = AppState.user?.login?.lowercase()
         val tokens = if (text.isEmpty()) emptyList() else ChatText.tokens(text, line.tags["emotes"], channelId)
         val highlight = me != null && login != me && mention(me).containsMatchIn(text.lowercase())
+        val badgeIds = (line.tags["badges"] ?: "").split(',').filter { it.contains('/') }
         return ChatMessage(
             id = line.tags["id"] ?: "m-${System.nanoTime()}",
             login = login,
             name = line.tags["display-name"]?.takeIf { it.isNotEmpty() } ?: login,
             color = ChatColors.parse(line.tags["color"], login),
-            badges = (line.tags["badges"] ?: "").split(',').filter { it.contains('/') }.mapNotNull { Badges.url(it, channelId) },
+            badges = badgeIds.mapNotNull { Badges.url(it, channelId) },
             tokens = tokens,
             action = action,
             highlight = highlight,
             time = line.tags["tmi-sent-ts"]?.toLongOrNull() ?: System.currentTimeMillis(),
+            badgeIds = badgeIds,
         )
     }
 
@@ -547,15 +626,54 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
             badges = myBadges.mapNotNull { Badges.url(it, channelId) },
             tokens = ChatText.tokens(body, null, channelId),
             action = action,
+            badgeIds = myBadges,
         ))
         return true
     }
 
-    /** 50 derniers messages (recent-messages.robotty.de), placés avant ceux reçus depuis. */
+    /** 50 derniers messages (recent-messages.robotty.de), placés avant ceux reçus
+     *  depuis. La modération rejouée s'y applique dans l'ordre, comme
+     *  loadRecentMessages (iOS) : messages supprimés et ceux des personnes
+     *  bannies retirés, ou barrés si on garde les messages supprimés. */
     private suspend fun loadHistory() {
         val r = Http.get("https://recent-messages.robotty.de/api/v2/recent-messages/$channel?limit=50", timeout = 10) ?: return
         val lines = parseJson(r.body)?.arr("messages")?.strings() ?: return
-        val old = lines.mapNotNull { raw -> Irc.parse(raw)?.takeIf { it.command == "PRIVMSG" }?.let { build(it) } }
+        val keep = Features.chatKeepDeleted.value
+        val old = ArrayList<ChatMessage>()
+        fun moderate(match: (ChatMessage) -> Boolean) {
+            if (keep) {
+                for (i in old.indices) if (match(old[i])) old[i] = old[i].copy(deleted = true)
+            } else {
+                old.removeAll { match(it) }
+            }
+        }
+        for (raw in lines) {
+            val line = Irc.parse(raw) ?: continue
+            when (line.command) {
+                "PRIVMSG" -> {
+                    val m = build(line) ?: continue
+                    // Supprimé depuis par la modération (marqué par le service).
+                    if (line.tags["rm-deleted"] == "1") {
+                        if (keep) old += m.copy(deleted = true)
+                    } else {
+                        old += m
+                    }
+                }
+                "USERNOTICE" -> noticeMessage(line)?.let { old += it }
+                "CLEARMSG" -> line.tags["target-msg-id"]?.let { id -> moderate { it.id == id } }
+                "CLEARCHAT" -> {
+                    val target = line.trailing?.lowercase()
+                    if (target.isNullOrEmpty()) {
+                        // Chat vidé : rien de ce qui précède.
+                        old.clear()
+                        old += system(AppState.t("chat_cleared")).copy(
+                            time = line.tags["tmi-sent-ts"]?.toLongOrNull() ?: System.currentTimeMillis())
+                    } else {
+                        moderate { it.login == target }
+                    }
+                }
+            }
+        }
         if (old.isEmpty()) return
         val known = messages.map { it.id }.toHashSet()
         messages.addAll(0, old.filter { it.id !in known }.distinctBy { it.id })
@@ -637,6 +755,34 @@ object ChatText {
             } else {
                 segment.appendCodePoint(cps[i])
                 i++
+            }
+        }
+        flushSegment()
+        return merge(out)
+    }
+
+    /** Message déjà découpé, refait avec les emotes 7TV/BTTV/FFZ connues
+     *  maintenant (chargées après lui, ou d'une autre chaîne) ; celles de
+     *  Twitch (tag « emotes ») restent. Les morceaux recollés redonnent le texte. */
+    fun retokenize(tokens: List<ChatToken>, channelId: String?): List<ChatToken> {
+        val out = mutableListOf<ChatToken>()
+        val segment = StringBuilder()
+        fun flushSegment() {
+            if (segment.isEmpty()) return
+            words(segment.toString(), channelId, out)
+            segment.setLength(0)
+        }
+        for (t in tokens) {
+            when (t) {
+                is ChatToken.Emote -> if (t.source == "twitch") {
+                    flushSegment()
+                    out += t
+                } else {
+                    segment.append(t.name)
+                }
+                is ChatToken.Text -> segment.append(t.text)
+                is ChatToken.Mention -> segment.append(t.name)
+                is ChatToken.Link -> segment.append(t.url)
             }
         }
         flushSegment()

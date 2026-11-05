@@ -193,6 +193,8 @@ class VodChat(private val videoId: String, private val scope: CoroutineScope, pr
             color = ChatColors.parse(msg.str("userColor"), login),
             badges = badges,
             tokens = tokens,
+            // Heure du chat rejoué : sa position dans la VOD, comme l'iPhone.
+            timeLabel = com.mxfia19.twitchunblock.core.Format.clock(offset.toLong()),
         ))
     }
 
