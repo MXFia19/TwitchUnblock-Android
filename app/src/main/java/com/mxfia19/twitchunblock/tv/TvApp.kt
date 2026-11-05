@@ -410,14 +410,14 @@ private fun TvChannel(login: String, autoplay: Boolean, nav: TvNav) {
     val scope = rememberCoroutineScope()
     val model = remember(login) { ChannelModel(login, scope) }
     val clips = remember(login) { TvClips(login, scope) }
-    var collections by remember(login) { mutableStateOf<List<TvApi.Playlist>>(emptyList()) }
+    var collections by remember(login) { mutableStateOf<List<com.mxfia19.twitchunblock.core.Playlist>>(emptyList()) }
     LaunchedEffect(login) {
         model.load()
         clips.load()
     }
     // Collections avec la page (une requête) : leurs rangées n'apparaissent
     // qu'avec elles, la plupart des chaînes n'en ont aucune.
-    LaunchedEffect(login) { collections = TvApi.collections(login).orEmpty() }
+    LaunchedEffect(login) { collections = com.mxfia19.twitchunblock.core.NavApi.collections(login).orEmpty() }
     // Ouverte avec Lecture : le direct s'il a commencé, sinon la dernière
     // vidéo, une fois chargés ; une seule fois (pas au retour du lecteur).
     LaunchedEffect(login, autoplay) {

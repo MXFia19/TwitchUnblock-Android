@@ -117,8 +117,9 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
     var openCount by mutableStateOf(0)
         private set
 
-    /** Pauses pub de la chaîne (StreamUi) : créé au premier usage, jamais sur
-     *  la TV. Seule la lecture principale coupe le son (le multi-live gère le sien). */
+    /** Pauses pub de la chaîne (StreamUi, bandeau de la TV) : créé au premier
+     *  usage. Seule la lecture principale coupe le son (le multi-live gère le
+     *  sien, la TV le laisse comme l'Apple TV). */
     val adBreaks by lazy { AdBreakWatcher(player, scope, managesAudio = main) }
     /** Image verticale (Dual Format) du direct en cours. */
     val vertical by lazy { VerticalFeed(this, scope) }
