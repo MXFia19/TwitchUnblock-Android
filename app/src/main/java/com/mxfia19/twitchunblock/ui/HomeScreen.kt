@@ -145,7 +145,10 @@ fun HomeScreen(model: HomeModel, nav: Navigator) {
     val list = BrowsePrefs.homeList.value
     // Épinglées en tête des suivies ; le widget reprend la même liste.
     val followed = Pins.sortStreams(model.followed)
-    LaunchedEffect(model.followed) { com.mxfia19.twitchunblock.widget.LiveWidget.save(context, model.followed) }
+    // Seulement une liste lue (pas celle, vide, d'avant le chargement ou d'un échec).
+    LaunchedEffect(model.followed, model.loading) {
+        if (!model.loading && !model.failed) com.mxfia19.twitchunblock.widget.LiveWidget.save(context, model.followed)
+    }
     val followedLogins = model.followed.map { it.login.lowercase() }.toHashSet()
     val grid = rememberLazyGridState()
     TabTop.Listen(Screen.Home) { grid.animateScrollToItem(0) }

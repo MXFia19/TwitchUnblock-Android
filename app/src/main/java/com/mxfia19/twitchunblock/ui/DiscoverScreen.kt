@@ -444,7 +444,7 @@ private fun FeedPager(count: Int, live: Boolean, lives: List<TwitchStream>, clip
  *  page affichée), puis la fiche et la colonne de droite. */
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
-private fun FeedPage(thumb: String, current: Boolean, player: ExoPlayer, firstFrame: Boolean, failed: Boolean,
+private fun FeedPage(thumb: String, current: Boolean, exo: ExoPlayer, firstFrame: Boolean, failed: Boolean,
                      onOpen: () -> Unit, info: @Composable () -> Unit, side: @Composable () -> Unit) {
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         AsyncImage(model = thumb, contentDescription = null, contentScale = ContentScale.Crop,
@@ -461,10 +461,10 @@ private fun FeedPage(thumb: String, current: Boolean, player: ExoPlayer, firstFr
                                 resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
                                 setShutterBackgroundColor(android.graphics.Color.TRANSPARENT)
                                 keepScreenOn = true
-                                this.player = player
+                                player = exo
                             }
                         },
-                        update = { v -> if (v.player !== player) v.player = player },
+                        update = { v -> if (v.player !== exo) v.player = exo },
                         // Page quittée : la vue lâche le lecteur (repris par la suivante).
                         onRelease = { v -> v.player = null },
                         modifier = Modifier.fillMaxSize(),
