@@ -149,6 +149,7 @@ fun sourceName(id: String): String = when (id) {
     "twitch" -> "Twitch"
     "worker" -> "Worker"
     "account" -> AppState.t("source_account")
+    "pp", "al2", "eu2", "custom" -> AppState.t("src_$id")
     else -> id
 }
 
@@ -303,6 +304,7 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
             Box(Modifier.weight(1f).fillMaxHeight()) {
                 VideoSurface(session, Modifier.fillMaxSize(), onFullscreen = toggleFullscreen)
                 PlayerOverlay(session, Modifier.align(Alignment.Center))
+                StreamVideoOverlay(session)
                 if ((chat != null || vodChat != null) && AppState.showChat) {
                     IconButton(onClick = { chatInLandscape = !chatInLandscape }, modifier = Modifier.align(Alignment.TopEnd)) {
                         Icon(Icons.Filled.Email, contentDescription = AppState.t("tv_chat"), tint = Color.White)
@@ -330,10 +332,12 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
     }
 
     Column(Modifier.fillMaxSize().background(TU.bg)) {
-        Box(Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding().aspectRatio(16f / 9f)) {
+        Box(Modifier.fillMaxWidth().background(Color.Black).statusBarsPadding().portraitVideoSize(session)) {
             VideoSurface(session, Modifier.fillMaxSize(), onFullscreen = toggleFullscreen)
             PlayerOverlay(session, Modifier.align(Alignment.Center))
+            StreamVideoOverlay(session)
         }
+        BroadcastBar(session)
         InfoBar(session, nav)
         when {
             rewardsOpen && liveLogin != null ->
@@ -525,6 +529,15 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                         HorizontalDivider()
                         DropdownMenuItem(text = { Text(AppState.t("multi_add")) },
                                          onClick = { open = false; nav.multi(session.channelLogin) })
+                    }
+                    // Chromecast (CastUi.kt) : choisir un appareil, ou arrêter la diffusion.
+                    if (session.isLive && session.state is PlaybackSession.State.Ready) {
+                        val casting = com.mxfia19.twitchunblock.cast.CastManager.device != null
+                        DropdownMenuItem(text = { Text(AppState.t(if (casting) "st_cast_stop" else "st_cast")) }, onClick = {
+                            open = false
+                            if (casting) com.mxfia19.twitchunblock.cast.CastManager.stop()
+                            else com.mxfia19.twitchunblock.cast.CastManager.openPicker(context)
+                        })
                     }
                 }
             }

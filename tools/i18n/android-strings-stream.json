@@ -1,0 +1,86 @@
+{
+  "_indirect": {
+    "keys": ["src_pp", "src_al2", "src_eu2", "src_custom"]
+  },
+  "st_custom_sub": {
+    "fr": "Adresse de ton propre serveur luminous-ttv (https://…) : il est essayé avant toutes les autres sources. Vide : pas de source perso.",
+    "en": "Address of your own luminous-ttv server (https://…): it's tried before every other source. Empty: no custom source.",
+    "es": "Dirección de tu propio servidor luminous-ttv (https://…): se prueba antes que todas las demás fuentes. Vacío: sin fuente propia.",
+    "ru": "Адрес вашего собственного сервера luminous-ttv (https://…): он пробуется раньше всех остальных источников. Пусто — без своего источника.",
+    "it": "Indirizzo del tuo server luminous-ttv (https://…): viene provato prima di tutte le altre fonti. Vuoto: nessuna fonte personale.",
+    "ja": "自分の luminous-ttv サーバーのアドレス（https://…）：ほかのすべてのソースより先に試されます。空欄ならマイソースはありません。",
+    "zh-Hant": "你自己的 luminous-ttv 伺服器位址（https://…）：會在所有其他來源之前先嘗試。留空：不使用自訂來源。"
+  },
+  "st_hq_sub": {
+    "fr": "1440p et plus, parfois en HEVC ou AV1, sur les chaînes qui diffusent en Enhanced Broadcasting. Twitch ne les donne qu'à un compte connecté : sur Android, seulement quand ton compte regarde la chaîne sans pub (abonnement ou Turbo, avec la session web et « Regarder sans pub avec mon abonnement »). Décodés par cet appareil : {c}. S'applique au prochain direct lancé.",
+    "en": "1440p and above, sometimes in HEVC or AV1, on channels using Enhanced Broadcasting. Twitch only serves them to a signed-in account: on Android, only when your account watches the channel ad-free (sub or Turbo, with the web session and “Watch ad-free with my sub”). Decoded by this device: {c}. Applies to the next stream you open.",
+    "es": "1440p o más, a veces en HEVC o AV1, en los canales que emiten con Enhanced Broadcasting. Twitch solo las da a una cuenta conectada: en Android, solo cuando tu cuenta ve el canal sin anuncios (suscripción o Turbo, con la sesión web y «Ver sin anuncios con mi suscripción»). Decodificados por este dispositivo: {c}. Se aplica al próximo directo.",
+    "ru": "1440p и выше, иногда в HEVC или AV1, на каналах с Enhanced Broadcasting. Twitch отдаёт его только аккаунту, в который выполнен вход: на Android — только когда ваш аккаунт смотрит канал без рекламы (подписка или Turbo, с веб-сессией и «Смотреть без рекламы по подписке»). Это устройство декодирует: {c}. Применяется к следующей открытой трансляции.",
+    "it": "1440p e oltre, a volte in HEVC o AV1, sui canali che trasmettono con Enhanced Broadcasting. Twitch le fornisce solo a un account connesso: su Android, solo quando il tuo account guarda il canale senza pubblicità (abbonamento o Turbo, con la sessione web e «Guarda senza pubblicità con il mio abbonamento»). Decodificati da questo dispositivo: {c}. Si applica alla prossima diretta aperta.",
+    "ja": "Enhanced Broadcasting を使うチャンネルの 1440p 以上（HEVC や AV1 の場合あり）。Twitch はログイン中のアカウントにしか提供しません。Android では、あなたのアカウントがそのチャンネルを広告なしで視聴できる場合のみ（サブスクまたは Turbo、Web セッションと「サブスクの特典で広告なしで視聴」が必要）。この端末で再生できる形式：{c}。次に開く配信から適用されます。",
+    "zh-Hant": "1440p 以上，有時為 HEVC 或 AV1，需頻道使用 Enhanced Broadcasting。Twitch 只提供給已登入的帳號：在 Android 上，只有當你的帳號能無廣告觀看該頻道時（訂閱或 Turbo，並開啟網頁工作階段與「用我的訂閱無廣告觀看」）。由本裝置解碼：{c}。套用於你下次開啟的直播。"
+  },
+  "st_cast": {
+    "fr": "Diffuser sur un appareil (Chromecast)",
+    "en": "Cast to a device (Chromecast)",
+    "es": "Enviar a un dispositivo (Chromecast)",
+    "ru": "Транслировать на устройство (Chromecast)",
+    "it": "Trasmetti a un dispositivo (Chromecast)",
+    "ja": "デバイスにキャスト（Chromecast）",
+    "zh-Hant": "投放到裝置（Chromecast）"
+  },
+  "st_cast_searching": {
+    "fr": "Recherche des appareils sur ce réseau Wi-Fi…",
+    "en": "Looking for devices on this Wi-Fi network…",
+    "es": "Buscando dispositivos en esta red Wi-Fi…",
+    "ru": "Поиск устройств в этой сети Wi-Fi…",
+    "it": "Ricerca dei dispositivi su questa rete Wi-Fi…",
+    "ja": "この Wi-Fi ネットワークのデバイスを検索中…",
+    "zh-Hant": "正在搜尋此 Wi-Fi 網路上的裝置…"
+  },
+  "st_cast_unavailable": {
+    "fr": "Diffusion indisponible : il faut les services Google Play sur ce téléphone.",
+    "en": "Casting unavailable: this phone needs Google Play services.",
+    "es": "Envío no disponible: este teléfono necesita los servicios de Google Play.",
+    "ru": "Трансляция недоступна: на этом телефоне нужны сервисы Google Play.",
+    "it": "Trasmissione non disponibile: su questo telefono servono i servizi Google Play.",
+    "ja": "キャストを利用できません：この端末には Google Play 開発者サービスが必要です。",
+    "zh-Hant": "無法投放：這支手機需要 Google Play 服務。"
+  },
+  "st_cast_playing": {
+    "fr": "Lecture sur {d}",
+    "en": "Playing on {d}",
+    "es": "Reproduciendo en {d}",
+    "ru": "Воспроизводится на {d}",
+    "it": "In riproduzione su {d}",
+    "ja": "{d} で再生中",
+    "zh-Hant": "正在 {d} 上播放"
+  },
+  "st_cast_connecting": {
+    "fr": "Connexion à l'appareil…",
+    "en": "Connecting to the device…",
+    "es": "Conectando con el dispositivo…",
+    "ru": "Подключение к устройству…",
+    "it": "Connessione al dispositivo…",
+    "ja": "デバイスに接続中…",
+    "zh-Hant": "正在連線到裝置…"
+  },
+  "st_cast_stop": {
+    "fr": "Arrêter la diffusion",
+    "en": "Stop casting",
+    "es": "Dejar de enviar",
+    "ru": "Остановить трансляцию",
+    "it": "Interrompi la trasmissione",
+    "ja": "キャストを停止",
+    "zh-Hant": "停止投放"
+  },
+  "st_cast_failed": {
+    "fr": "L'appareil n'a pas pu lire ce direct. Essaie une autre qualité.",
+    "en": "The device couldn't play this stream. Try another quality.",
+    "es": "El dispositivo no pudo reproducir este directo. Prueba otra calidad.",
+    "ru": "Устройству не удалось воспроизвести этот эфир. Попробуйте другое качество.",
+    "it": "Il dispositivo non è riuscito a riprodurre questa diretta. Prova un'altra qualità.",
+    "ja": "デバイスでこの配信を再生できませんでした。別の画質をお試しください。",
+    "zh-Hant": "裝置無法播放這個直播，請試試其他畫質。"
+  }
+}

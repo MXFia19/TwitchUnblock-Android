@@ -49,6 +49,10 @@ fun parseMaster(content: String, baseUrl: String? = null): Master {
     for (i in lines.indices) {
         val line = lines[i].trim()
         if (!line.startsWith("#EXT-X-STREAM-INF")) continue
+        // Image verticale (Dual Format, IVS-GROUPS="portrait") : jamais parmi
+        // les qualités habituelles, elle a sa bascule (StreamApi.portraitLive).
+        val groups = (attr(line, "IVS-GROUPS") ?: "").lowercase().split(',')
+        if ("portrait" in groups && "landscape" !in groups) continue
         var quality = "unknown"
         val name = attr(line, "VIDEO") ?: attr(line, "STABLE-VARIANT-ID") ?: attr(line, "IVS-NAME")
         if (name != null) {

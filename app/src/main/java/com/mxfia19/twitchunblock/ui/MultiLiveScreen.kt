@@ -177,6 +177,8 @@ fun MultiTile(tile: MultiLiveModel.Tile, hasAudio: Boolean, modifier: Modifier, 
                                                    color = TU.muted, fontSize = 13.sp, modifier = Modifier.align(Alignment.Center).padding(8.dp))
             PlaybackSession.State.Ready -> {}
         }
+        // Pause pub de la chaîne : bandeau d'une ligne (StreamUi.kt).
+        AdBreakBanner(tile.session.adBreaks, compact = true, modifier = Modifier.align(Alignment.BottomStart).padding(4.dp))
         Text(
             (if (hasAudio) "🔊 " else "") + tile.login,
             color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,

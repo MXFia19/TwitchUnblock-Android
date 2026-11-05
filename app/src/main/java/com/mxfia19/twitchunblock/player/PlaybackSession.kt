@@ -113,6 +113,15 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
     /** Abonné à la chaîne (jeton du compte), null : inconnu. */
     var subscriber by mutableStateOf<Boolean?>(null)
         private set
+    /** Lectures ouvertes (open) : l'image verticale ne vaut que pour celle en cours. */
+    var openCount by mutableStateOf(0)
+        private set
+
+    /** Pauses pub de la chaîne (StreamUi) : créé au premier usage, jamais sur
+     *  la TV. Seule la lecture principale coupe le son (le multi-live gère le sien). */
+    val adBreaks by lazy { AdBreakWatcher(player, scope, managesAudio = main) }
+    /** Image verticale (Dual Format) du direct en cours. */
+    val vertical by lazy { VerticalFeed(this, scope) }
 
     /** Multi-live : toujours la qualité Auto, plafonnée à cette hauteur. */
     var forceAuto = false
@@ -175,6 +184,7 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
         seekJob?.cancel()
         val sameLive = req is PlayRequest.Live && req.login.lowercase() == channelLogin?.lowercase()
         request = req
+        openCount++
         state = State.Loading()
         errors = 0
         chapters = emptyList()
@@ -255,9 +265,10 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                     com.mxfia19.twitchunblock.core.ContinueWatching.keep(meta)
                 }
                 isClip = false
+                // Rembobinage : à l'instant visé sur la barre du direct, sinon près de la fin.
                 val resume = when {
-                    req.rewind -> -1L
                     req.startMs >= 0 -> req.startMs
+                    req.rewind -> -1L
                     else -> AppState.vodPosition(req.id)
                 }
                 start(m, resume)
@@ -265,7 +276,7 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
                 // Historique (et « Continuer à regarder ») : TV comprise ; le
                 // multi-live ne lit que des directs.
                 com.mxfia19.twitchunblock.core.History.addVod(req.id, title, thumbnail, channelLogin)
-                if (req.rewind) {
+                if (req.rewind && req.startMs < 0) {
                     // Près de la fin de l'enregistrement : là où en est le direct.
                     seekJob = scope.launch {
                         repeat(50) {
@@ -363,6 +374,20 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
         if (startMs > 0) player.setMediaItem(item, startMs) else player.setMediaItem(item)
         player.prepare()
         player.playWhenReady = true
+    }
+
+    /** Liste en cours (image verticale : gardée pour le retour). */
+    val currentMaster: Master get() = master
+
+    /** Autre liste du même direct (image verticale, retour) : relancée comme un
+     *  changement de qualité, sans chercher les sources. */
+    fun swapMaster(m: Master, src: String?) {
+        if (!isLive || m.isEmpty) return
+        source = src
+        start(m, startMs = -1)
+        // Drops : un jeton anonyme ne compte pas, la pulsation relit les segments.
+        val login = channelLogin
+        if (main && login != null) com.mxfia19.twitchunblock.drops.DropsHeartbeat.start(login, pollSegments = src != "account")
     }
 
     /** Qualité choisie dans le lecteur : retenue comme préférence. */
@@ -473,6 +498,7 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
             "not_found" -> "not_found"
             "network" -> "err_network"
             "no_source" -> "err_no_source"
+            "geo_blocked" -> "err_geo_blocked"
             "vod_unavailable" -> "err_vod_unavailable"
             "offline" -> "offline_msg"
             else -> code

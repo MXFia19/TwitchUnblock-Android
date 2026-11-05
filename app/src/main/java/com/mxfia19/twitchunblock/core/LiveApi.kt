@@ -65,6 +65,10 @@ object LiveApi {
         }
 
         val lowLatency = AppState.lowLatency
+        // Blocage par pays (droits de diffusion) : dit par les jetons, usher ou
+        // le Worker ; les proxys, ailleurs, peuvent quand même y avoir accès.
+        val geo = GeoBlockFlag()
+        token?.first?.let { StreamApi.tokenGeoBlock(it) }?.let { geo.note(it) }
         var found = Master()
         var used: String? = null
         var workerInfo: JSONObject? = null
@@ -73,8 +77,10 @@ object LiveApi {
             is com.mxfia19.twitchunblock.web.AccountPlayback.Result.Ok -> {
                 val pat = account.token
                 subscriber = pat.subscriber
+                StreamApi.tokenGeoBlock(pat.value)?.let { geo.note(it) }
                 if (pat.adFree && !pat.forbidden) {
-                    found = usher(login, Pair(pat.value, pat.signature), lowLatency)
+                    // Jeton lié au compte : le seul que Twitch serve au-dessus de 1080p.
+                    found = usher(login, Pair(pat.value, pat.signature), lowLatency, HigherQualities.requested(), geo)
                     if (!found.isEmpty) {
                         used = "account"
                         Logger.success("LIVE", "Direct par le compte (sans pub)", "${found.links.size} qualités")
@@ -87,17 +93,18 @@ object LiveApi {
             }
             else -> {}
         }
-        val steps = AppState.liveSourceSteps()
+        val steps = StreamApi.steps(AppState.liveSourceSteps())
         Logger.info("LIVE", "Ordre des sources", steps.joinToString(" → ").uppercase())
         for (src in steps) {
             if (!found.isEmpty) break
             onSource(src)
             when (src) {
                 "al" -> found = ttvlol(login, lowLatency)
-                "twitch" -> if (token != null) found = usher(login, token, lowLatency)
+                "twitch" -> if (token != null) found = usher(login, token, lowLatency, geo = geo)
+                "custom" -> StreamPrefs.customSourceHost()?.let { found = luminous(listOf(it), login, lowLatency) }
                 in Config.LIVE_PROXY_HOSTS -> found = luminous(listOf(Config.LIVE_PROXY_HOSTS.getValue(src)), login, lowLatency)
                 else -> {
-                    val w = worker(login)
+                    val w = worker(login, geo)
                     found = w.first
                     workerInfo = w.second
                 }
@@ -117,8 +124,19 @@ object LiveApi {
             info.str("thumbnail")?.takeIf { it.isNotEmpty() }?.let { thumbnail = it }
             info.str("avatar")?.takeIf { it.isNotEmpty() }?.let { shownAvatar = it }
         }
-        val error = if (found.isEmpty) (if (user == null) "network" else "no_source") else null
-        if (error != null) Logger.error("LIVE", if (user == null) "Ni Twitch ni aucune source n'ont répondu" else "Aucune source n'a répondu", login)
+        // Aucune source : le réseau si Twitch non plus n'a pas répondu, le pays
+        // si Twitch l'a dit (« geo_blocked » dans son app), sinon les sources.
+        val error = when {
+            !found.isEmpty -> null
+            user == null -> "network"
+            geo.reason != null -> "geo_blocked"
+            else -> "no_source"
+        }
+        if (error != null) Logger.error("LIVE", when (error) {
+            "network" -> "Ni Twitch ni aucune source n'ont répondu"
+            "geo_blocked" -> "Direct bloqué dans ce pays par Twitch"
+            else -> "Aucune source n'a répondu"
+        }, login)
         LiveResult(
             info = LiveInfo(login, title, game, thumbnail, shownAvatar, userId,
                             stream?.int("viewersCount") ?: 0, stream?.str("createdAt"), error = error),
@@ -168,16 +186,22 @@ object LiveApi {
         return Master()
     }
 
-    /** Flux officiel de Twitch (avec ses pubs). */
-    private suspend fun usher(login: String, token: Pair<String, String>, lowLatency: Boolean): Master {
+    /** Flux officiel de Twitch (avec ses pubs). `codecs` : `supported_codecs`,
+     *  jeton du compte seulement (qualités supérieures). `geo` : noté si usher
+     *  refuse le direct pour cause de pays. */
+    private suspend fun usher(login: String, token: Pair<String, String>, lowLatency: Boolean,
+                              codecs: String? = null, geo: GeoBlockFlag? = null): Master {
         if (login.isEmpty() || !login.all { it.isLetterOrDigit() || it == '_' }) return Master()
         Logger.info("LIVE", "Tentative Twitch officiel…")
         val url = "https://usher.ttvnw.net/api/channel/hls/$login.m3u8" +
             "?allow_source=true&allow_audio_only=true&allow_spectre=true" +
             "&fast_bread=$lowLatency&low_latency=$lowLatency&player_backend=mediaplayer" +
             "&playlist_include_framerate=true&segment_preference=4" +
-            "&sig=${Http.encode(token.second)}&token=${Http.encode(token.first)}"
+            "&sig=${Http.encode(token.second)}&token=${Http.encode(token.first)}" +
+            (codecs?.let { "&supported_codecs=${Http.encode(it)}" } ?: "")
+        if (codecs != null) Logger.info("LIVE", "Qualités supérieures demandées à Twitch", codecs)
         val r = Http.get(url, timeout = 8)
+        if (r != null && r.code != 200 && geo != null && StreamApi.usherGeoBlocked(r.body)) geo.note("usher ${r.code}")
         if (r == null || r.code != 200) return Master()
         val m = parseMaster(r.body, url)
         if (!m.isEmpty) Logger.success("LIVE", "Twitch officiel : ${m.links.size} qualités")
@@ -185,9 +209,11 @@ object LiveApi {
     }
 
     /** Worker : sa propre chaîne de sources, en dernier recours. */
-    private suspend fun worker(login: String): Pair<Master, JSONObject?> {
+    private suspend fun worker(login: String, geo: GeoBlockFlag? = null): Pair<Master, JSONObject?> {
         Logger.info("LIVE", "Tentative Worker…")
-        val json = Workers.json("/api/get-live?name=$login&proxy=false") ?: return Pair(Master(), null)
+        val json = Workers.json("/api/get-live?name=$login&proxy=false") { body ->
+            if (StreamApi.workerGeoBlocked(body)) geo?.note("worker")
+        } ?: return Pair(Master(), null)
         val links = linksOf(json.obj("links"))
         if (links.isEmpty()) return Pair(Master(), json)
         val variants = workerVariants(json.obj("variants"))
