@@ -274,9 +274,14 @@ fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onOpenChannel: 
 private fun ChatInput(client: ChatClient, draft: TextFieldValue, onDraft: (TextFieldValue) -> Unit, onLogin: () -> Unit) {
     if (AppState.user == null) {
         Row(Modifier.fillMaxWidth().background(TU.surface).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(AppState.t("chat_login_to_send"), color = TU.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
-            Text(AppState.t("tv_login"), color = TU.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
-                 modifier = Modifier.clip(RoundedCornerShape(6.dp)).focusCard(onLogin).padding(6.dp))
+            // « Sans compte Twitch » : pas d'invitation à se connecter.
+            if (com.mxfia19.twitchunblock.core.NoAccount.active) {
+                androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+            } else {
+                Text(AppState.t("chat_login_to_send"), color = TU.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
+                Text(AppState.t("tv_login"), color = TU.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
+                     modifier = Modifier.clip(RoundedCornerShape(6.dp)).focusCard(onLogin).padding(6.dp))
+            }
             // Cloche des notifications de live de la chaîne (suivie, notifications actives).
             NotifBell(client.channel, Modifier.size(40.dp))
         }

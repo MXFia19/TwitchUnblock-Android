@@ -128,6 +128,8 @@ fun SettingsScreen(nav: Navigator) {
                                modifier = Modifier.padding(top = 8.dp)) { Text(AppState.t("tv_login")) }
                     }
                 }
+                // Changer de compte, comptes gardés (SettingsAppLook.kt).
+                SavedAccountsRows(nav)
                 WebSessionRow(nav)
             }
             Group(AppState.t("settings_twitch_extras")) {

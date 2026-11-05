@@ -311,8 +311,10 @@ private fun PredictionCard(pred: LivePrediction, events: LiveEvents, points: Cha
         if (open) {
             val chosen = pred.outcomes.firstOrNull { it.id == selected }
             when {
-                needsSession -> Text(AppState.t("pred_need_login"), color = TU.primary, fontSize = 10.sp,
-                                     modifier = Modifier.clickable { onWebLogin() })
+                needsSession -> if (!com.mxfia19.twitchunblock.core.NoAccount.active) {
+                    Text(AppState.t("pred_need_login"), color = TU.primary, fontSize = 10.sp,
+                         modifier = Modifier.clickable { onWebLogin() })
+                }
                 chosen == null -> Text(AppState.t("pred_tap_to_bet"), color = TU.muted, fontSize = 10.sp)
                 else -> {
                     val tint = outcomeColor(chosen.color)
@@ -433,6 +435,8 @@ private fun HypeCard(h: LiveHype, now: Long) {
 private fun PointsBar(points: ChannelPoints, events: LiveEvents, onOpenRewards: () -> Unit, onWebLogin: () -> Unit) {
     val scope = rememberCoroutineScope()
     if (points.rewards.isEmpty() && !points.balanceKnown && !points.needsWebLogin) return
+    // « Sans compte Twitch » : pas de barre qui ne fait qu'inviter à se connecter.
+    if (points.needsWebLogin && com.mxfia19.twitchunblock.core.NoAccount.active) return
     Row(Modifier.fillMaxWidth().background(TU.surface).padding(horizontal = 10.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically) {
         if (Features.showWatchStreak.value && events.watchStreak > 0) {

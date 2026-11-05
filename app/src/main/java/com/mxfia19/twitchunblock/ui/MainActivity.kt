@@ -58,6 +58,8 @@ class MainActivity : ComponentActivity() {
         }
         enableEdgeToEdge()
         lifecycleScope.launch { Auth.restore() }
+        // Session web vérifiée une fois au lancement (WebSessionCheck).
+        com.mxfia19.twitchunblock.web.WebSession.checkSoon()
         handleLink(intent)
         setContent {
             TUTheme {

@@ -484,7 +484,8 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                     }
                     // Direct (pas son rembobinage) : un clip de l'image affichée.
                     val live = session.request as? PlayRequest.Live
-                    if (live != null && session.state is PlaybackSession.State.Ready) {
+                    if (live != null && session.state is PlaybackSession.State.Ready &&
+                        !com.mxfia19.twitchunblock.core.NoAccount.active) {
                         DropdownMenuItem(text = { Text(AppState.t("clip_create")) }, onClick = {
                             open = false
                             ClipCreator.start(live.login, System.currentTimeMillis() - liveLatency(session))

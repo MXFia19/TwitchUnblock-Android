@@ -45,6 +45,8 @@ object CloudSync {
     }
 
     fun syncNow() {
+        // Réglages synchronisés (SettingsSync) : relus au même rythme.
+        SettingsSync.refreshIfStale()
         if (!enabled) return
         scope.launch { sync() }
     }

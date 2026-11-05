@@ -20,6 +20,9 @@ import com.mxfia19.twitchunblock.core.objects
 import com.mxfia19.twitchunblock.core.parseJson
 import com.mxfia19.twitchunblock.core.parseJsonArray
 import com.mxfia19.twitchunblock.core.str
+import com.mxfia19.twitchunblock.core.boolPref
+import com.mxfia19.twitchunblock.core.stringPref
+import com.mxfia19.twitchunblock.web.WebSession
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -52,6 +55,26 @@ object Feedback {
 
     private const val KEY = "feedback_reports"
     val reports = mutableStateListOf<Report>()
+
+    /** Nom joint, pour que le développeur reconnaisse qui revient d'un
+     *  signalement à l'autre : le compte Twitch (interrupteur allumé
+     *  d'office), sinon un pseudo écrit à la main ; retenus sur l'appareil.
+     *  Mêmes noms que l'app iPhone. */
+    val signWithTwitch = boolPref("fb_sign_twitch", true)
+    val pseudo = stringPref("fb_pseudo", "")
+
+    /** Compte Twitch connecté (compte de l'app, sinon session web), proposé pour signer. */
+    val signLogin: String?
+        get() = AppState.user?.login?.takeIf { AppState.token != null && it.isNotEmpty() }
+            ?: WebSession.login?.takeIf { WebSession.token != null && it.isNotEmpty() }
+
+    /** Nom joint et sa source (« twitch » ou « pseudo ») ; null : pas signé. */
+    fun signedName(): Pair<String, String>? {
+        signLogin?.let { return if (signWithTwitch.value) it to "twitch" else null }
+        // Espaces et retours à la ligne ramenés à un espace (une ligne, comme le Worker).
+        val p = pseudo.value.split(' ', '\t', '\n', '\r').filter { it.isNotEmpty() }.joinToString(" ").take(30)
+        return if (p.isEmpty()) null else p to "pseudo"
+    }
 
     val unreadCount: Int get() = reports.count { it.unread }
 
@@ -134,6 +157,8 @@ object Feedback {
         val body = JSONObject().put("kind", kind).put("message", message).put("contact", contact)
             .put("platform", "android").put("version", BuildConfig.VERSION_NAME).put("info", info)
             .put("errors", JSONArray(errors)).put("photos", JSONArray(photos))
+        // Champs « name » et « nameSource » du Worker (gardés en nm/ns), comme l'iPhone.
+        signedName()?.let { (name, source) -> body.put("name", name).put("nameSource", source) }
         val r = Http.postJson("${Config.API_URL}/api/feedback", body.toString(), timeout = 30) ?: return "fb_failed"
         if (r.code == 429) return "fb_too_many"
         val j = parseJson(r.body)

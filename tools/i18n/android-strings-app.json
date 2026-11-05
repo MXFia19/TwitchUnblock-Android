@@ -1,0 +1,86 @@
+{
+  "_indirect": {
+    "keys": ["accent_twitch", "accent_blue", "accent_green", "accent_pink", "accent_orange", "accent_red", "accent_teal", "bg_dark", "bg_oled", "bg_slate", "icon_default", "icon_purple", "icon_night", "icon_light", "icon_contrast", "icon_neon"]
+  },
+  "ap_sync_settings_sub": {
+    "fr": "Chat, langue du top, chaînes et catégories masquées, et réglages des événements du direct : les mêmes sur le site, l'app iPhone et tes appareils connectés à ce compte. La langue, la qualité, les notifications et l'apparence restent propres à chaque appareil.",
+    "en": "Chat, top streams language, hidden channels and categories, and the live events settings: the same on the website, the iPhone app and your devices signed in to this account. Language, quality, notifications and appearance stay specific to each device.",
+    "es": "Chat, idioma del top, canales y categorías ocultos, y ajustes de los eventos del directo: los mismos en la web, la app de iPhone y tus dispositivos conectados a esta cuenta. El idioma, la calidad, las notificaciones y la apariencia son propios de cada dispositivo.",
+    "ru": "Чат, язык топа, скрытые каналы и категории и настройки событий трансляции: одинаковые на сайте, в приложении для iPhone и на ваших устройствах с этим аккаунтом. Язык, качество, уведомления и оформление у каждого устройства свои.",
+    "it": "Chat, lingua della top, canali e categorie nascosti e impostazioni degli eventi della diretta: gli stessi sul sito, nell'app per iPhone e sui tuoi dispositivi collegati a questo account. Lingua, qualità, notifiche e aspetto restano propri di ogni dispositivo.",
+    "ja": "チャット、トップ配信の言語、非表示のチャンネルとカテゴリ、ライブイベントの設定を、サイト・iPhone アプリ・このアカウントでサインインしている端末で共通にします。言語、画質、通知、外観は端末ごとの設定のままです。",
+    "zh-Hant": "聊天室、熱門直播語言、隱藏的頻道與分類，以及直播活動設定：在網站、iPhone App 和登入此帳號的裝置上都相同。語言、畫質、通知和外觀仍依各裝置而定。"
+  },
+  "ap_icon_sub": {
+    "fr": "Ton lanceur peut mettre quelques secondes à afficher la nouvelle icône. Si l'app disparaît de l'écran d'accueil, remets-la depuis la liste des apps.",
+    "en": "Your launcher may take a few seconds to show the new icon. If the app disappears from your home screen, add it back from the app list.",
+    "es": "Tu launcher puede tardar unos segundos en mostrar el nuevo icono. Si la app desaparece de la pantalla de inicio, vuelve a añadirla desde la lista de apps.",
+    "ru": "Лаунчеру может понадобиться несколько секунд, чтобы показать новый значок. Если приложение пропало с главного экрана, добавьте его снова из списка приложений.",
+    "it": "Il launcher può metterci qualche secondo a mostrare la nuova icona. Se l'app sparisce dalla schermata Home, aggiungila di nuovo dall'elenco delle app.",
+    "ja": "ランチャーに新しいアイコンが表示されるまで数秒かかることがあります。ホーム画面からアプリが消えた場合は、アプリ一覧から追加し直してください。",
+    "zh-Hant": "啟動器可能需要幾秒鐘才會顯示新圖示。如果 App 從主畫面消失，請從 App 清單重新加入。"
+  },
+  "ap_icon_failed": {
+    "fr": "Android a refusé de changer l'icône : {e}",
+    "en": "Android refused to change the icon: {e}",
+    "es": "Android se negó a cambiar el icono: {e}",
+    "ru": "Android не дал сменить значок: {e}",
+    "it": "Android ha rifiutato di cambiare l'icona: {e}",
+    "ja": "Android がアイコンの変更を拒否しました: {e}",
+    "zh-Hant": "Android 拒絕變更圖示：{e}"
+  },
+  "ap_switch_account_sub": {
+    "fr": "Ce compte reste en place tant que l'autre n'est pas connecté : sur twitch.tv/activate, connecte-toi avec l'autre compte (dans un onglet privé si ton navigateur est déjà connecté). Celui-ci est gardé plus bas pour y revenir.",
+    "en": "This account stays until the other one is connected: on twitch.tv/activate, sign in with the other account (in a private tab if your browser is already signed in). This one is kept below so you can switch back.",
+    "es": "Esta cuenta se mantiene hasta que la otra esté conectada: en twitch.tv/activate, inicia sesión con la otra cuenta (en una pestaña privada si tu navegador ya tiene una sesión). La actual se guarda abajo para volver a ella.",
+    "ru": "Этот аккаунт остаётся, пока не подключён другой: на twitch.tv/activate войдите в другой аккаунт (в приватной вкладке, если браузер уже вошёл). Текущий сохранится ниже, чтобы к нему вернуться.",
+    "it": "Questo account resta finché l'altro non è collegato: su twitch.tv/activate accedi con l'altro account (in una scheda privata se il browser ha già fatto l'accesso). Quello attuale resta qui sotto per tornarci.",
+    "ja": "別のアカウントが接続されるまで、このアカウントはそのままです。twitch.tv/activate で別のアカウントでサインインしてください（ブラウザがすでにサインインしている場合はプライベートタブで）。今のアカウントは下に残り、いつでも戻せます。",
+    "zh-Hant": "在另一個帳號連線前，此帳號會保持登入：請在 twitch.tv/activate 用另一個帳號登入（如果瀏覽器已登入，請用私密分頁）。目前的帳號會保留在下方，方便切換回來。"
+  },
+  "ap_accounts_other": {
+    "fr": "Autres comptes sur cet appareil",
+    "en": "Other accounts on this device",
+    "es": "Otras cuentas en este dispositivo",
+    "ru": "Другие аккаунты на этом устройстве",
+    "it": "Altri account su questo dispositivo",
+    "ja": "この端末のほかのアカウント",
+    "zh-Hant": "此裝置上的其他帳號"
+  },
+  "ap_account_use": {
+    "fr": "Utiliser",
+    "en": "Use",
+    "es": "Usar",
+    "ru": "Выбрать",
+    "it": "Usa",
+    "ja": "使用する",
+    "zh-Hant": "使用"
+  },
+  "ap_account_expired": {
+    "fr": "Twitch n'accepte plus la session de @{u} : reconnecte-toi avec ce compte.",
+    "en": "Twitch no longer accepts @{u}'s session: sign in again with this account.",
+    "es": "Twitch ya no acepta la sesión de @{u}: vuelve a iniciar sesión con esta cuenta.",
+    "ru": "Twitch больше не принимает сеанс @{u}: войдите в этот аккаунт снова.",
+    "it": "Twitch non accetta più la sessione di @{u}: accedi di nuovo con questo account.",
+    "ja": "Twitch が @{u} のセッションを受け付けなくなりました。このアカウントでもう一度サインインしてください。",
+    "zh-Hant": "Twitch 不再接受 @{u} 的登入工作階段：請用此帳號重新登入。"
+  },
+  "ap_account_forget_q": {
+    "fr": "Retirer @{u} de cet appareil ? Il faudra te reconnecter pour l'utiliser à nouveau.",
+    "en": "Remove @{u} from this device? Using it again will require signing in.",
+    "es": "¿Quitar @{u} de este dispositivo? Tendrás que volver a iniciar sesión para usarla.",
+    "ru": "Удалить @{u} с этого устройства? Чтобы снова им пользоваться, нужно будет войти.",
+    "it": "Rimuovere @{u} da questo dispositivo? Per usarlo di nuovo dovrai accedere.",
+    "ja": "この端末から @{u} を削除しますか？もう一度使うにはサインインが必要です。",
+    "zh-Hant": "要從此裝置移除 @{u} 嗎？之後要再使用需重新登入。"
+  },
+  "ap_following_empty_local": {
+    "fr": "Suis des chaînes depuis leur page (♡) pour les retrouver ici.",
+    "en": "Follow channels from their page (♡) to find them here.",
+    "es": "Sigue canales desde su página (♡) para encontrarlos aquí.",
+    "ru": "Отслеживайте каналы на их странице (♡), чтобы видеть их здесь.",
+    "it": "Segui i canali dalla loro pagina (♡) per ritrovarli qui.",
+    "ja": "チャンネルのページ（♡）からフォローすると、ここに表示されます。",
+    "zh-Hant": "在頻道頁面（♡）追蹤頻道，就能在這裡找到它們。"
+  }
+}
