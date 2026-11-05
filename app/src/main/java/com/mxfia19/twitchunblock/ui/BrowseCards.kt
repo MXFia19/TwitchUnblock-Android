@@ -152,6 +152,7 @@ fun LiveCard(stream: TwitchStream, pinned: Boolean, showGame: Boolean, modifier:
             AsyncImage(model = stream.thumb() + "?t=$stamp", contentDescription = null,
                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             LiveBadge(Modifier.align(Alignment.TopStart).padding(6.dp))
+            MultiCardToggle(stream.login, stream.name, Modifier.align(Alignment.TopEnd).padding(6.dp))
             Pill("● " + Format.viewers(stream.viewers), Modifier.align(Alignment.BottomStart).padding(6.dp))
             uptimeText(stream.startedAt, now)?.let {
                 Box(Modifier.align(Alignment.BottomEnd).padding(6.dp).clip(RoundedCornerShape(4.dp))
@@ -192,6 +193,7 @@ fun LiveRow(stream: TwitchStream, pinned: Boolean, showGame: Boolean, modifier: 
             AsyncImage(model = stream.thumb(320, 180) + "?t=$stamp", contentDescription = null,
                        contentScale = ContentScale.Crop, modifier = Modifier.fillMaxSize())
             Pill("● " + Format.viewers(stream.viewers), Modifier.align(Alignment.BottomStart).padding(4.dp))
+            MultiCardToggle(stream.login, stream.name, Modifier.align(Alignment.TopEnd).padding(4.dp))
         }
         Spacer(Modifier.width(10.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
@@ -235,11 +237,12 @@ fun BrowseStreamItem(stream: TwitchStream, list: Boolean, pinnable: Boolean = fa
     val hideChannel = hideable && !BrowseRules.follows(stream.login)
     val hideGame = hideable && hideCategory && stream.gameId.isNotEmpty() && stream.game.isNotEmpty() &&
         !FollowedCategories.isFollowed(stream.gameId)
-    val long: (() -> Unit)? = if (pinnable || hideChannel || hideGame) ({ menu = true }) else null
+    val long: (() -> Unit)? = { menu = true }
     Box {
         if (list) LiveRow(stream, pinnable && pinned, showGame, onLongClick = long, onClick = onClick)
         else LiveCard(stream, pinnable && pinned, showGame, onLongClick = long, onClick = onClick)
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
+            MultiLiveMenuItem(stream.login, stream.name) { menu = false }
             if (pinnable) {
                 DropdownMenuItem(text = { Text(AppState.t(if (pinned) "unpin_streamer" else "pin_streamer")) },
                                  leadingIcon = { Icon(BrowseIcons.pin, contentDescription = null, modifier = Modifier.size(18.dp)) },

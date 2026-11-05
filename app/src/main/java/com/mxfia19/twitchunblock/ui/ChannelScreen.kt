@@ -437,7 +437,7 @@ fun ChannelScreen(login: String, nav: Navigator) {
                     if (model.videos.isNotEmpty()) item(key = "vod-filter", span = FullSpan) { VodFilterField(keyword) { keyword = it } }
                     val shown = model.videos.filter { vodMatches(it, keyword) }
                     items(shown, key = { "v-" + it.id }) { v ->
-                        VodCard(v) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
+                        VodCard(v, onLongClick = multiVodToggle(v.id, v.title, v.thumbnail, login)) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
                     }
                     val filtering = keyword.isNotBlank()
                     when {

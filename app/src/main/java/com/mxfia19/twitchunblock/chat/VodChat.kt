@@ -256,14 +256,16 @@ class VodChat(private val videoId: String, private val scope: CoroutineScope, pr
          *  ligne (téléchargements). Écrit au fil des pages, hors du fil
          *  principal (SavedChat) : tenu en mémoire d'un bloc, un gros chat
          *  faisait planter l'app. Nombre de messages, ou null en échec. */
-        suspend fun archive(videoId: String, lengthSeconds: Double, file: File): Int? = withContext(Dispatchers.IO) {
+        suspend fun archive(videoId: String, lengthSeconds: Double, file: File, from: Double = 0.0): Int? = withContext(Dispatchers.IO) {
             val channelId = owner(videoId)
             val writer = try { SavedChat.Writer(file) } catch (e: Exception) { return@withContext null }
             var done = false
             try {
                 // Identifiants récents seulement : les pages se chevauchent de peu.
                 val seen = HashMap<String, Double>()
-                var position = 0
+                // Partie d'une VOD (téléchargements, série 6) : de `from` à
+                // `lengthSeconds`, heures comptées depuis son début.
+                var position = from.toInt()
                 var pages = 0
                 var failures = 0
                 val end = if (lengthSeconds > 0) lengthSeconds else Double.MAX_VALUE
@@ -283,12 +285,13 @@ class VodChat(private val videoId: String, private val scope: CoroutineScope, pr
                     for (node in page.first) {
                         val at = node.dbl("contentOffsetSeconds") ?: 0.0
                         if (at > end) { beyond = true; break }
+                        if (at < from) continue
                         val id = node.str("id") ?: continue
                         if (seen.containsKey(id)) continue
                         seen[id] = at
                         fresh++
                         newest = maxOf(newest, at)
-                        writer.add(compact(node))
+                        writer.add(if (from > 0) compact(node).put("contentOffsetSeconds", at - from) else compact(node))
                     }
                     if (beyond || (!page.second && fresh == 0)) break
                     position = if (fresh > 0) maxOf(position + 1, newest.toInt()) else position + 5

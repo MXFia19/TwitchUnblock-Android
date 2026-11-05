@@ -99,19 +99,9 @@ object AppState {
         sp.edit().putString("custom_worker", url).apply()
     }
 
-    /** Ordre des sources du direct : la préférée d'abord, le Worker en dernier. */
-    fun liveSourceSteps(): List<String> {
-        val order = listOfNotNull(liveSource.takeIf { it in Config.LIVE_SOURCES }).toMutableList()
-        // Les autres dans l'ordre automatique, chaque source de secours juste
-        // après celle qu'elle secourt.
-        for (id in Config.LIVE_SOURCES) {
-            if (id in order) continue
-            val parent = Config.LIVE_SOURCE_BACKUP_OF[id]
-            val i = if (parent != null) order.indexOf(parent) else -1
-            if (i >= 0) order.add(i + 1, id) else order.add(id)
-        }
-        return order + "worker"
-    }
+    /** Ordre des sources du direct (LiveSources, série 6), sans Ma source ;
+     *  le Worker en dernier. */
+    fun liveSourceSteps(): List<String> = LiveSources.order().filter { it != "custom" } + "worker"
 
     /** Workers pour la lecture : le personnel d'abord, puis le principal et ses secours. */
     val lookupBases: List<String>

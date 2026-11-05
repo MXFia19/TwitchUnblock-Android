@@ -179,9 +179,9 @@ fun HideableCategoryCard(category: Category, onClick: () -> Unit) {
 }
 
 @Composable
-fun VodCard(vod: Vod, modifier: Modifier = Modifier, onClick: () -> Unit) {
+fun VodCard(vod: Vod, modifier: Modifier = Modifier, onLongClick: (() -> Unit)? = null, onClick: () -> Unit) {
     val resume = AppState.vodPosition(vod.id)
-    Column(modifier.focusCard(onClick)) {
+    Column(modifier.focusCard(onClick, onLongClick = onLongClick)) {
         Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f).background(TU.surfaceHi)) {
             AsyncImage(model = vod.thumbnail, contentDescription = null, contentScale = ContentScale.Crop,
                        modifier = Modifier.fillMaxSize())

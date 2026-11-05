@@ -145,9 +145,6 @@ fun SettingsScreen(nav: Navigator) {
                        AppState.qualityPref) { AppState.updateQualityPref(it) }
                 Choice(AppState.t("cellular_quality"), Quality.CELLULAR_PREFS.map { it to Quality.prefLabel(it, AppState.lang) },
                        AppState.cellularQuality, AppState.t("cellular_quality_sub")) { AppState.updateCellularQuality(it) }
-                Choice(AppState.t("live_source"), Config.LIVE_SOURCE_CHOICES.map {
-                    it to if (it == "auto") AppState.t("source_auto") else sourceName(it)
-                }, AppState.liveSource) { AppState.updateLiveSource(it) }
                 Toggle(AppState.t("low_latency"), AppState.t("low_latency_sub"), AppState.lowLatency) { AppState.updateLowLatency(it) }
                 Toggle(AppState.t("tv_chat_show"), null, AppState.showChat) { AppState.updateShowChat(it) }
                 Toggle(AppState.t("background_play"), AppState.t("background_play_sub"), AppState.backgroundPlay) { AppState.updateBackgroundPlay(it) }

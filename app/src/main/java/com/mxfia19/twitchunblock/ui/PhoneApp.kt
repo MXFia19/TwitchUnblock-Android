@@ -215,6 +215,8 @@ fun PhoneApp(nav: Navigator) {
             }
             }
             }
+            // Multi-live en préparation : « Regarder » (MultiPicks.kt, série 6).
+            MultiPickBar(nav, Modifier.align(Alignment.BottomCenter))
           }
         }
     }

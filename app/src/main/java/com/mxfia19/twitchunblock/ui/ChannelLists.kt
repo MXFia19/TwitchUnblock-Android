@@ -95,7 +95,7 @@ fun LazyGridScope.highlightsTab(model: ChannelListsModel, login: String, nav: Na
         list == null -> item(span = FullSpan) { LoadingBox() }
         list.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("no_highlights")) }
         else -> items(list, key = { "h-" + it.id }) { v ->
-            VodCard(v) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
+            VodCard(v, onLongClick = multiVodToggle(v.id, v.title, v.thumbnail, login)) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
         }
     }
 }
@@ -137,7 +137,7 @@ private fun PlaylistRow(p: Playlist, login: String, nav: Navigator) {
         }
         LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             items(p.videos, key = { it.id }) { v ->
-                VodCard(v, Modifier.width(200.dp)) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
+                VodCard(v, Modifier.width(200.dp), onLongClick = multiVodToggle(v.id, v.title, v.thumbnail, login)) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
             }
         }
     }
