@@ -176,6 +176,11 @@ object Backup {
             // Série 6 : son d'origine des passages coupés, chat du multi-live.
             .put("android_restoreMuted", com.mxfia19.twitchunblock.player.VodUnmute.enabled.value)
             .put("multiChat", com.mxfia19.twitchunblock.ui.MultiPrefs.chat.value)
+            // Lecteur (série 6) : son seul en arrière-plan, PiP en quittant le
+            // lecteur, latence affichée (absents de la sauvegarde de l'iPhone).
+            .put("android_bgAudioOnly", PlayerExtraPrefs.bgAudioOnly.value)
+            .put("android_pipOnLeave", PlayerExtraPrefs.pipOnLeave.value)
+            .put("android_showLatency", PlayerExtraPrefs.showLatency.value)
             // Android TV (série 6) : place du chat par défaut et rangée « Reprendre »
             // (mêmes valeurs que l'Apple TV ; les choix par chaîne restent sur l'appareil).
             .put("android_tvChatLayout", com.mxfia19.twitchunblock.tv.TvChatPrefs.place.raw)
@@ -449,6 +454,9 @@ object Backup {
         }
         bool("android_restoreMuted", "ios_restoreMuted") { com.mxfia19.twitchunblock.player.VodUnmute.enabled.set(it) }
         bool("multiChat") { com.mxfia19.twitchunblock.ui.MultiPrefs.chat.set(it) }
+        bool("android_bgAudioOnly") { PlayerExtraPrefs.bgAudioOnly.set(it) }
+        bool("android_pipOnLeave") { PlayerExtraPrefs.pipOnLeave.set(it) }
+        bool("android_showLatency") { PlayerExtraPrefs.showLatency.set(it) }
         str("android_tvChatLayout") { com.mxfia19.twitchunblock.tv.TvChatPlace.parse(it) != null }
             ?.let { com.mxfia19.twitchunblock.tv.TvChatPlace.parse(it)?.let { p -> com.mxfia19.twitchunblock.tv.TvChatPrefs.setDefaultPlace(p) } }
         str("android_tvResumePlace") { it in listOf("top", "bottom", "hidden") }

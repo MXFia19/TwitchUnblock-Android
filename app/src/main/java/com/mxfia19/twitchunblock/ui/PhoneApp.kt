@@ -158,8 +158,9 @@ fun PhoneApp(nav: Navigator) {
 
     // Lecture principale, portée ici et non par l'écran du lecteur : elle
     // continue sous une fiche chaîne, la connexion ou la session web, et
-    // reprend telle quelle au retour (rembobinage compris). Arrêtée quand le
-    // lecteur quitte la pile (fermé, onglet, multi-live).
+    // reprend telle quelle au retour (rembobinage compris). Réduite en
+    // mini-lecteur pour un onglet ; arrêtée quand le lecteur est fermé (✕)
+    // ou remplacé (autre lecture, multi-live).
     val playing = (nav.stack.filterIsInstance<Screen.Player>().lastOrNull() ?: nav.mini)?.request
     val session = remember(playing != null) { if (playing != null) PlaybackSession(context, scope) else null }
     DisposableEffect(session) { onDispose { session?.release() } }
