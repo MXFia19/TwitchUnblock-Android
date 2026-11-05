@@ -28,8 +28,9 @@ object Hidden {
     fun hidesChannel(login: String) = channels.any { it.login == login.lowercase() }
     fun hidesCategory(id: String) = id.isNotEmpty() && categories.any { it.id == id }
 
-    /** Un direct qu'on peut montrer dans le top ou une catégorie. */
-    fun allows(s: TwitchStream) = !hidesChannel(s.login) && !hidesCategory(s.gameId)
+    /** Un direct qu'on peut montrer dans le top ou une catégorie : ce qu'on
+     *  suit ou épingle passe toujours (BrowseRules, comme le téléphone). */
+    fun allows(s: TwitchStream, followed: Set<String> = emptySet()) = BrowseRules.shows(s, followed)
 
     fun hideChannel(login: String, name: String) {
         val l = login.lowercase()

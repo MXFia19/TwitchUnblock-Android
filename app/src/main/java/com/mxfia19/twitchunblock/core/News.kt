@@ -82,11 +82,17 @@ object News {
         val previous = reaction
         reaction = emoji
         val body = JSONObject().put("id", AppState.installId).put("announcementId", a.id).put("emoji", emoji ?: JSONObject.NULL)
-        val r = Http.postJson("${Config.API_URL}/api/announcement/react", body.toString(), timeout = 10)
-        if (r?.code == 200) {
-            AppState.prefs.edit().putString(REACTED + a.id, emoji).apply()
-        } else {
-            reaction = previous
+        var saved = false
+        try {
+            val r = Http.postJson("${Config.API_URL}/api/announcement/react", body.toString(), timeout = 10)
+            if (r?.code == 200) {
+                AppState.prefs.edit().putString(REACTED + a.id, emoji).apply()
+                saved = true
+            }
+        } finally {
+            // Refusée, ou annulée (accueil quitté pendant l'envoi) : la
+            // réaction gardée revient.
+            if (!saved) reaction = previous
         }
     }
 
@@ -94,8 +100,13 @@ object News {
         val p = poll ?: return
         voting = true
         val body = JSONObject().put("device", AppState.installId).put("pollId", p.id).put("choices", JSONArray(choices))
-        val r = Http.postJson("${Config.API_URL}/api/poll/vote", body.toString(), timeout = 15)
-        voting = false
+        val r = try {
+            Http.postJson("${Config.API_URL}/api/poll/vote", body.toString(), timeout = 15)
+        } finally {
+            // Annulé (accueil quitté pendant l'envoi) : le bouton Voter ne
+            // reste pas grisé jusqu'au redémarrage.
+            voting = false
+        }
         if (r?.code == 200) parsePoll(parseJson(r.body))?.let { poll = it } else Logger.warn("POLL", "Vote refusé", "HTTP ${r?.code ?: "réseau"}")
     }
 }

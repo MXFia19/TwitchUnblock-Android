@@ -225,7 +225,8 @@ object DiscoverFeed {
     suspend fun liveUrl(login: String): String? {
         val key = "live:$login"
         cached(key)?.let { return it }
-        val r = LiveApi.getLive(login)
+        // Sans le compte : aperçu muet, ses sources habituelles seulement.
+        val r = LiveApi.getLive(login, account = false)
         r.info.avatar?.let { avatars[login] = it }
         val links = r.master.links
         if (links.isEmpty()) return null

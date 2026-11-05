@@ -79,13 +79,38 @@ fun DropsScreen(nav: Navigator) {
 
 @Composable
 private fun DropsList(scope: kotlinx.coroutines.CoroutineScope, openUri: (String) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    // « Me prévenir » (actif d'office) : sans l'autorisation d'Android 13+,
+    // rien ne s'affiche. Demandée à la première ouverture de la page (comme
+    // l'iPhone) et à chaque activation du réglage.
+    val permission = androidx.activity.compose.rememberLauncherForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()) {}
+    fun needsPermission() =
+        android.os.Build.VERSION.SDK_INT >= 33 && !com.mxfia19.twitchunblock.notify.LiveNotifier.canNotify(context)
+    fun askNotifications() {
+        if (!needsPermission()) return
+        try {
+            permission.launch(android.Manifest.permission.POST_NOTIFICATIONS)
+        } catch (e: Exception) {
+            // Pas d'écran pour la demander : le réglage reste tel quel.
+        }
+    }
+    LaunchedEffect(Unit) {
+        if (Features.dropsNotify.value && needsPermission() && !AppState.prefs.getBoolean("drops_notif_asked", false)) {
+            AppState.prefs.edit().putBoolean("drops_notif_asked", true).apply()
+            askNotifications()
+        }
+    }
     run {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 24.dp)) {
             item {
                 Column(Modifier.padding(horizontal = 12.dp)) {
                     Toggle(AppState.t("drops_progress"), AppState.t("drops_progress_sub"), Features.dropsProgress.value) { Features.dropsProgress.set(it) }
                     Toggle(AppState.t("drops_autoclaim"), AppState.t("drops_autoclaim_sub"), Features.dropsAutoClaim.value) { Features.dropsAutoClaim.set(it) }
-                    Toggle(AppState.t("drops_notify"), AppState.t("drops_notify_sub"), Features.dropsNotify.value) { Features.dropsNotify.set(it) }
+                    Toggle(AppState.t("drops_notify"), AppState.t("drops_notify_sub"), Features.dropsNotify.value) {
+                        Features.dropsNotify.set(it)
+                        if (it) askNotifications()
+                    }
                     val c = DropsHeartbeat.login ?: ""
                     val status = when {
                         !Features.dropsProgress.value -> AppState.t("drops_status_off")

@@ -27,7 +27,9 @@ object LiveApi {
         return Pair(value, sig)
     }
 
-    suspend fun getLive(channel: String, onSource: (String) -> Unit = {}): LiveResult = coroutineScope {
+    /** `account` faux : sans le flux du compte (aperçus de Découvrir, comme
+     *  l'iPhone) : ni attente de son jeton, ni direct regardé à son nom. */
+    suspend fun getLive(channel: String, account: Boolean = true, onSource: (String) -> Unit = {}): LiveResult = coroutineScope {
         val login = channel.trim().lowercase()
         // Mis tel quel dans les adresses des sources et du Worker : rien
         // d'autre qu'un pseudo Twitch (ni « ? », ni « & », ni « / »).
@@ -39,7 +41,7 @@ object LiveApi {
         val tokenTask = async { accessToken(login, live = true) }
         // En même temps que le reste : 6 s au plus (jeton d'intégrité compris).
         val accountTask = async {
-            if (Features.subAdFree.value) com.mxfia19.twitchunblock.web.AccountPlayback.forLaunch(login)
+            if (account && Features.subAdFree.value) com.mxfia19.twitchunblock.web.AccountPlayback.forLaunch(login)
             else com.mxfia19.twitchunblock.web.AccountPlayback.Result.Unavailable
         }
         val gql = gqlTask.await()

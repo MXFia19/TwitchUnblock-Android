@@ -54,7 +54,9 @@ object Format {
 
     /** Date courte dans la langue de l'app (« 12 oct. 2026 »). */
     fun shortDate(ms: Long): String {
-        val f = SimpleDateFormat("d MMM yyyy", Locale(AppState.lang.code))
+        // forLanguageTag : Locale("zh-Hant") donnait la langue invalide
+        // « zh-hant », et des mois par défaut (« M10 ») au lieu du chinois.
+        val f = SimpleDateFormat("d MMM yyyy", Locale.forLanguageTag(AppState.lang.code))
         return f.format(Date(ms))
     }
 }

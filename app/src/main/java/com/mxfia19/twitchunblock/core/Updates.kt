@@ -25,9 +25,14 @@ object Updates {
         val last = AppState.prefs.getLong(LAST, 0L)
         if (!force && System.currentTimeMillis() - last < 6 * 3_600_000L) return available
         checking = true
-        val r = Http.get("https://api.github.com/repos/${Config.REPO}/releases?per_page=20",
-                         mapOf("Accept" to "application/vnd.github+json"), timeout = 15)
-        checking = false
+        val r = try {
+            Http.get("https://api.github.com/repos/${Config.REPO}/releases?per_page=20",
+                     mapOf("Accept" to "application/vnd.github+json"), timeout = 15)
+        } finally {
+            // Annulée (réglages quittés pendant la requête) : le bouton ne
+            // reste pas grisé jusqu'au redémarrage.
+            checking = false
+        }
         val list = parseJsonArray(r?.body)?.objects()
         if (list == null) {
             Logger.warn("UPDATE", "Versions illisibles", "HTTP ${r?.code ?: "réseau"}")
