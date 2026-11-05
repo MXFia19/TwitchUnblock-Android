@@ -173,6 +173,8 @@ fun LiveCard(stream: TwitchStream, pinned: Boolean, showGame: Boolean, modifier:
             if (showGame && stream.game.isNotEmpty()) {
                 Text(stream.game, color = TU.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
+            // Tags (langue, DropsEnabled…), comme sous les cartes de Twitch.
+            TagChips(stream.tags, Modifier.padding(top = 3.dp))
         }
     }
 }
@@ -215,6 +217,7 @@ fun LiveRow(stream: TwitchStream, pinned: Boolean, showGame: Boolean, modifier: 
                     if (uptime != null) Uptime(uptime, TU.muted, 12)
                 }
             }
+            TagChips(stream.tags, Modifier.padding(top = 1.dp))
         }
     }
 }

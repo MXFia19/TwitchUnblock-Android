@@ -772,6 +772,8 @@
   "multi_watch": "Regarder",
   "muted_words": "Mots masqués",
   "muted_words_sub": "Séparés par des virgules : les messages qui les contiennent ne s’affichent pas.",
+  "n6_home_order": "Accueil · ordre des parties",
+  "n6_home_order_foot": "Les flèches changent l'ordre des parties de l'accueil ; l'interrupteur les masque.",
   "native_tabs": "Onglets natifs (Liquid Glass)",
   "native_tabs_sub": "La barre d'onglets d'iOS 26 au lieu de celle de l'app : elle se replie quand tu défiles et le système la range selon l'écran (iPad, iPhone Duo). En test : signale ce qui cloche.",
   "no_clips": "Aucun clip sur cette période",

@@ -772,6 +772,8 @@
   "multi_watch": "Ver",
   "muted_words": "Palabras silenciadas",
   "muted_words_sub": "Separadas por comas: los mensajes que las contienen no se muestran.",
+  "n6_home_order": "Inicio · orden de las secciones",
+  "n6_home_order_foot": "Las flechas cambian el orden de las secciones de Inicio; el interruptor las oculta.",
   "native_tabs": "Pestañas nativas (Liquid Glass)",
   "native_tabs_sub": "La barra de pestañas de iOS 26 en lugar de la de la app: se reduce al desplazarte y el sistema la coloca según la pantalla (iPad, iPhone Duo). En pruebas: avisa de lo que falle.",
   "no_clips": "No hay clips en este periodo",

@@ -50,6 +50,9 @@ import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.LiveInfo
 import com.mxfia19.twitchunblock.core.Vod
 import com.mxfia19.twitchunblock.core.Hidden
+import com.mxfia19.twitchunblock.core.BrowsePrefs
+import com.mxfia19.twitchunblock.core.ListCursor
+import com.mxfia19.twitchunblock.core.NavApi
 import com.mxfia19.twitchunblock.core.RecoverableStream
 import com.mxfia19.twitchunblock.core.VodApi
 import com.mxfia19.twitchunblock.notify.NotifChannels
@@ -76,10 +79,20 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
         private set
     var videosError by mutableStateOf<String?>(null)
         private set
+    /** Twitch refuse la suite des VODs (se connecter n'y changerait rien) : une note. */
+    var videosRefused by mutableStateOf(false)
+        private set
+    /** « Chercher dans les anciennes VODs » en cours. */
+    var searchingOlder by mutableStateOf(false)
+        private set
     val clips = mutableStateListOf<Clip>()
     var clipsLoading by mutableStateOf(false)
         private set
-    var clipsNext by mutableStateOf<String?>(null)
+    /** Suite des clips : GQL sans compte, Helix avec le compte si Twitch refuse. */
+    var clipsNext by mutableStateOf<ListCursor?>(null)
+        private set
+    /** Twitch refuse la suite des clips et aucun compte ne prend le relais. */
+    var clipsLocked by mutableStateOf(false)
         private set
     var period by mutableStateOf("LAST_WEEK")
         private set
@@ -93,6 +106,9 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
     var recoverLoading by mutableStateOf(false)
         private set
     var recoverFailed by mutableStateOf(false)
+        private set
+    /** Tirer pour actualiser en cours (direct et première page des VODs). */
+    var refreshing by mutableStateOf(false)
         private set
 
     fun loadRecovered() {
@@ -113,17 +129,64 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
         if (videos.isEmpty()) moreVideos()
     }
 
+    /** Direct et première page des VODs relus (tirer pour actualiser) ; les
+     *  VODs déjà là restent si Twitch ne répond pas. */
+    fun refresh() {
+        if (refreshing || videosLoading) return
+        refreshing = true
+        videosLoading = true
+        scope.launch {
+            val fresh = BrowseApi.channelInfo(login)
+            if (fresh.error != "network" || info == null) info = fresh
+            val page = BrowseApi.channelVideos(login, null)
+            if (page.error == null && !page.refused) {
+                videos.clear()
+                videos.addAll(page.videos.distinctBy { it.id })
+                videosNext = page.next
+                videosError = null
+                videosRefused = false
+            }
+            videosLoading = false
+            refreshing = false
+        }
+    }
+
     fun moreVideos() {
         if (videosLoading) return
         if (videos.isNotEmpty() && videosNext == null) return
         videosLoading = true
         scope.launch {
-            val page = BrowseApi.channelVideos(login, videosNext)
-            val seen = videos.map { it.id }.toHashSet()
-            videos.addAll(page.videos.filter { it.id !in seen }.distinctBy { it.id })
-            videosNext = page.next
-            videosError = page.error
+            nextVideos()
             videosLoading = false
+        }
+    }
+
+    /** Une page de VODs de plus ; faux si elle n'a pas été lue (panne, refus). */
+    private suspend fun nextVideos(): Boolean {
+        val page = BrowseApi.channelVideos(login, videosNext)
+        val seen = videos.map { it.id }.toHashSet()
+        videos.addAll(page.videos.filter { it.id !in seen }.distinctBy { it.id })
+        videosNext = page.next
+        videosError = page.error
+        videosRefused = page.refused
+        return page.error == null && !page.refused
+    }
+
+    /** Le filtre par mot-clé ne voit que les VODs chargées : page après page
+     *  (5 au plus par toucher, soit 500 VODs), jusqu'à une nouvelle
+     *  correspondance, la fin, une panne ou un refus. Comme searchOlderVods (iOS). */
+    fun searchOlder(matches: (Vod) -> Boolean) {
+        if (videosLoading || searchingOlder || videosNext == null) return
+        searchingOlder = true
+        videosLoading = true
+        scope.launch {
+            val before = videos.count(matches)
+            for (i in 0 until 5) {
+                if (videosNext == null || !nextVideos()) break
+                if (videos.count(matches) > before) break
+            }
+            videosLoading = false
+            searchingOlder = false
         }
     }
 
@@ -135,23 +198,45 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
         clipsLoading = true
         clipsFailed = false
         scope.launch {
-            val page = BrowseApi.clips(login, p, if (fresh) null else clipsNext)
             if (fresh) {
+                val page = BrowseApi.clips(login, p, null)
                 clips.clear()
                 // Rien de lu pour cette période tant que Twitch n'a pas répondu.
                 clipsLoadedFor = null
                 clipsNext = null
-            }
-            if (page != null) {
-                val seen = clips.map { it.slug }.toHashSet()
-                clips.addAll(page.items.filter { it.slug !in seen }.distinctBy { it.slug })
-                clipsNext = if (page.refused) null else page.next
-                clipsLoadedFor = p
+                clipsLocked = false
+                if (page != null) {
+                    clips.addAll(page.items.distinctBy { it.slug })
+                    clipsNext = page.next?.let { ListCursor.Gql(it) }
+                    clipsLoadedFor = p
+                } else {
+                    clipsFailed = true
+                }
             } else {
-                clipsFailed = true
+                val c = clipsNext
+                if (c != null) {
+                    val r = NavApi.more(c, clips, { it.slug }, gql = { BrowseApi.clips(login, p, it) },
+                                        helix = { after -> clipsHelix(p, after) })
+                    clips.addAll(r.fresh)
+                    clipsNext = r.cursor
+                    clipsLocked = r.locked
+                }
             }
             clipsLoading = false
         }
+    }
+
+    /** Connecté depuis le refus : Helix reprend du début. */
+    fun clipsWithAccount() {
+        if (!clipsLocked) return
+        clipsLocked = false
+        clipsNext = ListCursor.Helix(null)
+        loadClips()
+    }
+
+    private suspend fun clipsHelix(p: String, after: String?): com.mxfia19.twitchunblock.core.Page<Clip>? {
+        val id = info?.userId ?: NavApi.userId(login) ?: return null
+        return NavApi.helixClips(id, p, after)
     }
 }
 
@@ -164,15 +249,25 @@ fun ChannelScreen(login: String, nav: Navigator) {
     // Gardés tant que la page reste dans la pile (PhoneApp) : au retour d'un
     // live ou d'un clip, même onglet, même période, rien n'est relu.
     val model = rememberPageModel("channel:$login") { ChannelModel(login, it) }
-    var tab by rememberSaveable { mutableStateOf(0) }
+    // Onglet touché ; vide : le premier affiché (Personnaliser l'app → onglets de la chaîne).
+    var picked by rememberSaveable { mutableStateOf("") }
+    var keyword by rememberSaveable { mutableStateOf("") }
     LaunchedEffect(login) { model.load() }
-    // Planning (onglet 3, s'il y en a un) et À propos (onglet 4) : ChannelPanels.kt.
+    // Planning (s'il y en a un) et À propos : ChannelPanels.kt. Temps forts et playlists : ChannelLists.kt.
     val extras = rememberPageModel("extras:$login") { ChannelExtrasModel(login, it) }
+    val lists = rememberPageModel("lists:$login") { ChannelListsModel(login, it) }
+    // Onglets dans l'ordre choisi ; le planning seulement si la chaîne en a un.
+    val tabs = BrowsePrefs.visibleChannelTabs.filter { it != "schedule" || extras.hasSchedule }
+    val tab = if (picked in tabs) picked else tabs.first()
     LaunchedEffect(tab) {
         // Clips déjà là (retour sur la page) : pas de page en plus.
-        if (tab == 1 && model.clips.isEmpty()) model.loadClips()
-        if (tab == 2) model.loadRecovered()
-        if (tab == 4) extras.loadAbout()
+        when (tab) {
+            "clips" -> if (model.clips.isEmpty()) model.loadClips()
+            "recover" -> model.loadRecovered()
+            "about" -> extras.loadAbout()
+            "highlights" -> lists.loadHighlights()
+            "playlists" -> lists.loadPlaylists()
+        }
     }
     LaunchedEffect(model.info) { model.info?.let { extras.loadSchedule(it.userId) } }
     // Session web : le cœur suit la chaîne sur le compte Twitch ; sinon sur l'appareil.
@@ -181,6 +276,8 @@ fun ChannelScreen(login: String, nav: Navigator) {
     var busy by remember { mutableStateOf(false) }
     var confirmUnfollow by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
+    // Refus de Twitch (code, vide s'il n'en donne pas) ; null : pas de refus.
+    var followError by remember(login) { mutableStateOf<String?>(null) }
     LaunchedEffect(login, WebSession.token) {
         twitchFollow = null
         twitchId = null
@@ -195,17 +292,19 @@ fun ChannelScreen(login: String, nav: Navigator) {
         val id = twitchId
         if (id != null && !busy) {
             busy = true
+            followError = null
             scope.launch {
-                if (TwitchFollow.set(id, want) == null) twitchFollow = want
+                val code = TwitchFollow.set(id, want)
+                if (code == null) twitchFollow = want else followError = code
                 busy = false
             }
         }
     }
     val info = model.info
+    val usesTwitch = twitchFollow != null
+    val followed = if (usesTwitch) twitchFollow == true else AppState.isFollowedLocally(login)
     Column(Modifier.fillMaxSize()) {
         PageHeader(login, nav) {
-            val usesTwitch = twitchFollow != null
-            val followed = if (usesTwitch) twitchFollow == true else AppState.isFollowedLocally(login)
             // Cloche : notifications de live de cette chaîne seulement. Suivie sur
             // l'appareil, ou par le compte : le statut lu sur Twitch (session
             // web) fait foi quand il est connu, sinon la liste des suivis.
@@ -250,6 +349,7 @@ fun ChannelScreen(login: String, nav: Navigator) {
                 containerColor = TU.surface, titleContentColor = TU.text,
             )
         }
+        RefreshBox(loading = model.refreshing, onRefresh = { model.refresh() }) {
         LazyVerticalGrid(
             columns = BrowseGrid.cards,
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),
@@ -258,71 +358,114 @@ fun ChannelScreen(login: String, nav: Navigator) {
             modifier = Modifier.fillMaxSize(),
         ) {
             item(span = FullSpan) { ChannelHeader(login, info) { nav.play(PlayRequest.Live(login)) } }
+            // Suivie sur l'appareil seulement, refus de Twitch, chaîne masquée des listes.
+            item(span = FullSpan) {
+                ChannelStatusLines(localFollow = !usesTwitch && AppState.isFollowedLocally(login), followError = followError,
+                                   hidden = Hidden.hidesChannel(login)) { Hidden.unhideChannel(login) }
+            }
             // Hors ligne : son prochain live prévu, ou ses vacances.
             val schedule = extras.schedule
             if (info?.error == "offline" && schedule != null) item(span = FullSpan) { ScheduleHeadline(schedule) }
             item(span = FullSpan) {
                 Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    TabChip(AppState.t("tv_videos"), tab == 0) { tab = 0 }
-                    TabChip(AppState.t("clips"), tab == 1) { tab = 1 }
-                    TabChip(AppState.t("recover_tab"), tab == 2) { tab = 2 }
-                    if (extras.hasSchedule) TabChip(AppState.t("sched_tab"), tab == 3) { tab = 3 }
-                    TabChip(AppState.t("about"), tab == 4) { tab = 4 }
+                    for (key in tabs) TabChip(AppState.t(channelTabLabel(key)), tab == key) { picked = key }
                 }
             }
-            if (tab == 3 && schedule != null) {
-                item(span = FullSpan) { ScheduleTab(schedule) }
-            } else if (tab == 4) {
-                val about = extras.about
-                when {
-                    about != null -> item(span = FullSpan) { AboutTab(about, info?.login ?: login) }
-                    extras.aboutFailed -> item(span = FullSpan) {
-                        MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { extras.loadAbout() }
-                    }
-                    else -> item(span = FullSpan) { LoadingBox() }
-                }
-            } else if (tab == 2) {
-                item(span = FullSpan) { Text(AppState.t("recover_sub"), color = TU.muted, fontSize = 13.sp) }
-                val list = model.recovered
-                when {
-                    model.recoverLoading -> item(span = FullSpan) { LoadingBox() }
-                    model.recoverFailed || list == null -> item(span = FullSpan) {
-                        MessageBox(AppState.t("recover_unavailable"), action = AppState.t("retry")) { model.loadRecovered() }
-                    }
-                    list.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("recover_empty")) }
-                    else -> items(list, key = { "r-" + it.streamId }, span = { GridItemSpan(maxLineSpan) }) { st ->
-                        RecoverRow(st) { nav.play(PlayRequest.Recovered(st)) }
+            when (tab) {
+                "schedule" -> if (schedule != null) item(span = FullSpan) { ScheduleTab(schedule) }
+                "about" -> {
+                    val about = extras.about
+                    when {
+                        about != null -> item(span = FullSpan) { AboutTab(about, info?.login ?: login) }
+                        extras.aboutFailed -> item(span = FullSpan) {
+                            MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { extras.loadAbout() }
+                        }
+                        else -> item(span = FullSpan) { LoadingBox() }
                     }
                 }
-            } else if (tab == 0) {
-                items(model.videos, key = { "v-" + it.id }) { v ->
-                    VodCard(v) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
-                }
-                when {
-                    model.videosLoading -> item(span = FullSpan) { LoadingBox() }
-                    model.videos.isEmpty() && model.videosError == "network" -> item(span = FullSpan) {
-                        MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.moreVideos() }
-                    }
-                    model.videos.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("tv_no_videos")) }
-                    model.videosNext != null -> item(span = FullSpan) { MoreButton(false) { model.moreVideos() } }
-                }
-            } else {
-                item(span = FullSpan) {
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        for ((p, key) in periods) TabChip(AppState.t(key), model.period == p) { model.loadClips(p) }
+                "recover" -> {
+                    item(span = FullSpan) { Text(AppState.t("recover_sub"), color = TU.muted, fontSize = 13.sp) }
+                    val list = model.recovered
+                    when {
+                        model.recoverLoading -> item(span = FullSpan) { LoadingBox() }
+                        model.recoverFailed || list == null -> item(span = FullSpan) {
+                            MessageBox(AppState.t("recover_unavailable"), action = AppState.t("retry")) { model.loadRecovered() }
+                        }
+                        list.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("recover_empty")) }
+                        else -> items(list, key = { "r-" + it.streamId }, span = { GridItemSpan(maxLineSpan) }) { st ->
+                            RecoverRow(st) { nav.play(PlayRequest.Recovered(st)) }
+                        }
                     }
                 }
-                items(model.clips, key = { "c-" + it.slug }) { c -> ClipCard(c) { nav.play(PlayRequest.Clip(c.slug)) } }
-                when {
-                    model.clipsLoading -> item(span = FullSpan) { LoadingBox() }
-                    model.clipsFailed && model.clips.isEmpty() -> item(span = FullSpan) {
-                        MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.loadClips(model.period) }
+                "highlights" -> highlightsTab(lists, login, nav)
+                "playlists" -> playlistsTab(lists, login, nav)
+                "clips" -> {
+                    item(span = FullSpan) {
+                        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            for ((p, key) in periods) TabChip(AppState.t(key), model.period == p) { model.loadClips(p) }
+                        }
                     }
-                    model.clips.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("no_clips")) }
-                    model.clipsNext != null -> item(span = FullSpan) { MoreButton(false) { model.loadClips() } }
+                    items(model.clips, key = { "c-" + it.slug }) { c -> ClipCard(c) { nav.play(PlayRequest.Clip(c.slug)) } }
+                    when {
+                        model.clipsLoading -> item(span = FullSpan) { LoadingBox() }
+                        model.clipsFailed && model.clips.isEmpty() -> item(span = FullSpan) {
+                            MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.loadClips(model.period) }
+                        }
+                        model.clips.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("no_clips")) }
+                        model.clipsNext != null -> item(span = FullSpan) { MoreButton(false) { model.loadClips() } }
+                        // Twitch refuse la suite : le compte la reprend (Helix), sinon une note.
+                        model.clipsLocked && AppState.token != null -> item(span = FullSpan) { MoreButton(false) { model.clipsWithAccount() } }
+                        model.clipsLocked -> item(span = FullSpan) { ListEndNote("more_needs_login") }
+                    }
+                }
+                else -> {
+                    // Filtre par mot-clé : seulement s'il y a de quoi filtrer.
+                    if (model.videos.isNotEmpty()) item(key = "vod-filter", span = FullSpan) { VodFilterField(keyword) { keyword = it } }
+                    val shown = model.videos.filter { vodMatches(it, keyword) }
+                    items(shown, key = { "v-" + it.id }) { v ->
+                        VodCard(v) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
+                    }
+                    val filtering = keyword.isNotBlank()
+                    when {
+                        model.videosLoading -> item(span = FullSpan) { LoadingBox() }
+                        model.videos.isEmpty() && model.videosError == "network" -> item(span = FullSpan) {
+                            MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.moreVideos() }
+                        }
+                        model.videos.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("tv_no_videos")) }
+                        // Le filtre ne voit que les VODs chargées : de quoi chercher plus loin.
+                        filtering && model.videosNext != null -> {
+                            if (shown.isEmpty()) item(span = FullSpan) { MessageBox(AppState.t("no_result")) }
+                            item(span = FullSpan) {
+                                MoreButtonText(AppState.t("vods_search_older")) { model.searchOlder { vodMatches(it, keyword) } }
+                            }
+                        }
+                        filtering && shown.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("no_result")) }
+                        model.videosNext != null -> item(span = FullSpan) { MoreButton(false) { model.moreVideos() } }
+                        model.videosRefused -> item(span = FullSpan) { ListEndNote("more_unavailable") }
+                    }
                 }
             }
         }
+        }
+    }
+}
+
+/** Texte d'un onglet de la page d'une chaîne (clés passées par une variable : _indirect). */
+fun channelTabLabel(key: String): String = when (key) {
+    "highlights" -> "highlights"
+    "playlists" -> "playlists"
+    "clips" -> "clips"
+    "recover" -> "recover_tab"
+    "schedule" -> "sched_tab"
+    "about" -> "about"
+    else -> "tv_videos"
+}
+
+/** Bouton « Charger plus » avec un autre texte (Chercher dans les anciennes VODs). */
+@Composable
+private fun MoreButtonText(text: String, onClick: () -> Unit) {
+    Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) {
+        androidx.compose.material3.OutlinedButton(onClick = onClick) { Text(text, color = TU.text) }
     }
 }
 

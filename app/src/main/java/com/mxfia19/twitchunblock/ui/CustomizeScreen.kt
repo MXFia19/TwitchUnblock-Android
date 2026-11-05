@@ -64,14 +64,41 @@ fun CustomizeScreen(nav: Navigator) {
                     Logger.info("SETTINGS", "Onglet au lancement", it)
                 }
             }
-            Group(AppState.t("tab_home")) {
-                for (part in BrowsePrefs.homeParts) {
-                    Toggle(AppState.t(homePartKey(part)), null, BrowsePrefs.showsHome(part)) { BrowsePrefs.setHomeShown(part, it) }
+            // Accueil : les cartes du haut (masquables), puis les parties à ranger.
+            Group(AppState.t("cust_home_cards")) {
+                for (part in BrowsePrefs.homeParts.filter { it !in BrowsePrefs.homeMovable }) {
+                    // Cartes de connexion : déjà masquées avec « Sans compte Twitch ».
+                    val locked = part != "announcement" && com.mxfia19.twitchunblock.core.NoAccount.active
+                    Toggle(AppState.t(homePartKey(part)), null, BrowsePrefs.showsHome(part) && !locked) {
+                        if (!locked) BrowsePrefs.setHomeShown(part, it)
+                    }
+                }
+            }
+            Text(AppState.t("cust_home_foot"), color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+            Group(AppState.t("n6_home_order")) {
+                val parts = BrowsePrefs.homeSections
+                parts.forEachIndexed { i, key ->
+                    OrderRow(AppState.t(homePartKey(key)), null, i, parts.size, BrowsePrefs.showsHome(key), locked = false,
+                             onMove = { BrowsePrefs.moveHome(key, it) }) { BrowsePrefs.setHomeShown(key, it) }
                 }
                 Toggle(AppState.t("cust_pinned_viewers"), AppState.t("cust_pinned_viewers_foot"), BrowsePrefs.pinnedByViewers.value) {
                     BrowsePrefs.pinnedByViewers.set(it)
                 }
             }
+            Text(AppState.t("n6_home_order_foot"), color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
+            // Page d'une chaîne : ses onglets, dans l'ordre choisi.
+            Group(AppState.t("cust_channel_tabs")) {
+                val tabs = BrowsePrefs.channelTabs
+                tabs.forEachIndexed { i, key ->
+                    val shown = key !in BrowsePrefs.hiddenChannelTabs.value
+                    // Le dernier onglet affiché (planning mis à part) ne se masque pas.
+                    val last = shown && key != "schedule" && BrowsePrefs.visibleChannelTabs.count { it != "schedule" } <= 1
+                    OrderRow(AppState.t(channelTabLabel(key)), null, i, tabs.size, shown, locked = last,
+                             onMove = { BrowsePrefs.moveChannelTab(key, it) }) { BrowsePrefs.setChannelTabShown(key, it) }
+                }
+            }
+            Text(AppState.t("cust_channel_tabs_foot"), color = TU.muted, fontSize = 12.sp,
+                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp))
             Group(AppState.t("cust_followed_cats")) {
                 Choice(AppState.t("cust_cat_size"),
                        listOf("normal" to AppState.t("cust_cat_normal"), "compact" to AppState.t("cust_cat_compact")),
@@ -111,6 +138,8 @@ fun CustomizeScreen(nav: Navigator) {
 /** Texte d'une partie de l'accueil (clés passées par une variable : _indirect). */
 private fun homePartKey(part: String): String = when (part) {
     "announcement" -> "cust_announcement"
+    "login" -> "cust_login_card"
+    "web" -> "cust_web_banner"
     "continue" -> "continue_watching"
     "followed" -> "home_followed"
     "categories" -> "cust_followed_cats"
@@ -141,5 +170,32 @@ private fun TabOrderRow(key: String, index: Int, count: Int, fixRoot: () -> Unit
             BrowsePrefs.setTabShown(key, it)
             fixRoot()
         }, colors = SwitchDefaults.colors(checkedTrackColor = TU.primary))
+    }
+}
+
+/** Une ligne qu'on range : flèches pour la monter ou la descendre, et
+ *  interrupteur pour l'afficher (`locked` : le dernier ne se masque pas). */
+@Composable
+private fun OrderRow(title: String, icon: androidx.compose.ui.graphics.vector.ImageVector?, index: Int, count: Int, shown: Boolean,
+                     locked: Boolean, onMove: (Int) -> Unit, onShow: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 2.dp, bottom = 2.dp),
+        verticalAlignment = Alignment.CenterVertically) {
+        if (icon != null) {
+            Icon(icon, contentDescription = null, tint = if (shown) TU.primary else TU.muted)
+            Spacer(Modifier.width(12.dp))
+        } else {
+            Spacer(Modifier.width(4.dp))
+        }
+        Text(title, color = if (shown) TU.text else TU.muted, fontSize = 15.sp, modifier = Modifier.weight(1f))
+        IconButton(onClick = { onMove(-1) }, enabled = index > 0) {
+            Icon(Icons.Filled.KeyboardArrowUp, contentDescription = AppState.t("br_move_up"),
+                 tint = if (index > 0) TU.text else TU.line)
+        }
+        IconButton(onClick = { onMove(1) }, enabled = index < count - 1) {
+            Icon(Icons.Filled.KeyboardArrowDown, contentDescription = AppState.t("br_move_down"),
+                 tint = if (index < count - 1) TU.text else TU.line)
+        }
+        Switch(checked = shown, enabled = !locked, onCheckedChange = onShow,
+               colors = SwitchDefaults.colors(checkedTrackColor = TU.primary))
     }
 }

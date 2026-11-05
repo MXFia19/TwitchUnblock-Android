@@ -532,6 +532,7 @@ private fun ChannelLine(name: String, login: String, channelId: String, nav: Nav
 @Composable
 private fun FollowButton(login: String, channelId: String, name: String) {
     val scope = rememberCoroutineScope()
+    val context = androidx.compose.ui.platform.LocalContext.current
     var twitch by remember(login) { mutableStateOf<Boolean?>(null) }
     var id by remember(login) { mutableStateOf(channelId) }
     var busy by remember { mutableStateOf(false) }
@@ -551,7 +552,10 @@ private fun FollowButton(login: String, channelId: String, name: String) {
         if (!busy && id.isNotEmpty()) {
             busy = true
             scope.launch {
-                if (TwitchFollow.set(id, want) == null) twitch = want
+                // Twitch a refusé (limite de suivis, chaîne qui bloque…) : on le dit.
+                val code = TwitchFollow.set(id, want)
+                if (code == null) twitch = want
+                else android.widget.Toast.makeText(context, followFailedText(code), android.widget.Toast.LENGTH_LONG).show()
                 busy = false
             }
         }

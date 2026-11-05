@@ -772,6 +772,8 @@
   "multi_watch": "Guarda",
   "muted_words": "Parole nascoste",
   "muted_words_sub": "Separate da virgole: i messaggi che le contengono non vengono mostrati.",
+  "n6_home_order": "Home · ordine delle sezioni",
+  "n6_home_order_foot": "Le frecce cambiano l'ordine delle sezioni della Home; l'interruttore le nasconde.",
   "native_tabs": "Schede native (Liquid Glass)",
   "native_tabs_sub": "La barra delle schede di iOS 26 al posto di quella dell'app: si riduce mentre scorri e il sistema la posiziona in base allo schermo (iPad, iPhone Duo). In prova: segnala cosa non va.",
   "no_clips": "Nessuna clip per questo periodo",
