@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -27,6 +28,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.SmallFloatingActionButton
 import androidx.compose.material3.Text
@@ -42,7 +44,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.LinkAnnotation
 import androidx.compose.ui.text.LinkInteractionListener
@@ -59,21 +64,23 @@ import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.mxfia19.twitchunblock.chat.ChatClient
+import com.mxfia19.twitchunblock.chat.ChatClock
 import com.mxfia19.twitchunblock.chat.ChatMessage
+import com.mxfia19.twitchunblock.chat.ChatPrefs
+import com.mxfia19.twitchunblock.chat.ChatRules
 import com.mxfia19.twitchunblock.chat.ChatToken
+import com.mxfia19.twitchunblock.chat.EmoteLists
 import com.mxfia19.twitchunblock.chat.Emotes
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Features
 import com.mxfia19.twitchunblock.core.Links
 import kotlinx.coroutines.launch
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 /** Texte d'un message sans images (filtres, mots surlignés). */
 fun ChatMessage.plainText(): String = tokens.joinToString("") { t ->
@@ -113,15 +120,18 @@ private fun highlighted(m: ChatMessage): Boolean {
     return words.any { lower.contains(it) }
 }
 
-private val clock = SimpleDateFormat("HH:mm", Locale.US)
-
 /** Texte d'un message, emotes et badges en images dans la ligne. `onEmote` :
- *  emote touchée (sa fiche) ; `onUser` : mention touchée (fiche de la personne). */
+ *  emote touchée (sa fiche ; appui long : favoris, masquer) ; `onUser` :
+ *  mention touchée (fiche de la personne). Une emote masquée (EmoteLists)
+ *  s'affiche comme le mot tapé. `badgeSize` : sinon 70 % des emotes ;
+ *  `twelve` : heure en 12 h. */
 fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false,
              onEmote: ((ChatToken.Emote) -> Unit)? = null,
-             onUser: ((String) -> Unit)? = null): Pair<AnnotatedString, Map<String, InlineTextContent>> {
+             onUser: ((String) -> Unit)? = null,
+             badgeSize: TextUnit = TextUnit.Unspecified,
+             twelve: Boolean = false): Pair<AnnotatedString, Map<String, InlineTextContent>> {
     val inline = HashMap<String, InlineTextContent>()
-    val badgeSize = (emoteSize.value * 0.7f).sp
+    val badge = if (badgeSize == TextUnit.Unspecified) (emoteSize.value * 0.7f).sp else badgeSize
     val text = buildAnnotatedString {
         if (m.notice != null) {
             withStyle(SpanStyle(color = Color(0xFFBF94FF), fontWeight = FontWeight.SemiBold)) { append(m.notice) }
@@ -129,11 +139,11 @@ fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false,
         }
         if (m.login.isEmpty()) return@buildAnnotatedString
         if (timestamp) {
-            withStyle(SpanStyle(color = TU.muted, fontSize = (emoteSize.value * 0.45f).sp)) { append(clock.format(Date(m.time)) + " ") }
+            withStyle(SpanStyle(color = TU.muted, fontSize = (emoteSize.value * 0.45f).sp)) { append(ChatClock.format(m.time, twelve) + " ") }
         }
         m.badges.forEachIndexed { i, url ->
             val id = "b$i"
-            inline[id] = InlineTextContent(Placeholder(badgeSize, badgeSize, PlaceholderVerticalAlign.Center)) {
+            inline[id] = InlineTextContent(Placeholder(badge, badge, PlaceholderVerticalAlign.Center)) {
                 AsyncImage(model = url, contentDescription = null, modifier = Modifier.fillMaxSize())
             }
             appendInlineContent(id, "[b]")
@@ -153,13 +163,23 @@ fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false,
                 when (tok) {
                     is ChatToken.Text ->
                         if (m.action) withStyle(SpanStyle(color = nameColor)) { append(tok.text) } else append(tok.text)
-                    is ChatToken.Emote -> {
+                    is ChatToken.Emote -> if (EmoteLists.hides(tok.name)) {
+                        // Masquée : le mot tapé, comme un texte ; un toucher ouvre
+                        // toujours sa fiche (de quoi la réafficher).
+                        val style = if (m.action) SpanStyle(color = nameColor) else SpanStyle()
+                        if (onEmote != null) {
+                            withLink(LinkAnnotation.Clickable("emote:$i", null, LinkInteractionListener { onEmote(tok) })) {
+                                withStyle(style) { append(tok.name) }
+                            }
+                        } else {
+                            withStyle(style) { append(tok.name) }
+                        }
+                    } else {
                         val id = "e$i"
                         val width = (emoteSize.value * tok.ratio.coerceIn(0.5f, 4f)).sp
                         inline[id] = InlineTextContent(Placeholder(width, emoteSize, PlaceholderVerticalAlign.Center)) {
-                            AsyncImage(model = tok.url, contentDescription = tok.name,
-                                       modifier = if (onEmote != null) Modifier.fillMaxSize().clickable { onEmote(tok) }
-                                                  else Modifier.fillMaxSize())
+                            // ChatEmotesUi.kt : toucher, sa fiche ; appui long, favoris et masquer.
+                            ChatEmoteImage(tok, onEmote)
                         }
                         appendInlineContent(id, tok.name)
                     }
@@ -184,23 +204,35 @@ fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false,
     return Pair(text, inline)
 }
 
+/** `badgeSize`, `vPad` (demi-espace entre deux messages) : tailles des
+ *  réglages du chat ; `shadow` : texte ombré, lisible posé sur l'image. */
 @Composable
 fun ChatMessageRow(m: ChatMessage, emoteSize: TextUnit = 24.sp, fontSize: TextUnit = 14.sp, timestamp: Boolean = false,
                    onClick: (() -> Unit)? = null, onEmote: ((ChatToken.Emote) -> Unit)? = null,
-                   onUser: ((String) -> Unit)? = null) {
+                   onUser: ((String) -> Unit)? = null, badgeSize: TextUnit = TextUnit.Unspecified,
+                   vPad: Dp = 3.dp, shadow: Boolean = false) {
     val keepDeleted = Features.chatKeepDeleted.value
+    // Emotes masquées et format de l'heure : la ligne est refaite s'ils changent.
+    val hiddenEmotes = EmoteLists.hiddenSet
+    val twelve = timestamp && ChatClock.twelve()
     // onEmote et onUser : rappels stables (ChatPanel), hors des clés du cache.
-    val (text, inline) = remember(m, timestamp, keepDeleted, emoteSize) { chatLine(m, emoteSize, timestamp, onEmote, onUser) }
+    val (text, inline) = remember(m, timestamp, keepDeleted, emoteSize, badgeSize, hiddenEmotes, twelve) {
+        chatLine(m, emoteSize, timestamp, onEmote, onUser, badgeSize, twelve)
+    }
     val bg = when {
         highlighted(m) -> TU.highlight
         m.notice != null -> TU.primaryDim
         else -> Color.Transparent
     }
+    // Ligne assez haute pour la plus grande image (emote ou badge agrandis).
+    val tallest = maxOf(emoteSize.value, if (badgeSize == TextUnit.Unspecified) 0f else badgeSize.value)
     Text(
-        text, inlineContent = inline, color = TU.text, fontSize = fontSize, lineHeight = (emoteSize.value + 4).sp,
+        text, inlineContent = inline, color = TU.text, fontSize = fontSize,
+        lineHeight = maxOf(tallest + 4, fontSize.value * 1.3f).sp,
+        style = if (shadow) LocalTextStyle.current.copy(shadow = Shadow(Color.Black, Offset(1f, 1f), 4f)) else LocalTextStyle.current,
         modifier = Modifier.fillMaxWidth().background(bg)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 10.dp, vertical = 3.dp),
+            .padding(horizontal = 10.dp, vertical = vPad),
     )
 }
 
@@ -213,10 +245,11 @@ private fun atBottom(state: LazyListState): Boolean {
 /** Chat d'un direct : les messages filtrés (qui suivent le bas, sauf si on
  *  remonte), et la saisie avec ses emotes et l'autocomplétion. Toucher un
  *  message ou un pseudo : la fiche de la personne ; une emote : sa fiche.
- *  `onOpenChannel` : « Sa chaîne » dans la fiche (pas en multi-live). */
+ *  `onOpenChannel` : « Sa chaîne » dans la fiche (pas en multi-live) ;
+ *  `translucent` : posé sur l'image (paysage), fond transparent. */
 @Composable
 fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onOpenChannel: ((String) -> Unit)? = null,
-              onLogin: () -> Unit) {
+              translucent: Boolean = false, onLogin: () -> Unit) {
     val list = rememberLazyListState()
     val scope = rememberCoroutineScope()
     var stick by remember { mutableStateOf(true) }
@@ -229,26 +262,36 @@ fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onOpenChannel: 
     val openEmote = remember { { e: ChatToken.Emote -> emoteCard = e } }
     val visible by remember(client) { derivedStateOf { client.messages.filter { !hiddenByFilters(it) } } }
     val font = Features.chatFontSize.value
-    val emote = (font * 1.7f).sp
+    // Tailles des réglages (ChatPrefs) : emotes et badges suivent le texte, puis leur facteur.
+    val emote = (font * 1.7f * ChatPrefs.emoteScale.value / 100f).sp
+    val badge = (font * 1.19f * ChatPrefs.badgeScale.value / 100f).sp
+    val vPad = (ChatPrefs.spacing.value / 2f).dp
     LaunchedEffect(list) {
         snapshotFlow { list.isScrollInProgress }.collect { scrolling -> if (!scrolling) stick = atBottom(list) }
     }
     LaunchedEffect(visible.size, visible.lastOrNull()?.id) {
         if (stick && visible.isNotEmpty()) list.scrollToItem(visible.size - 1)
     }
-    Column(modifier.background(TU.bg)) {
+    // Posé sur l'image : un dégradé qui assombrit le bas, là où les messages
+    // s'accumulent, plutôt qu'un fond opaque.
+    val background = if (translucent) Modifier.background(Brush.verticalGradient(listOf(Color.Black.copy(alpha = 0.25f), Color.Black.copy(alpha = 0.6f))))
+                     else Modifier.background(TU.bg)
+    Column(modifier.then(background)) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
             LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
                 itemsIndexed(visible, key = { _, m -> m.id }) { _, m ->
                     val open = if (m.login.isNotEmpty()) ({ userCard = m.login }) else null
                     ChatMessageRow(m, emoteSize = emote, fontSize = font.sp, timestamp = Features.chatTimestamps.value,
-                                   onClick = open, onEmote = openEmote, onUser = openUser)
+                                   onClick = open, onEmote = openEmote, onUser = openUser, badgeSize = badge, vPad = vPad,
+                                   shadow = translucent)
                 }
             }
             if (!client.connected && client.messages.isEmpty()) {
                 Text(AppState.t("chat_connecting"), color = TU.muted, fontSize = 13.sp,
                      modifier = Modifier.align(Alignment.Center))
             }
+            // ChatBars.kt : « ⏱ −6 s » quand le chat attend l'image.
+            ChatSyncBadge(client, Modifier.align(Alignment.TopEnd).padding(6.dp))
             if (!stick) {
                 SmallFloatingActionButton(
                     onClick = {
@@ -260,7 +303,8 @@ fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onOpenChannel: 
                 ) { Text("↓ " + AppState.t("chat_resume"), color = Color.White, fontSize = 12.sp, modifier = Modifier.padding(horizontal = 10.dp)) }
             }
         }
-        ChatInput(client, draft, { draft = it }, onLogin)
+        // Zone d'envoi masquable (Réglages → Chat) : la place va aux messages.
+        if (ChatPrefs.showInput.value) ChatInput(client, draft, { draft = it }, onLogin, translucent, openEmote)
     }
     userCard?.let { login ->
         UserCard(login, client,
@@ -271,9 +315,11 @@ fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onOpenChannel: 
 }
 
 @Composable
-private fun ChatInput(client: ChatClient, draft: TextFieldValue, onDraft: (TextFieldValue) -> Unit, onLogin: () -> Unit) {
+private fun ChatInput(client: ChatClient, draft: TextFieldValue, onDraft: (TextFieldValue) -> Unit, onLogin: () -> Unit,
+                      translucent: Boolean, onEmoteInfo: (ChatToken.Emote) -> Unit) {
+    val barColor = if (translucent) Color.Black.copy(alpha = 0.45f) else TU.surface
     if (AppState.user == null) {
-        Row(Modifier.fillMaxWidth().background(TU.surface).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().background(barColor).padding(10.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(AppState.t("chat_login_to_send"), color = TU.muted, fontSize = 13.sp, modifier = Modifier.weight(1f))
             Text(AppState.t("tv_login"), color = TU.primary, fontSize = 14.sp, fontWeight = FontWeight.SemiBold,
                  modifier = Modifier.clip(RoundedCornerShape(6.dp)).focusCard(onLogin).padding(6.dp))
@@ -282,22 +328,38 @@ private fun ChatInput(client: ChatClient, draft: TextFieldValue, onDraft: (TextF
         }
         return
     }
+    // Compte banni de ce chat (ChatBars.kt) : un bandeau à la place du champ.
+    if (client.readOnly) {
+        ReadOnlyBar(client, barColor)
+        return
+    }
     var picker by remember { mutableStateOf(false) }
-    val send = {
-        if (client.send(draft.text)) onDraft(TextFieldValue(""))
+    // Message retenu le temps d'accepter les règles du chat (ChatBars.kt).
+    var awaitingRules by remember { mutableStateOf<String?>(null) }
+    val sendNow: (String) -> Unit = { text -> if (client.send(text)) onDraft(TextFieldValue("")) }
+    val send: () -> Unit = {
+        // Règles du chat pas encore acceptées (comme sur Twitch) : elles
+        // d'abord, le message part une fois acceptées.
+        if (draft.text.isNotBlank() && client.rules.isNotEmpty() && !ChatRules.accepted(client.channel, client.rules)) {
+            awaitingRules = draft.text
+        } else {
+            sendNow(draft.text)
+        }
     }
     // Autocomplétion : « @ » + pseudos récents du chat, « : » + 2 lettres → emotes.
     val word = currentWord(draft)?.second.orEmpty()
     val suggestions = remember(word, client.roomId) { chatCompletions(word, client) }
-    Column(Modifier.fillMaxWidth().background(TU.surface)) {
+    Column(Modifier.fillMaxWidth().background(barColor)) {
         if (picker) {
-            EmotePicker(client.roomId) { name ->
+            EmotePicker(client.roomId, onEmoteInfo) { name ->
                 val t = draft.text
                 val next = (if (t.isEmpty() || t.endsWith(" ")) t else "$t ") + name + " "
                 if (next.length <= 500) onDraft(TextFieldValue(next, TextRange(next.length)))
             }
         }
         if (suggestions.isNotEmpty()) ChatSuggestions(suggestions) { onDraft(completeWord(draft, it.text)) }
+        // Modes du salon (followers, abonnés, lent…) : sus avant d'écrire.
+        RoomModesLine(client.modes)
         Row(Modifier.fillMaxWidth().padding(6.dp), verticalAlignment = Alignment.CenterVertically) {
             // Cloche des notifications de live de la chaîne (suivie, notifications actives).
             NotifBell(client.channel, Modifier.size(40.dp))
@@ -320,31 +382,56 @@ private fun ChatInput(client: ChatClient, draft: TextFieldValue, onDraft: (TextF
             }
         }
     }
+    awaitingRules?.let { text ->
+        ChatRulesDialog(client.channel, client.rules) { accepted ->
+            awaitingRules = null
+            if (accepted) {
+                ChatRules.accept(client.channel, client.rules)
+                sendNow(text)
+            }
+        }
+    }
 }
 
-/** Emotes 7TV, BTTV et FFZ de la chaîne puis globales : un toucher l'ajoute au message. */
+/** Emotes 7TV, BTTV et FFZ de la chaîne puis globales : un toucher l'ajoute
+ *  au message ; appui long : sa fiche, les favoris, copier son nom. Les
+ *  favorites d'abord, dans l'ordre où elles ont été ajoutées. */
 @Composable
-private fun EmotePicker(channelId: String?, onPick: (String) -> Unit) {
+private fun EmotePicker(channelId: String?, onInfo: (ChatToken.Emote) -> Unit, onPick: (String) -> Unit) {
     val all = remember(channelId) { Emotes.all(channelId).distinctBy { it.name } }
+    val favoriteCodes = EmoteLists.favorites
+    val favorites = remember(all, favoriteCodes) { favoriteEmotes(all, favoriteCodes) }
     var query by remember { mutableStateOf("") }
-    val shown = if (query.isBlank()) all else all.filter { it.name.contains(query.trim(), ignoreCase = true) }
+    val q = query.trim()
+    val shown = if (q.isEmpty()) all else {
+        // Recherche : les favorites qui correspondent d'abord (celles de Twitch comprises).
+        val names = all.mapTo(HashSet()) { it.name }
+        val found = all.filter { it.name.contains(q, ignoreCase = true) }
+        favorites.filter { it.name !in names && it.name.contains(q, ignoreCase = true) } +
+            found.sortedBy { if (it.name in favoriteCodes) 0 else 1 }
+    }
     Column(Modifier.fillMaxWidth().height(230.dp)) {
         OutlinedTextField(
             value = query, onValueChange = { query = it }, singleLine = true,
             placeholder = { Text(AppState.t("emote_search_ph"), color = TU.muted) },
             colors = fieldColors(), modifier = Modifier.fillMaxWidth().padding(horizontal = 6.dp),
         )
-        if (shown.isEmpty()) {
-            Text(AppState.t(if (all.isEmpty()) "emotes_loading" else "emotes_no_result"), color = TU.muted, fontSize = 13.sp,
-                 modifier = Modifier.padding(12.dp))
+        if (shown.isEmpty() && (q.isNotEmpty() || favorites.isEmpty())) {
+            Text(AppState.t(if (all.isEmpty() && q.isEmpty()) "emotes_loading" else "emotes_no_result"), color = TU.muted,
+                 fontSize = 13.sp, modifier = Modifier.padding(12.dp))
         }
         LazyVerticalGrid(columns = GridCells.Adaptive(44.dp), modifier = Modifier.fillMaxSize().padding(4.dp)) {
-            items(shown, key = { it.name }) { e ->
-                Box(Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)).clickable { onPick(e.name) }.padding(4.dp),
-                    contentAlignment = Alignment.Center) {
-                    AsyncImage(model = e.url, contentDescription = e.name, modifier = Modifier.fillMaxSize())
+            if (q.isEmpty() && favorites.isNotEmpty()) {
+                item(key = "h-fav", span = { GridItemSpan(maxLineSpan) }) {
+                    Text("★ " + AppState.t("emotes_fav"), color = TU.muted, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+                         modifier = Modifier.padding(start = 4.dp, top = 2.dp, bottom = 2.dp))
+                }
+                items(favorites, key = { "f:" + it.name }) { e -> PickerEmote(e, onInfo) { onPick(e.name) } }
+                item(key = "h-all", span = { GridItemSpan(maxLineSpan) }) {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp).height(1.dp).background(TU.line))
                 }
             }
+            items(shown, key = { it.name }) { e -> PickerEmote(e, onInfo) { onPick(e.name) } }
         }
     }
 }

@@ -91,6 +91,8 @@ import kotlinx.coroutines.delay
 @Composable
 fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFullscreen: (() -> Unit)? = null,
                  focusOnStart: Boolean = false, controls: Boolean = true) {
+    // Chat posé sur l'image (paysage) : les commandes s'en écartent (ChatLayout.kt).
+    val chatInset = LocalChatOverlayInset.current
     AndroidView(
         factory = { ctx ->
             PlayerView(ctx).apply {
@@ -114,6 +116,7 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
                 view.useController = controls
                 if (!controls) view.hideController()
             }
+            view.insetControls(chatInset)
         },
         // La session survit à l'écran : la vue retirée lâche le lecteur.
         onRelease = { view -> view.player = null },
@@ -181,15 +184,17 @@ fun rememberVodChat(session: PlaybackSession, show: Boolean): VodChat? {
     return chat
 }
 
-/** Messages du chat rejoué (lecture seule), qui suivent le bas. */
+/** Messages du chat rejoué (lecture seule), qui suivent le bas. `background` :
+ *  transparent quand il est posé sur l'image (paysage). */
 @Composable
-fun VodChatList(chat: VodChat, modifier: Modifier = Modifier, emoteSize: Int = 24, fontSize: Int = 14) {
+fun VodChatList(chat: VodChat, modifier: Modifier = Modifier, emoteSize: Int = 24, fontSize: Int = 14,
+                background: Color = TU.bg) {
     val list = rememberLazyListState()
     // Dernier message en clé : la liste plafonnée (200) garde la même taille.
     LaunchedEffect(chat.messages.size, chat.messages.lastOrNull()?.id) {
         if (chat.messages.isNotEmpty()) list.scrollToItem(chat.messages.size - 1)
     }
-    Box(modifier.background(TU.bg)) {
+    Box(modifier.background(background)) {
         LazyColumn(state = list, modifier = Modifier.fillMaxSize()) {
             items(chat.messages, key = { it.id }) { m -> ChatMessageRow(m, emoteSize = emoteSize.sp, fontSize = fontSize.sp) }
         }
@@ -236,8 +241,9 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
         chat?.start(session.channelId)
         onDispose { chat?.stop() }
     }
+    // ChatBars.kt : le chat du direct attend l'image (lecteur principal seulement).
+    ChatSyncFeeder(session, chat)
     val vodChat = rememberVodChat(session, AppState.showChat)
-    var chatInLandscape by remember { mutableStateOf(false) }
 
     // Direct : points de chaîne, événements, message épinglé, raids.
     val points = remember { ChannelPoints(scope) }
@@ -299,31 +305,28 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
     ClipDialog(nav)
 
     if (landscape) {
-        Row(Modifier.fillMaxSize().background(Color.Black)) {
-            Box(Modifier.weight(1f).fillMaxHeight()) {
+        // ChatLayout.kt : chat en colonne, posé sur l'image ou replié (bouton
+        // du chat), largeur réglable à la poignée.
+        LandscapePlayer(
+            hasChat = (chat != null || vodChat != null) && AppState.showChat,
+            video = {
                 VideoSurface(session, Modifier.fillMaxSize(), onFullscreen = toggleFullscreen)
                 PlayerOverlay(session, Modifier.align(Alignment.Center))
-                if ((chat != null || vodChat != null) && AppState.showChat) {
-                    IconButton(onClick = { chatInLandscape = !chatInLandscape }, modifier = Modifier.align(Alignment.TopEnd)) {
-                        Icon(Icons.Filled.Email, contentDescription = AppState.t("tv_chat"), tint = Color.White)
-                    }
-                }
-            }
-            if (chatInLandscape) {
-                if (chat != null) {
-                    Column(Modifier.width(330.dp).fillMaxHeight().imePadding()) {
-                        if (rewardsOpen) {
-                            RewardsPanel(points, Modifier.weight(1f), onClose = { rewardsOpen = false }) { nav.push(Screen.WebLogin) }
-                        } else {
-                            extras()
-                            ChatPanel(chat, Modifier.weight(1f), onOpenChannel = { nav.push(Screen.Channel(it)) }) {
-                                nav.push(Screen.Login)
-                            }
+            },
+        ) { chatModifier, overlay ->
+            if (chat != null) {
+                Column(chatModifier) {
+                    if (rewardsOpen) {
+                        RewardsPanel(points, Modifier.weight(1f), onClose = { rewardsOpen = false }) { nav.push(Screen.WebLogin) }
+                    } else {
+                        extras()
+                        ChatPanel(chat, Modifier.weight(1f), onOpenChannel = { nav.push(Screen.Channel(it)) }, translucent = overlay) {
+                            nav.push(Screen.Login)
                         }
                     }
-                } else if (vodChat != null) {
-                    VodChatList(vodChat, Modifier.width(330.dp).fillMaxHeight())
                 }
+            } else if (vodChat != null) {
+                VodChatList(vodChat, chatModifier, background = if (overlay) Color.Black.copy(alpha = 0.45f) else TU.bg)
             }
         }
         return

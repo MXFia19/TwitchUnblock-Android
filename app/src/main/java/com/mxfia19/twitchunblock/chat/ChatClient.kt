@@ -6,9 +6,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Auth
+import com.mxfia19.twitchunblock.core.Gql
 import com.mxfia19.twitchunblock.core.Http
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.arr
+import com.mxfia19.twitchunblock.core.bool
+import com.mxfia19.twitchunblock.core.int
+import com.mxfia19.twitchunblock.core.obj
 import com.mxfia19.twitchunblock.core.parseJson
 import com.mxfia19.twitchunblock.core.strings
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +38,19 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     /** Écrire est possible (compte connecté, IRC authentifié). */
     var canSend by mutableStateOf(false)
         private set
+    /** Lecture seule : Twitch refuse le compte dans ce salon (banni, NOTICE
+     *  msg_banned au JOIN) ; le chat continue sans compte, rien ne s'envoie. */
+    var readOnly by mutableStateOf(false)
+        private set
+    /** Modes du salon qui limitent qui peut écrire (ROOMSTATE, réglages GQL). */
+    var modes by mutableStateOf(RoomModes())
+        private set
+    /** Règles du chat de la chaîne, à accepter avant le premier message. */
+    var rules by mutableStateOf<List<String>>(emptyList())
+        private set
+    /** Chat du lecteur principal : les messages reçus attendent que l'image
+     *  les rejoigne (ChatSync). Faux en multi-live et sur la TV. */
+    var syncsWithPlayer by mutableStateOf(false)
 
     private var channelId: String? = null
     /** Identifiant de la chaîne (emotes), connu au plus tard à ROOMSTATE. */
@@ -52,25 +69,101 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     private var renewing = false
     private var renewTried = false
     private var anonymous = false
+    /** Dernière reconnexion sur un PART ou un CLEARCHAT à notre nom (une par 15 s). */
+    private var lastRejoin = 0L
+    private var rejoinJob: Job? = null
+
+    /** Message reçu en attente du retard du chat, avec son heure d'arrivée
+     *  (la modération peut encore le marquer supprimé). */
+    private class Pending(var message: ChatMessage, val arrivedAt: Long)
+    /** File de la synchro, dans l'ordre d'arrivée. Jamais nos messages ni les
+     *  lignes de l'app : affichés tout de suite. */
+    private val pending = ArrayDeque<Pending>()
+    /** Sortie de la file au fil du temps ; arrêtée quand elle est vide. */
+    private var releaseJob: Job? = null
+    /** Retard appliqué à la file (lissé), sa dernière mise à jour et la
+     *  vitesse du rattrapage en cours (s regagnées par seconde). */
+    private var appliedDelay = 0.0
+    private var appliedAt = 0L
+    private var catchUpRate = 0.0
 
     fun start(channelIdHint: String?) {
         channelId = channelIdHint
+        // Salon déjà refusé à ce compte pendant cette séance : directement
+        // sans compte, le bandeau tout de suite.
+        if (readOnlyKey()?.let { it in readOnlyKeys } == true) {
+            readOnly = true
+            anonymous = true
+        }
         scope.launch {
             Emotes.loadGlobal()
             Badges.loadGlobal()
         }
         channelIdHint?.let { loadChannelAssets(it) }
         if (com.mxfia19.twitchunblock.core.Features.chatLoadHistory.value) scope.launch { loadHistory() }
+        // Règles et modes : utiles seulement à qui peut écrire.
+        if (AppState.user != null) scope.launch { loadChatSettings() }
         connect()
     }
 
     fun stop() {
         stopped = true
         reconnectJob?.cancel()
+        rejoinJob?.cancel()
+        releaseJob?.cancel()
+        pending.clear()
         socket?.close(1000, null)
         socket = null
         connected = false
         canSend = false
+    }
+
+    /** Bandeau « Réessayer avec mon compte » : Twitch ne dit rien d'un déban
+     *  sur l'IRC. Encore banni : le JOIN remet la lecture seule. */
+    fun retryWithAccount() {
+        readOnlyKey()?.let { readOnlyKeys.remove(it) }
+        readOnly = false
+        anonymous = false
+        attempts = 0
+        Logger.info("CHAT", "Nouvel essai avec le compte", "#$channel")
+        reconnectNow()
+    }
+
+    private fun readOnlyKey(): String? {
+        val login = AppState.user?.login?.lowercase()?.takeIf { it.isNotEmpty() } ?: return null
+        return "$login#${channel.lowercase()}"
+    }
+
+    /** Twitch refuse le compte (banni) : le salon est rouvert sans lui, comme
+     *  un spectateur déconnecté. Comme enterReadOnly (iOS). */
+    private fun enterReadOnly() {
+        if (readOnly) return
+        readOnly = true
+        canSend = false
+        anonymous = true
+        readOnlyKey()?.let { readOnlyKeys.add(it) }
+        add(system(AppState.t("chat_ban_switched")))
+        Logger.warn("CHAT", "Compte refusé dans #$channel (banni)", "lecture seule, sans compte")
+        reconnectNow()
+    }
+
+    /** PART ou CLEARCHAT sans durée à notre nom : signal ambigu (ban, coupure).
+     *  On rejoint avec le compte ; si le ban est réel, le msg_banned du JOIN
+     *  fait passer en lecture seule. Une fois par 15 s au plus. */
+    private fun rejoinWithAccount(reason: String) {
+        val now = System.currentTimeMillis()
+        if (now - lastRejoin < 15_000) {
+            if (rejoinJob?.isActive == true) return
+            val wait = 15_000 - (now - lastRejoin)
+            rejoinJob = scope.launch {
+                delay(wait)
+                if (!stopped && !readOnly) rejoinWithAccount(reason)
+            }
+            return
+        }
+        lastRejoin = now
+        Logger.warn("CHAT", "$reason à notre nom → #$channel", "reconnexion avec le compte")
+        reconnectNow()
     }
 
     private fun loadChannelAssets(id: String) {
@@ -102,7 +195,11 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
                     connected = true
                     canSend = token != null && login != null
                     attempts = 0
-                    Logger.success("CHAT", "Connecté", "#$channel" + if (canSend) " (compte)" else " (anonyme)")
+                    Logger.success("CHAT", "Connecté", "#$channel" + when {
+                        canSend -> " (compte)"
+                        readOnly -> " (lecture seule, compte refusé)"
+                        else -> " (anonyme)"
+                    })
                 }
             }
 
@@ -141,6 +238,8 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     }
 
     private fun reconnectNow() {
+        // Une reprise programmée ouvrirait sinon une seconde connexion.
+        reconnectJob?.cancel()
         socket?.close(1000, null)
         connect()
     }
@@ -170,38 +269,194 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         for (line in lines) {
             when (line.command) {
                 "PING" -> ws.send("PONG :tmi.twitch.tv")
-                "PRIVMSG" -> build(line)?.let { add(it) }
+                "PRIVMSG" -> build(line)?.let { publish(it) }
                 "USERNOTICE" -> notice(line)
                 "CLEARMSG" -> line.tags["target-msg-id"]?.let { id -> markDeleted { it.id == id } }
-                "CLEARCHAT" -> {
-                    val target = line.trailing?.lowercase()
-                    if (target != null) markDeleted { it.login == target }
-                    else add(system(AppState.t("chat_cleared")))
-                }
+                "CLEARCHAT" -> clearChat(line)
                 "USERSTATE", "GLOBALUSERSTATE" -> {
                     line.tags["color"]?.let { myColor = ChatColors.parse(it, AppState.user?.login ?: "") }
                     line.tags["badges"]?.let { b -> myBadges = b.split(',').filter { it.contains('/') } }
                     line.tags["display-name"]?.takeIf { it.isNotEmpty() }?.let { myName = it }
                 }
-                "ROOMSTATE" -> line.tags["room-id"]?.takeIf { it.isNotEmpty() }?.let { id ->
-                    if (channelId == null) {
-                        channelId = id
-                        loadChannelAssets(id)
+                "ROOMSTATE" -> {
+                    roomState(line.tags)
+                    line.tags["room-id"]?.takeIf { it.isNotEmpty() }?.let { id ->
+                        if (channelId == null) {
+                            channelId = id
+                            loadChannelAssets(id)
+                        }
                     }
                 }
-                "NOTICE" -> line.trailing?.let { msg ->
-                    // Connexion refusée (jeton expiré…) : jeton renouvelé, sinon
-                    // le chat reste lisible en anonyme.
-                    if (msg.contains("Login authentication failed") || msg.contains("Improperly formatted auth")) {
-                        Logger.warn("CHAT", "Authentification refusée", msg)
-                        canSend = false
-                        authRefused()
-                    }
-                    add(system(msg))
+                "NOTICE" -> handleNotice(line)
+                "PART" -> {
+                    // Twitch nous sort du salon (ban en plein direct, coupure) : on
+                    // y retourne avec le compte, le JOIN dira s'il est banni.
+                    val who = (line.tags["login"] ?: line.nick)?.lowercase()
+                    val me = AppState.user?.login?.lowercase()
+                    if (who != null && who == me && usedToken != null && !readOnly) rejoinWithAccount("PART")
                 }
                 "RECONNECT" -> reconnectNow()
             }
         }
+    }
+
+    private fun handleNotice(line: IrcLine) {
+        val msg = line.trailing ?: return
+        val id = line.tags["msg-id"].orEmpty()
+        // Connexion refusée (jeton expiré…) : jeton renouvelé, sinon le chat
+        // reste lisible en anonyme.
+        if (msg.contains("Login authentication failed") || msg.contains("Improperly formatted auth")) {
+            Logger.warn("CHAT", "Authentification refusée", msg)
+            canSend = false
+            authRefused()
+            add(system(msg))
+            return
+        }
+        // Compte banni de ce salon : Twitch le refuse au JOIN (et à l'envoi).
+        // Pas un message refusé : le chat continue en lecture seule, sans compte.
+        if (id == "msg_banned") {
+            if (usedToken != null && !readOnly) {
+                removeRecentEcho()
+                enterReadOnly()
+            }
+            return
+        }
+        // Message refusé (mode abonnés, followers, lent…) : la raison dans la
+        // langue de l'app, et notre message, affiché d'avance comme envoyé,
+        // retiré — sinon on le croyait passé.
+        val key = chatRejections[id] ?: if (id.startsWith("msg_")) "chat_rej_generic" else null
+        if (key != null) {
+            Logger.warn("CHAT", "Message refusé : $id", msg)
+            removeRecentEcho()
+            val minutes = modes.followersMinutes ?: 0
+            add(system(AppState.t(key)
+                .replace("{d}", if (minutes > 0) RoomModes.duration(minutes) else "")
+                .replace("{t}", msg)))
+            return
+        }
+        add(system(msg))
+    }
+
+    private fun clearChat(line: IrcLine) {
+        val target = line.trailing?.lowercase()
+        if (target == null) {
+            // Purge du salon : les messages qui attendaient l'image partent avec.
+            pending.clear()
+            add(system(AppState.t("chat_cleared")))
+            return
+        }
+        markDeleted { it.login == target }
+        // Nous visés, avec le compte (sans compte, les exclusions ne nous concernent pas).
+        val me = AppState.user?.login?.lowercase()
+        if (target != me || usedToken == null || readOnly) return
+        val seconds = line.tags["ban-duration"]?.toIntOrNull()
+        if (seconds != null) {
+            // Exclusion temporaire : on reste dans le salon, Twitch refusera
+            // les messages d'ici là (msg_timedout).
+            Logger.warn("CHAT", "Exclu de #$channel", "$seconds s")
+            add(system(AppState.t("chat_timed_out").replace("{d}", RoomModes.durationSeconds(seconds))))
+        } else {
+            rejoinWithAccount("CLEARCHAT")
+        }
+    }
+
+    /** ROOMSTATE : complet à l'arrivée, puis seulement ce qui change. */
+    private fun roomState(tags: Map<String, String>) {
+        var m = modes
+        tags["followers-only"]?.toIntOrNull()?.let { m = m.copy(followersMinutes = if (it < 0) null else it) }
+        tags["subs-only"]?.let { m = m.copy(subsOnly = it == "1") }
+        tags["emote-only"]?.let { m = m.copy(emoteOnly = it == "1") }
+        tags["slow"]?.toIntOrNull()?.let { m = m.copy(slowSeconds = maxOf(0, it)) }
+        tags["r9k"]?.let { m = m.copy(uniqueChat = it == "1") }
+        modes = m
+    }
+
+    /** Règles et modes du chat (GQL public, sans compte) : la vérification du
+     *  compte n'est dite que là. */
+    private suspend fun loadChatSettings() {
+        val q = "query { user(login: \"${Gql.str(channel)}\") { chatSettings { rules followersOnlyDurationMinutes " +
+            "isSubscribersOnlyModeEnabled isEmoteOnlyModeEnabled slowModeDurationSeconds requireVerifiedAccount " +
+            "isUniqueChatModeEnabled } } }"
+        val cs = Gql.raw(q)?.obj("data")?.obj("user")?.obj("chatSettings") ?: return
+        if (stopped) return
+        rules = cs.arr("rules")?.strings().orEmpty().map { it.trim() }.filter { it.isNotEmpty() }
+        modes = modes.copy(
+            followersMinutes = cs.int("followersOnlyDurationMinutes")?.takeIf { it >= 0 },
+            subsOnly = cs.bool("isSubscribersOnlyModeEnabled") == true,
+            emoteOnly = cs.bool("isEmoteOnlyModeEnabled") == true,
+            slowSeconds = maxOf(0, cs.int("slowModeDurationSeconds") ?: 0),
+            uniqueChat = cs.bool("isUniqueChatModeEnabled") == true,
+            verifiedOnly = cs.bool("requireVerifiedAccount") == true,
+        )
+    }
+
+    /** Retire notre dernier message, affiché d'avance comme envoyé, quand
+     *  Twitch le refuse dans la foulée. */
+    private fun removeRecentEcho() {
+        val i = messages.indexOfLast { it.id.startsWith("local-") }
+        if (i >= 0 && System.currentTimeMillis() - messages[i].time < 20_000) messages.removeAt(i)
+    }
+
+    // ── Synchro avec la vidéo (ChatSync) ──
+
+    /** Message reçu : affiché tout de suite, ou une fois rejoint par l'image.
+     *  Sans retard et rien en attente : tout de suite ; sinon derrière ceux
+     *  qui attendent déjà. */
+    private fun publish(m: ChatMessage) {
+        val now = System.currentTimeMillis()
+        if (currentDelay(now) < 0.5 && pending.isEmpty()) {
+            add(m)
+            return
+        }
+        pending.addLast(Pending(m, now))
+        startRelease()
+    }
+
+    /** Retard voulu : celui de l'image, moins la marge de réaction, plus la
+     *  retouche ; 0 si la synchro est coupée ou le retard inconnu. */
+    private fun syncTarget(now: Long): Double {
+        if (!syncsWithPlayer || !ChatPrefs.sync.value) return 0.0
+        val player = ChatSync.playerDelay(now) ?: return 0.0
+        return ChatSync.chatDelay(player, ChatPrefs.syncNudge.value.toDouble())
+    }
+
+    /** Retard appliqué à la file. Une hausse (calage) est suivie tout de
+     *  suite ; une baisse (retour au direct, synchro coupée) en quelques
+     *  secondes : les messages en attente sortent dans l'ordre, en accéléré,
+     *  sans tout lâcher d'un coup. */
+    private fun currentDelay(now: Long): Double {
+        val target = syncTarget(now)
+        val elapsed = ((now - appliedAt) / 1000.0).coerceIn(0.0, 1.0)
+        appliedAt = now
+        if (pending.isEmpty() || target >= appliedDelay) {
+            appliedDelay = target
+            catchUpRate = 0.0
+        } else {
+            // Vitesse fixée au début du rattrapage ; une nouvelle baisse l'accélère.
+            catchUpRate = maxOf(catchUpRate, MIN_CATCH_UP_RATE, (appliedDelay - target) / CATCH_UP_TIME)
+            appliedDelay = maxOf(target, appliedDelay - catchUpRate * elapsed)
+        }
+        return appliedDelay
+    }
+
+    private fun startRelease() {
+        if (releaseJob?.isActive == true || pending.isEmpty()) return
+        releaseJob = scope.launch {
+            while (pending.isNotEmpty() && !stopped) {
+                delay(150)
+                releaseDue()
+            }
+        }
+    }
+
+    /** Rend, dans l'ordre d'arrivée, les messages dont l'heure est venue ;
+     *  file trop longue : les plus anciens aussi, en avance. */
+    private fun releaseDue() {
+        val now = System.currentTimeMillis()
+        val horizon = now - (currentDelay(now) * 1000).toLong()
+        val ripe = pending.indexOfFirst { it.arrivedAt > horizon }.let { if (it < 0) pending.size else it }
+        val count = maxOf(ripe, pending.size - MAX_PENDING)
+        repeat(count) { add(pending.removeFirst().message) }
     }
 
     private fun add(m: ChatMessage) {
@@ -215,6 +470,9 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         for (i in messages.indices) {
             if (match(messages[i]) && !messages[i].deleted) messages[i] = messages[i].copy(deleted = true)
         }
+        // Messages qui attendaient l'image (synchro) : la modération s'y applique
+        // aussi, sinon un spam supprimé s'affichait intact quelques secondes après.
+        for (p in pending) if (match(p.message) && !p.message.deleted) p.message = p.message.copy(deleted = true)
     }
 
     private fun system(text: String) = ChatMessage(
@@ -226,7 +484,7 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     private fun notice(line: IrcLine) {
         val systemText = line.tags["system-msg"]?.takeIf { it.isNotEmpty() } ?: return
         val base = build(line)
-        add((base ?: system(systemText)).copy(notice = systemText))
+        publish((base ?: system(systemText)).copy(notice = systemText))
     }
 
     /** Mention de notre pseudo : expression compilée une fois par pseudo, et
@@ -302,6 +560,19 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
         val known = messages.map { it.id }.toHashSet()
         messages.addAll(0, old.filter { it.id !in known }.distinctBy { it.id })
         while (messages.size > 300) messages.removeAt(0)
+    }
+
+    companion object {
+        /** Couples « compte#chaîne » refusés pendant cette séance : rouvrir le
+         *  chat (multi-live, retour au direct) repart directement sans compte. */
+        private val readOnlyKeys = HashSet<String>()
+        /** Au-delà (chat très rapide retardé d'une minute), les plus anciens
+         *  sortent en avance plutôt que de grossir sans fin. */
+        private const val MAX_PENDING = 1500
+        /** Une baisse du retard se rattrape en 4 s environ, jamais à moins de
+         *  2 s regagnées par seconde. */
+        private const val CATCH_UP_TIME = 4.0
+        private const val MIN_CATCH_UP_RATE = 2.0
     }
 }
 
