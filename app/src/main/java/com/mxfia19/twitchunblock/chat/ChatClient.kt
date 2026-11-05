@@ -279,6 +279,12 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
     private fun connect() {
         if (stopped) return
         val gen = ++generation
+        // Présents relus à chaque connexion (liste NAMES) : ceux partis pendant
+        // une coupure n'y restent pas.
+        if (present.isNotEmpty()) {
+            present.clear()
+            chattersVersion++
+        }
         val token = if (anonymous) null else AppState.token
         val login = AppState.user?.login
         usedToken = token
@@ -394,13 +400,14 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
                 "353" -> {
                     // Liste des présents à l'arrivée : « = #salon :nom1 nom2… ».
                     line.trailing?.split(' ')?.filter { it.isNotEmpty() }?.let { names ->
-                        present.addAll(names.map { it.lowercase() })
+                        // Sans les spectateurs anonymes (justinfan…), dont nous sans compte.
+                        present.addAll(names.map { it.lowercase() }.filter { !it.startsWith("justinfan") })
                         presenceSupported = true
                         chattersVersion++
                     }
                 }
                 "366" -> presenceSupported = true
-                "JOIN" -> (line.tags["login"] ?: line.nick)?.lowercase()?.let { who ->
+                "JOIN" -> (line.tags["login"] ?: line.nick)?.lowercase()?.takeIf { !it.startsWith("justinfan") }?.let { who ->
                     if (present.add(who)) chattersVersion++
                 }
                 "ROOMSTATE" -> {

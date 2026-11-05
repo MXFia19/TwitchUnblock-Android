@@ -79,6 +79,7 @@ import com.mxfia19.twitchunblock.chat.ChatRules
 import com.mxfia19.twitchunblock.chat.ChatToken
 import com.mxfia19.twitchunblock.chat.EmoteLists
 import com.mxfia19.twitchunblock.chat.Emotes
+import com.mxfia19.twitchunblock.chat.TwitchEmotes
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Features
 import com.mxfia19.twitchunblock.core.Links
@@ -173,7 +174,7 @@ fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false,
             withStyle(SpanStyle(color = TU.muted, fontSize = (emoteSize.value * 0.5f).sp)) {
                 append("↩ ")
                 withStyle(SpanStyle(fontWeight = FontWeight.Bold)) { append("@$to") }
-                m.replyBody?.let { b -> append(": " + if (b.length > 80) b.take(80) + "…" else b) }
+                append(m.replyBody?.let { b -> ": " + if (b.length > 80) b.take(80) + "…" else b } ?: "")
             }
             append("\n")
         }
@@ -462,7 +463,7 @@ private fun ChatInput(client: ChatClient, draft: TextFieldValue, onDraft: (TextF
     }
     // Autocomplétion : « @ » + pseudos récents du chat, « : » + 2 lettres → emotes.
     val word = currentWord(draft)?.second.orEmpty()
-    val suggestions = remember(word, client.roomId, Emotes.version) { chatCompletions(word, client) }
+    val suggestions = remember(word, client.roomId, Emotes.version, TwitchEmotes.version) { chatCompletions(word, client) }
     Column(Modifier.fillMaxWidth().background(barColor)) {
         if (picker) {
             // ChatPicker.kt : favorites, « Mes emotes », la chaîne, globales.
