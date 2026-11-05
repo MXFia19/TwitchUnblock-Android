@@ -41,6 +41,13 @@ installable à côté de l'autre.
   emote (source, auteur), autocomplétion (`@` pseudos récents, `:` et 2 lettres pour les emotes).
 
 - **Série 5** (menée en cinq parties en parallèle) :
+  - *Lecteur* : vitesse de 0,25× à 2× (menu ⋮ ; retenue pour les VODs, les clips repartent à 1×, un direct
+    reculé est rattrapé à cette vitesse jusqu'au bord) ; double-tap à gauche ou à droite pour reculer ou avancer de
+    10 s (les touchers s'additionnent) ; remplir l'écran en paysage (Réglages → Lecteur) et zoom à deux doigts
+    jusqu'à 4× ; heure réelle des archives (avec les commandes, sur la barre, ⋮ → Aller à une heure) ; toucher le
+    titre ouvre une fiche (titre en entier, catégorie, spectateurs, durée ou date, chaîne) ; passages coupés en
+    orange sur la barre, avec « Passer » ; compresseur audio comme sur le site ; plusieurs sons dans le multi-live
+    (haut-parleur de chaque tuile, appui long pour le volume).
   - *Direct* : un direct bloqué dans ton pays est dit tel quel ; pauses pub de la chaîne expliquées (bandeau,
     compte à rebours, son coupé le temps de la pause, une ligne sur les tuiles du multi-live) ; image verticale des
     directs en Dual Format (bouton sur l'image, choix retenu) ; barre de toute la diffusion quand l'enregistrement

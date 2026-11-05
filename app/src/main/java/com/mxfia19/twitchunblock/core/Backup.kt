@@ -76,6 +76,9 @@ object Backup {
             .put("android_chatBadgeScale", chat.badgeScale.value / 100.0)
             .put("android_chatEmoteScale", chat.emoteScale.value / 100.0)
             .put("android_customization", BrowsePrefs.customizationJson())
+            .put("vodSpeed", PlayerPrefs.vodSpeed.value / 100.0)
+            .put("audioCompressor", PlayerPrefs.audioCompressor.value)
+            .put("android_fillScreen", PlayerPrefs.fillScreen.value)
         val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val root = JSONObject()
             .put("format", FORMAT)
@@ -199,5 +202,9 @@ object Backup {
         percent("android_chatBadgeScale", "ios_chatBadgeScale")?.let { chat.badgeScale.set(it) }
         percent("android_chatEmoteScale", "ios_chatEmoteScale")?.let { chat.emoteScale.set(it) }
         (s.obj("android_customization") ?: s.obj("ios_customization"))?.let { BrowsePrefs.applyCustomization(it) }
+        // Vitesse des VODs : un facteur de 0,25 à 2 chez le site et l'iPhone.
+        s.dbl("vodSpeed")?.takeIf { it in 0.25..2.0 }?.let { PlayerPrefs.vodSpeed.set(Math.round(it * 100).toInt()) }
+        bool("audioCompressor") { PlayerPrefs.setCompressor(it) }
+        bool("android_fillScreen", "ios_fillScreen") { PlayerPrefs.fillScreen.set(it) }
     }
 }

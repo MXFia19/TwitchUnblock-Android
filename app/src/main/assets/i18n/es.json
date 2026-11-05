@@ -874,6 +874,8 @@
   "pinned_short": "Fijado",
   "pip_on_leave": "PiP al salir del reproductor",
   "pip_on_leave_sub": "Al minimizar un directo o un VOD (deslizar hacia abajo, flecha atrás), se abre en imagen en imagen en lugar del minirreproductor, si el vídeo se está reproduciendo. Solo con el reproductor inmersivo.",
+  "pl_audio_comp": "Compresor de audio",
+  "pl_audio_comp_sub": "Suaviza los picos de sonido y sube las partes tranquilas, como el de FrankerFaceZ. Directos, VODs y multi-live.",
   "play_all": "Reproducir todo",
   "player_failed": "La reproducción se detuvo (red o flujo no disponible).",
   "player_muted": "Sonido desactivado",

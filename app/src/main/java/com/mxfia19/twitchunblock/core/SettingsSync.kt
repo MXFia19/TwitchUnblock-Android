@@ -135,6 +135,10 @@ object SettingsSync {
             write = { v -> (v as? JSONArray)?.let { com.mxfia19.twitchunblock.chat.EmoteLists.replaceFavorites(it.strings()) } },
             isDefault = { com.mxfia19.twitchunblock.chat.EmoteLists.favorites.isEmpty() },
             unionMax = com.mxfia19.twitchunblock.chat.EmoteLists.MAX_FAVORITES, unionKeepsEnd = true))
+        // Vitesse des VODs : facteur de 0,25 à 2, comme le site et l'iPhone.
+        register(Entry("common", "vodSpeed", read = { PlayerPrefs.vodSpeed.value / 100.0 },
+            write = { v -> (v as? Number)?.toDouble()?.takeIf { it in 0.25..2.0 }?.let { PlayerPrefs.vodSpeed.set(Math.round(it * 100).toInt()) } },
+            isDefault = { PlayerPrefs.vodSpeed.value == 100 }))
         // Chaînes épinglées (accueil, Suivies, widget).
         pinnedList = object : PinnedList {
             override val logins: List<String> get() = BrowsePrefs.pinned.value

@@ -11,6 +11,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.OptIn
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -73,6 +74,7 @@ import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Format
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.NetworkStatus
+import com.mxfia19.twitchunblock.core.PlayerPrefs
 import com.mxfia19.twitchunblock.core.Quality
 import com.mxfia19.twitchunblock.download.Downloads
 import com.mxfia19.twitchunblock.core.Features
@@ -86,16 +88,20 @@ import com.mxfia19.twitchunblock.web.ClipCreator
 import com.mxfia19.twitchunblock.web.WebSession
 import kotlinx.coroutines.delay
 
-/** Image du lecteur (PlayerView de Media3 et ses commandes). */
+/** Image du lecteur (PlayerView de Media3 et ses commandes), avec les gestes
+ *  du lecteur : double-tap ±10 s, zoom, remplir l'écran (PlayerGestures.kt). */
 @OptIn(UnstableApi::class)
 @Composable
 fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFullscreen: (() -> Unit)? = null,
                  focusOnStart: Boolean = false, controls: Boolean = true) {
     // Chat posé sur l'image (paysage) : les commandes s'en écartent (ChatLayout.kt).
     val chatInset = LocalChatOverlayInset.current
+    // Remplir l'écran : en paysage seulement. Passages coupés de la VOD sur la barre.
+    val fill = PlayerPrefs.fillScreen.value && LocalConfiguration.current.orientation == Configuration.ORIENTATION_LANDSCAPE
+    val muted = PlayerUi.markers?.takeIf { it.id == session.vodId }?.muted.orEmpty()
     AndroidView(
         factory = { ctx ->
-            PlayerView(ctx).apply {
+            GesturePlayerView(ctx).apply {
                 player = session.player
                 setShowNextButton(false)
                 setShowPreviousButton(false)
@@ -116,6 +122,7 @@ fun VideoSurface(session: PlaybackSession, modifier: Modifier = Modifier, onFull
                 view.useController = controls
                 if (!controls) view.hideController()
             }
+            view.bind(session, gestures = controls, fill = fill, muted = muted)
             view.insetControls(chatInset)
         },
         // La session survit à l'écran : la vue retirée lâche le lecteur.
@@ -295,6 +302,9 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
+    // Vitesse, repères de la VOD, fiches du titre et de l'heure (PlayerAddons.kt).
+    PlayerAddons(session, nav)
+
     // Image dans l'image : rien que la vidéo.
     if (pip) {
         VideoSurface(session, Modifier.fillMaxSize(), controls = false)
@@ -314,6 +324,7 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
                 VideoSurface(session, Modifier.fillMaxSize(), onFullscreen = toggleFullscreen)
                 PlayerOverlay(session, Modifier.align(Alignment.Center))
                 StreamVideoOverlay(session)
+                PlayerVideoOverlay(session)
             },
         ) { chatModifier, overlay ->
             if (chat != null) {
@@ -339,6 +350,7 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
             VideoSurface(session, Modifier.fillMaxSize(), onFullscreen = toggleFullscreen)
             PlayerOverlay(session, Modifier.align(Alignment.Center))
             StreamVideoOverlay(session)
+            PlayerVideoOverlay(session)
         }
         BroadcastBar(session)
         InfoBar(session, nav)
@@ -368,7 +380,8 @@ private fun InfoBar(session: PlaybackSession, nav: Navigator) {
         verticalAlignment = Alignment.CenterVertically) {
         Avatar(session.avatar, 36.dp, Modifier.focusCard({ session.channelLogin?.let { nav.push(Screen.Channel(it)) } }))
         Spacer(Modifier.width(10.dp))
-        Column(Modifier.weight(1f)) {
+        // Titre souvent coupé : le toucher ouvre sa fiche (titre en entier…).
+        Column(Modifier.weight(1f).clickable { PlayerUi.infoOpen = true }) {
             Text(session.title.ifEmpty { session.channelName ?: "" }, color = TU.text, fontSize = 14.sp,
                  fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
             val parts = mutableListOf<String>()
@@ -416,7 +429,7 @@ private fun InfoBar(session: PlaybackSession, nav: Navigator) {
 private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
     val context = LocalContext.current
     var open by remember { mutableStateOf(false) }
-    var page by remember { mutableStateOf(0) }   // 0 : menu, 1 : minuterie, 2 : qualité du téléchargement, 3 : chapitres
+    var page by remember { mutableStateOf(0) }   // 0 : menu, 1 : minuterie, 2 : qualité du téléchargement, 3 : chapitres, 4 : vitesse
     var pendingDownload by remember { mutableStateOf<String?>(null) }
     // Téléchargement refusé faute de place : taille estimée et espace libre.
     var noSpace by remember { mutableStateOf<Pair<Long, Long>?>(null) }
@@ -439,6 +452,7 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                                          onClick = { open = false; session.setSleepTimer(null) })
                     }
                 }
+                4 -> SpeedMenuPage(session) { open = false }
                 3 -> {
                     for (c in session.chapters) {
                         DropdownMenuItem(
@@ -502,6 +516,8 @@ private fun MoreMenu(session: PlaybackSession, nav: Navigator) {
                         text = { Text(AppState.t("sleep_timer") + (session.sleepAt?.let { "  ✓" } ?: "")) },
                         onClick = { page = 1 },
                     )
+                    // Vitesse, aller à une heure, compresseur audio (PlayerAddons.kt).
+                    PlayerMenuExtras(session, onSpeed = { page = 4 }) { open = false }
                     val vod = session.vodId
                     if (vod != null && !session.isOffline && session.state is PlaybackSession.State.Ready) {
                         val saved = Downloads.find(vod)
