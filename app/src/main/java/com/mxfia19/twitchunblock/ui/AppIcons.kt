@@ -18,9 +18,11 @@ private val CLASS_PACKAGE: String = AppIcon::class.java.name.substringBeforeLast
  * iPhone : dessins de assets/icons, mipmaps faits par la CI. Le manifeste a
  * un alias de MainActivity par icône (« .ui.Launcher<Nom> ») : seul celui
  * de l'icône choisie reste actif. `id` : nom de l'iPhone (AppIconChoice).
+ * `preview` : un PNG (celle par défaut est adaptative à partir d'Android 8,
+ * et Compose ne dessine pas une icône adaptative).
  */
 enum class AppIcon(val id: String, val preview: Int) {
-    DEFAULT("Default", R.mipmap.ic_launcher),
+    DEFAULT("Default", R.mipmap.ic_launcher_legacy),
     PURPLE("Purple", R.mipmap.ic_launcher_purple),
     NIGHT("Night", R.mipmap.ic_launcher_night),
     LIGHT("Light", R.mipmap.ic_launcher_light),

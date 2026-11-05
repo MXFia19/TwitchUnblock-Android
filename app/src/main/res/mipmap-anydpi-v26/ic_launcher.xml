@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Icône adaptative (Android 8+) : fond uni, premier plan, et couche
+     monochrome pour les icônes à thème d'Android 13. Le premier plan est fait
+     par la CI depuis assets/icon.png (.github/workflows/build.yml). -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/ic_launcher_background" />
+    <foreground android:drawable="@mipmap/ic_launcher_foreground" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
+</adaptive-icon>

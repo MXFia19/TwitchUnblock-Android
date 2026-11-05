@@ -59,6 +59,16 @@ jobs:
             size="${d##*:}"
             mkdir -p "$dir"
             convert assets/icon.png -resize "${size}x${size}" "$dir/ic_launcher.png"
+            # Même PNG pour l'aperçu des réglages (ui/AppIcons.kt) : à partir
+            # d'Android 8, ic_launcher est l'icône adaptative, que Compose ne
+            # sait pas dessiner.
+            cp "$dir/ic_launcher.png" "$dir/ic_launcher_legacy.png"
+            # Premier plan de l'icône adaptative (mipmap-anydpi-v26) : 108 dp,
+            # dont les 72 du centre se voient. Le cœur de l'icône (860 px sur
+            # 1024, sans les coins arrondis) posé sur son fond, #140419.
+            fg=$((size * 9 / 4))
+            convert assets/icon.png -background '#140419' -flatten -gravity center -crop 860x860+0+0 +repage \
+              -background '#140419' -gravity center -extent 1290x1290 -resize "${fg}x${fg}" "$dir/ic_launcher_foreground.png"
             # Icônes au choix (Réglages → Apparence), celles de l'app iPhone.
             for f in assets/icons/*.png; do
               convert "$f" -resize "${size}x${size}" "$dir/ic_launcher_$(basename "$f" .png).png"
