@@ -13,6 +13,7 @@ import com.mxfia19.twitchunblock.core.int
 import com.mxfia19.twitchunblock.core.obj
 import com.mxfia19.twitchunblock.core.objects
 import com.mxfia19.twitchunblock.core.str
+import com.mxfia19.twitchunblock.points.PointsTracker
 import com.mxfia19.twitchunblock.web.WebGql
 import com.mxfia19.twitchunblock.web.WebSession
 import kotlinx.coroutines.CoroutineScope
@@ -105,6 +106,9 @@ class LiveEvents(private val scope: CoroutineScope) {
         private set
     /** Code de Twitch, ou « NO_SESSION » / « NETWORK ». */
     var betError by mutableStateOf<String?>(null)
+    /** Bandeaux fermés (×) de LiveExtras, par clé : gardés ici pour ne pas
+     *  revenir à la rotation ni après le panneau des récompenses. */
+    var closed by mutableStateOf<Set<String>>(emptySet())
 
     private var login = ""
     private var channelId = ""
@@ -306,7 +310,17 @@ class LiveEvents(private val scope: CoroutineScope) {
             val prev = prediction ?: return
             if (prev.winnerId == null && prev.id.isNotEmpty()) {
                 val winner = resolvedWinner(prev.id)
-                if (winner != null) {
+                // Le gain d'un pari gagnant, ou la mise rendue d'une prédiction
+                // annulée, n'est pas compté dans les points gagnés en regardant
+                // (Suivi des points), comme expectPayout (iOS).
+                if (winner == "") {
+                    if (prev.myPoints > 0) PointsTracker.expectPayout(prev.myPoints, login)
+                } else if (winner != null && prev.myOutcomeId == winner && prev.myPoints > 0) {
+                    prev.outcomes.firstOrNull { it.id == winner }?.let { prev.ratio(it.points) }?.let { r ->
+                        PointsTracker.expectPayout((prev.myPoints * r).toInt(), login)
+                    }
+                }
+                if (!winner.isNullOrEmpty()) {
                     prediction = prev.copy(winnerId = winner, closesAt = null)
                     resultUntil = System.currentTimeMillis() + 60_000
                     Logger.success("EVENTS", "Prédiction résolue", prev.title)
@@ -369,11 +383,15 @@ class LiveEvents(private val scope: CoroutineScope) {
         return Pair(oid, pts)
     }
 
+    /** Issue gagnante d'une prédiction terminée ; "" si elle a été annulée
+     *  (mises rendues) ; null si Twitch ne la donne pas. */
     private suspend fun resolvedWinner(eventId: String): String? {
-        val q = "query(\$l: String!) { channel(name: \$l) { resolvedPredictionEvents(first: 3) { edges { node { id winningOutcome { id } } } } } }"
+        val q = "query(\$l: String!) { channel(name: \$l) { resolvedPredictionEvents(first: 3) { edges { node { id status winningOutcome { id } } } } } }"
         val edges = WebGql.raw(q, JSONObject().put("l", login)).data?.obj("channel")?.obj("resolvedPredictionEvents")?.arr("edges")
             ?: return null
-        return edges.objects().mapNotNull { it.obj("node") }.firstOrNull { it.str("id") == eventId }?.obj("winningOutcome")?.str("id")
+        val node = edges.objects().mapNotNull { it.obj("node") }.firstOrNull { it.str("id") == eventId } ?: return null
+        if (node.str("status") == "CANCELED") return ""
+        return node.obj("winningOutcome")?.str("id")
     }
 
     // ── Hype train ──

@@ -88,7 +88,12 @@ class ChannelPoints(private val scope: CoroutineScope) {
         channelId = id
         token = WebSession.token ?: ""
         needsWebLogin = false
+        // Rien de la chaîne précédente (raid) : ni son solde (pari, gains), ni
+        // son coffre (réclamé sinon avec l'identifiant de la nouvelle).
+        balance = 0
         balanceKnown = false
+        pendingClaimId = null
+        lastGain = 0
         loading = true
         error = null
         jobs += scope.launch {
@@ -135,9 +140,13 @@ class ChannelPoints(private val scope: CoroutineScope) {
     // ── Solde et coffres ──
     private suspend fun refreshBalance() {
         val b = fetchBalance(quiet = true) ?: return
-        balanceKnown = true
         val delta = b.first - balance
-        if (delta > 0) {
+        if (!balanceKnown) {
+            // Première lecture réussie (celle de l'ouverture avait échoué) : le
+            // solde posé tel quel, pas compté comme un gain (« +250 000 »).
+            balance = b.first
+            balanceKnown = true
+        } else if (delta > 0) {
             Logger.success("POINTS", "Points gagnés", "+$delta · total ${format(b.first)}")
             PointsTracker.addGain(delta, channelLogin)
             balance = b.first
@@ -197,7 +206,12 @@ class ChannelPoints(private val scope: CoroutineScope) {
             pendingClaimId = null
             PointsTracker.addChest(channelLogin)
             val pts = claim.int("currentPoints")
-            if (pts != null) {
+            if (pts != null && !balanceKnown) {
+                // Solde encore inconnu : posé tel quel, sans gain du coffre compté.
+                Logger.success("POINTS", "Coffre réclamé")
+                balance = pts
+                balanceKnown = true
+            } else if (pts != null) {
                 val gained = pts - balance
                 Logger.success("POINTS", "Coffre réclamé", "+$gained")
                 PointsTracker.addGain(gained, channelLogin)

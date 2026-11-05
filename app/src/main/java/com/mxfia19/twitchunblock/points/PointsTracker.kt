@@ -21,6 +21,10 @@ object PointsTracker {
     /** Les chaînes, la plus récente d'abord. Fil principal. */
     val stats = mutableStateListOf<Stat>()
 
+    /** Gain de prédiction attendu par chaîne (points, fin de validité) : pas
+     *  des points gagnés en regardant. Comme payouts (iOS). */
+    private val payouts = HashMap<String, Pair<Int, Long>>()
+
     fun init() {
         stats.clear()
         parseJsonArray(AppState.prefs.getString("points_tracker", null))?.objects()?.forEach { o ->
@@ -37,8 +41,22 @@ object PointsTracker {
 
     fun addMinute(login: String) = touch(login) { it.copy(minutes = it.minutes + 1) }
 
+    /** Hausse du solde : comptée, moins un gain de prédiction attendu. */
     fun addGain(points: Int, login: String) {
-        if (points > 0) touch(login) { it.copy(points = it.points + points) }
+        if (points <= 0) return
+        var gain = points
+        payouts.remove(login.lowercase())?.let { (expected, until) ->
+            if (until > System.currentTimeMillis()) gain = maxOf(0, points - expected)
+        }
+        if (gain > 0) touch(login) { it.copy(points = it.points + gain) }
+    }
+
+    /** Prédiction gagnée (ou annulée, mise rendue) sur cette chaîne : retiré
+     *  de la prochaine hausse du solde dans les 3 min. */
+    fun expectPayout(points: Int, login: String) {
+        val l = login.lowercase()
+        if (points <= 0 || l.isEmpty()) return
+        payouts[l] = Pair(points, System.currentTimeMillis() + 180_000)
     }
 
     fun addChest(login: String) = touch(login) { it.copy(chests = it.chests + 1) }
