@@ -13,8 +13,14 @@ object BrowsePrefs {
     /** Onglets du téléphone, dans l'ordre par défaut : Découvrir après
      *  l'accueil, comme sur l'iPhone. */
     val defaultTabs = listOf("home", "discover", "search", "following", "library")
-    /** Parties de l'accueil qu'on peut masquer, dans leur ordre. */
-    val homeParts = listOf("announcement", "continue", "followed", "categories", "top")
+    /** Parties de l'accueil qu'on peut masquer : les cartes du haut (annonce,
+     *  invitation à se connecter, session web), puis celles qu'on range. */
+    val homeParts = listOf("announcement", "login", "web", "continue", "followed", "categories", "top")
+    /** Parties de l'accueil qu'on peut ranger (série 6), dans l'ordre par défaut. */
+    val homeMovable = listOf("continue", "followed", "categories", "top")
+    /** Onglets de la page d'une chaîne, comme defaultChannelTabs (iOS) ;
+     *  « recover » (VODs retirées) est propre à Android. */
+    val defaultChannelTabs = listOf("vods", "highlights", "playlists", "clips", "recover", "schedule", "about")
 
     /** Épinglées, dans l'ordre d'épinglage (300 au plus, comme l'iPhone). */
     val pinned = wordsPref("pinned_streamers", 300)
@@ -30,6 +36,64 @@ object BrowsePrefs {
     val compactCategories = boolPref("followed_cats_compact", false)
     /** Leur ordre : « viewers » (les plus regardées d'abord) ou « name » (A → Z). */
     val categorySort = stringPref("followed_cats_sort", "viewers")
+    /** Ordre des parties de l'accueil (homeMovable). */
+    val homeOrder = wordsPref("home_order", 10)
+    /** Onglets de la page d'une chaîne : ordre et masqués. */
+    val channelTabOrder = wordsPref("channel_tab_order", 10)
+    val hiddenChannelTabs = wordsPref("channel_tabs_hidden", 10)
+    /** Langue des lives d'une catégorie (TopLanguage.codes, « » : toutes),
+     *  la même pour toutes les catégories. Comme categoryLang (iOS). */
+    val categoryLang = stringPref("category_lang", "")
+    /** Carte « Session web » de l'accueil masquée jusqu'à cette date (ms) : ✕, une semaine. */
+    val webCardHiddenUntil = stringPref("web_card_hidden_until", "0")
+
+    val homeSections: List<String> get() = merged(homeOrder.value, homeMovable)
+
+    fun moveHome(key: String, delta: Int) {
+        homeOrder.set(swapped(homeSections, key, delta) ?: return)
+    }
+
+    val channelTabs: List<String> get() = merged(channelTabOrder.value, defaultChannelTabs)
+
+    /** Au moins un onglet toujours là, sans compter le planning (seulement
+     *  pour les chaînes qui en ont un) : les vidéos si tout était masqué. */
+    val visibleChannelTabs: List<String> get() {
+        val v = channelTabs.filter { it !in hiddenChannelTabs.value }
+        return if (v.any { it != "schedule" }) v else v + "vods"
+    }
+
+    fun setChannelTabShown(key: String, on: Boolean) {
+        val hidden = if (on) hiddenChannelTabs.value - key else hiddenChannelTabs.value + key
+        // Il reste toujours un onglet en plus du planning.
+        if (channelTabs.none { it != "schedule" && it !in hidden }) return
+        hiddenChannelTabs.set(hidden)
+    }
+
+    fun moveChannelTab(key: String, delta: Int) {
+        channelTabOrder.set(swapped(channelTabs, key, delta) ?: return)
+    }
+
+    /** `key` échangé avec sa voisine (`delta` : -1 vers le haut, 1 vers le bas) ; null au bord. */
+    private fun swapped(list: List<String>, key: String, delta: Int): List<String>? {
+        val out = list.toMutableList()
+        val i = out.indexOf(key)
+        val j = i + delta
+        if (i < 0 || j !in out.indices) return null
+        out[i] = out[j]
+        out[j] = key
+        return out
+    }
+
+    /** Ordre importé : les parties connues prennent, dans cet ordre, les places
+     *  qu'elles occupent ici. « homeOrder » de l'iPhone n'a que Suivies, Top et
+     *  Hors ligne : les autres parties ne bougent pas. */
+    private fun importedHomeOrder(list: List<String>): List<String> {
+        val current = homeSections.toMutableList()
+        val known = list.filter { it in homeMovable }.distinct()
+        val slots = current.indices.filter { current[it] in known }
+        slots.forEachIndexed { i, slot -> current[slot] = known[i] }
+        return current
+    }
 
     /** L'ordre choisi (éléments connus, sans doublon), puis les nouveaux :
      *  un onglet ajouté par une version suivante prend place à la fin. */
@@ -80,6 +144,9 @@ object BrowsePrefs {
         .put("pinnedByViewers", pinnedByViewers.value)
         .put("compactFollowedCategories", compactCategories.value)
         .put("followedCategoriesSort", categorySort.value)
+        .put("homeOrder", JSONArray(homeSections))
+        .put("channelTabOrder", JSONArray(channelTabs))
+        .put("hiddenChannelTabs", JSONArray(hiddenChannelTabs.value))
 
     /** Lue avec tolérance (celle de l'app, ou « ios_customization ») :
      *  éléments inconnus ignorés, champ absent gardé tel quel. */
@@ -93,6 +160,11 @@ object BrowsePrefs {
         o.bool("pinnedByViewers")?.let { pinnedByViewers.set(it) }
         o.bool("compactFollowedCategories")?.let { compactCategories.set(it) }
         o.str("followedCategoriesSort")?.takeIf { it == "viewers" || it == "name" }?.let { categorySort.set(it) }
+        o.arr("homeOrder")?.strings()?.let { homeOrder.set(importedHomeOrder(it)) }
+        o.arr("channelTabOrder")?.strings()?.let { channelTabOrder.set(merged(it, defaultChannelTabs)) }
+        o.arr("hiddenChannelTabs")?.strings()?.filter { it in defaultChannelTabs }?.let { hidden ->
+            if (defaultChannelTabs.any { it != "schedule" && it !in hidden }) hiddenChannelTabs.set(hidden)
+        }
     }
 
     /** « Rétablir la disposition d'origine » : onglets et accueil. */
@@ -104,6 +176,9 @@ object BrowsePrefs {
         pinnedByViewers.set(true)
         compactCategories.set(false)
         categorySort.set("viewers")
+        homeOrder.set(emptyList())
+        channelTabOrder.set(emptyList())
+        hiddenChannelTabs.set(emptyList())
     }
 }
 

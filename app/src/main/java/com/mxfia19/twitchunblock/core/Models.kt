@@ -48,8 +48,10 @@ data class TwitchUser(val id: String, val login: String, val displayName: String
 data class ChannelBrief(val login: String, val name: String, val avatar: String, val stream: TwitchStream?,
                         val lastEnd: Long? = null)
 
-/** Proposition de la recherche (chaîne), `viewers` non nul si en direct. */
-data class Suggestion(val login: String, val name: String, val avatar: String?, val viewers: Int?, val game: String?) {
+/** Proposition de la recherche (chaîne), `viewers` non nul si en direct.
+ *  `followers` : abonnés (recherche complète), null s'ils ne sont pas lus. */
+data class Suggestion(val login: String, val name: String, val avatar: String?, val viewers: Int?, val game: String?,
+                      val followers: Int? = null) {
     val isLive: Boolean get() = viewers != null
 }
 

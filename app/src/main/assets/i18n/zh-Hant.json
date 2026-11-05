@@ -779,6 +779,8 @@
   "multi_watch": "觀看",
   "muted_words": "靜音字詞",
   "muted_words_sub": "以逗號分隔：含有這些字詞的訊息不會顯示。",
+  "n6_home_order": "首頁・區塊順序",
+  "n6_home_order_foot": "箭頭可調整首頁各區塊的順序；開關可隱藏區塊。",
   "native_tabs": "原生分頁（Liquid Glass）",
   "native_tabs_sub": "使用 iOS 26 的分頁列取代 App 自己的分頁列：捲動時會縮小，並由系統依螢幕擺放（iPad、iPhone Duo）。測試中：有問題請回報。",
   "no_clips": "這段期間沒有精華片段",

@@ -779,6 +779,8 @@
   "multi_watch": "Watch",
   "muted_words": "Muted words",
   "muted_words_sub": "Comma-separated: messages containing them are not shown.",
+  "n6_home_order": "Home · order of sections",
+  "n6_home_order_foot": "The arrows change the order of Home's sections; the switch hides them.",
   "native_tabs": "Native tabs (Liquid Glass)",
   "native_tabs_sub": "iOS 26's own tab bar instead of the app's: it shrinks while you scroll and the system places it for the screen (iPad, iPhone Duo). In testing: report what's off.",
   "no_clips": "No clips for this period",

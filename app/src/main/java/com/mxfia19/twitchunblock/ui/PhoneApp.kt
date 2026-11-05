@@ -149,7 +149,11 @@ fun PhoneApp(nav: Navigator) {
     val playing = nav.stack.filterIsInstance<Screen.Player>().lastOrNull()?.request
     val session = remember(playing != null) { if (playing != null) PlaybackSession(context, scope) else null }
     DisposableEffect(session) { onDispose { session?.release() } }
-    LaunchedEffect(session, playing) { if (session != null && playing != null) session.open(playing) }
+    // Lecture déjà ouverte par la session (VOD suivante de « Tout lire », lancée
+    // même app en arrière-plan) : pas relue.
+    LaunchedEffect(session, playing) { if (session != null && playing != null && session.request != playing) session.open(playing) }
+    // « Tout lire » : VOD suivante de la playlist à la fin de celle-ci (PlayQueue.kt).
+    PlayQueueEffect(session, nav)
     // Multi-live, porté ici aussi : ses tuiles restent (en pause) sous la
     // connexion ouverte depuis son chat, au lieu d'être perdues au retour.
     val multiOpen = nav.stack.any { it is Screen.MultiLive }

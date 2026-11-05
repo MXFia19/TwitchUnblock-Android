@@ -1,0 +1,24 @@
+{
+  "_indirect": {
+    "keys": ["cust_login_card", "cust_web_banner", "highlights", "playlists", "clips", "recover_tab", "sched_tab", "about",
+             "tv_videos", "sort_viewers_desc", "sort_viewers_asc", "sort_name", "more_needs_login", "more_unavailable"]
+  },
+  "n6_home_order": {
+    "fr": "Accueil · ordre des parties",
+    "en": "Home · order of sections",
+    "es": "Inicio · orden de las secciones",
+    "ru": "Главная · порядок разделов",
+    "it": "Home · ordine delle sezioni",
+    "ja": "ホーム・セクションの順序",
+    "zh-Hant": "首頁・區塊順序"
+  },
+  "n6_home_order_foot": {
+    "fr": "Les flèches changent l'ordre des parties de l'accueil ; l'interrupteur les masque.",
+    "en": "The arrows change the order of Home's sections; the switch hides them.",
+    "es": "Las flechas cambian el orden de las secciones de Inicio; el interruptor las oculta.",
+    "ru": "Стрелки меняют порядок разделов главной, переключатель скрывает их.",
+    "it": "Le frecce cambiano l'ordine delle sezioni della Home; l'interruttore le nasconde.",
+    "ja": "矢印でホームのセクションの順序を変え、スイッチで非表示にします。",
+    "zh-Hant": "箭頭可調整首頁各區塊的順序；開關可隱藏區塊。"
+  }
+}

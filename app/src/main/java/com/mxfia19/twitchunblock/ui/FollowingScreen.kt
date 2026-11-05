@@ -66,19 +66,27 @@ class FollowingModel(private val scope: CoroutineScope) {
 @Composable
 fun FollowingScreen(model: FollowingModel, nav: Navigator) {
     LaunchedEffect(AppState.user?.id, AppState.localFollows.size) { model.load() }
-    when {
-        // « Sans compte Twitch » : seulement les suivis de l'appareil.
-        model.isEmptySetup && com.mxfia19.twitchunblock.core.NoAccount.active -> MessageBox(AppState.t("ap_following_empty_local"))
-        model.isEmptySetup -> MessageBox(AppState.t("following_empty"), action = AppState.t("tv_login")) { nav.push(Screen.Login) }
-        model.loading && model.channels.isEmpty() -> LoadingBox()
-        model.failed -> MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.load(force = true) }
-        model.channels.isEmpty() -> MessageBox(AppState.t("following_none"))
-        else -> {
-            // Épinglées en tête (en direct, puis hors ligne) ; deux colonnes sur tablette.
-            val grid = rememberLazyGridState()
-            TabTop.Listen(Screen.Following) { grid.animateScrollToItem(0) }
-            LazyVerticalGrid(columns = BrowseGrid.rows, state = grid, modifier = Modifier.fillMaxSize()) {
-                items(Pins.sortBriefs(model.channels), key = { it.login }) { b -> PinnableChannelRow(b, nav) }
+    // Tirer pour relire la liste (sinon gardée 2 min), messages compris.
+    RefreshBox(loading = model.loading, onRefresh = { model.load(force = true) }) {
+        when {
+            // « Sans compte Twitch » : seulement les suivis de l'appareil.
+            model.isEmptySetup && com.mxfia19.twitchunblock.core.NoAccount.active ->
+                PullableBox { MessageBox(AppState.t("ap_following_empty_local")) }
+            model.isEmptySetup -> PullableBox {
+                MessageBox(AppState.t("following_empty"), action = AppState.t("tv_login")) { nav.push(Screen.Login) }
+            }
+            model.loading && model.channels.isEmpty() -> LoadingBox()
+            model.failed -> PullableBox {
+                MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.load(force = true) }
+            }
+            model.channels.isEmpty() -> PullableBox { MessageBox(AppState.t("following_none")) }
+            else -> {
+                // Épinglées en tête (en direct, puis hors ligne) ; deux colonnes sur tablette.
+                val grid = rememberLazyGridState()
+                TabTop.Listen(Screen.Following) { grid.animateScrollToItem(0) }
+                LazyVerticalGrid(columns = BrowseGrid.rows, state = grid, modifier = Modifier.fillMaxSize()) {
+                    items(Pins.sortBriefs(model.channels), key = { it.login }) { b -> PinnableChannelRow(b, nav) }
+                }
             }
         }
     }
