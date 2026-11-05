@@ -152,6 +152,13 @@ object SettingsSync {
             write = { v -> (v as? String)?.takeIf { it in listOf("auto", "12", "24") }?.let { chat.timeFormat.set(it) } },
             isDefault = { chat.timeFormat.value == "auto" }, late = true))
         bool("ios", "ios_chatShowInput", chat.showInput, true, late = true)
+        // Série 6 : réglages du chat ajoutés après coup (hors empreinte tant
+        // qu'ils restent par défaut, comme l'iPhone).
+        val opts = com.mxfia19.twitchunblock.chat.ChatOptions
+        bool("ios", "ios_chatKeyboardSuggestions", opts.keyboardSuggestions, true, late = true)
+        bool("ios", "ios_showDropsNotice", opts.dropsCard, true, late = true)
+        bool("ios", "ios_showSpecialEvents", opts.specialEvents, true, late = true)
+        bool("ios", "ios_showFollowButton", opts.followButton, true, late = true)
         register(Entry("ios", "ios_customization", read = { BrowsePrefs.customizationJson() },
             write = { v -> (v as? JSONObject)?.let { applyCustomization(it) } },
             isDefault = { customizationIsDefault() }, late = true,

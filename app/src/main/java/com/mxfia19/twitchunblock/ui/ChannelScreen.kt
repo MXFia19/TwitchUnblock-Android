@@ -275,6 +275,7 @@ fun ChannelScreen(login: String, nav: Navigator) {
     var twitchId by remember(login) { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
     var confirmUnfollow by remember { mutableStateOf(false) }
+    var bots by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     // Refus de Twitch (code, vide s'il n'en donne pas) ; null : pas de refus.
     var followError by remember(login) { mutableStateOf<String?>(null) }
@@ -338,6 +339,7 @@ fun ChannelScreen(login: String, nav: Navigator) {
                 }
             }
         }
+        if (bots) BotCommandsSheet(login, onDismiss = { bots = false })
         if (confirmUnfollow) {
             AlertDialog(
                 onDismissRequest = { confirmUnfollow = false },
@@ -367,6 +369,13 @@ fun ChannelScreen(login: String, nav: Navigator) {
             item(span = FullSpan) {
                 ChannelStatusLines(localFollow = !usesTwitch && AppState.isFollowedLocally(login), followError = followError,
                                    hidden = Hidden.hidesChannel(login)) { Hidden.unhideChannel(login) }
+            }
+            // Commandes des bots (Nightbot, StreamElements…) : aussi hors ligne,
+            // quand il n'y a pas de chat pour ouvrir son menu ⋯ (comme l'iPhone).
+            item(span = FullSpan) {
+                TextButton(onClick = { bots = true }, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                    Text("🤖 " + AppState.t("bot_commands"), color = TU.primary, fontSize = 14.sp)
+                }
             }
             // Hors ligne : son prochain live prévu, ou ses vacances.
             val schedule = extras.schedule

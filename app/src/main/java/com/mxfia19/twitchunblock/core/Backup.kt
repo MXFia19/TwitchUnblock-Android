@@ -157,6 +157,14 @@ object Backup {
             .put("vodSpeed", PlayerPrefs.vodSpeed.value / 100.0)
             .put("audioCompressor", PlayerPrefs.audioCompressor.value)
             .put("android_fillScreen", PlayerPrefs.fillScreen.value)
+            // Série 6 : réglages du chat (noms de l'iPhone en repli à l'import)
+            // et langue des lives des catégories (nom et format du site, null = toutes).
+            .put("android_chatKeyboardSuggestions", com.mxfia19.twitchunblock.chat.ChatOptions.keyboardSuggestions.value)
+            .put("android_showDropsNotice", com.mxfia19.twitchunblock.chat.ChatOptions.dropsCard.value)
+            .put("android_showSpecialEvents", com.mxfia19.twitchunblock.chat.ChatOptions.specialEvents.value)
+            .put("android_showFollowButton", com.mxfia19.twitchunblock.chat.ChatOptions.followButton.value)
+            .put("android_landNoticesHidden", com.mxfia19.twitchunblock.chat.ChatOptions.landscapeNoticesHidden.value)
+            .put("catLang", BrowsePrefs.categoryLang.value.ifEmpty { null }?.replace("-", "_") ?: JSONObject.NULL)
             // Drops, synchro de l'historique et source du direct : perdus avant.
             .put("android_dropsProgress", Features.dropsProgress.value)
             .put("android_autoClaimDrops", Features.dropsAutoClaim.value)
@@ -404,6 +412,20 @@ object Backup {
         s.dbl("vodSpeed")?.takeIf { it in 0.25..2.0 }?.let { PlayerPrefs.vodSpeed.set(Math.round(it * 100).toInt()); ok("vodSpeed") }
         bool("audioCompressor") { PlayerPrefs.setCompressor(it) }
         bool("android_fillScreen", "ios_fillScreen") { PlayerPrefs.fillScreen.set(it) }
+        val opts = com.mxfia19.twitchunblock.chat.ChatOptions
+        bool("android_chatKeyboardSuggestions", "ios_chatKeyboardSuggestions") { opts.keyboardSuggestions.set(it) }
+        bool("android_showDropsNotice", "ios_showDropsNotice") { opts.dropsCard.set(it) }
+        bool("android_showSpecialEvents", "ios_showSpecialEvents") { opts.specialEvents.set(it) }
+        bool("android_showFollowButton", "ios_showFollowButton") { opts.followButton.set(it) }
+        bool("android_landNoticesHidden", "ios_landNoticesHidden") { opts.landscapeNoticesHidden.set(it) }
+        // Langue des lives des catégories : null = toutes (format du site, « zh_hk »).
+        if (s.isJsonNull("catLang")) {
+            BrowsePrefs.categoryLang.set("")
+            ok("catLang")
+        } else {
+            str("catLang") { it.lowercase().replace("_", "-") in TopLanguage.codes }
+                ?.let { BrowsePrefs.categoryLang.set(it.lowercase().replace("_", "-")) }
+        }
         bool("android_dropsProgress", "ios_dropsProgress") { Features.dropsProgress.set(it) }
         bool("android_autoClaimDrops", "ios_autoClaimDrops") { Features.dropsAutoClaim.set(it) }
         bool("android_dropsNotify", "ios_dropsNotify") { Features.dropsNotify.set(it) }
