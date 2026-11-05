@@ -56,15 +56,38 @@ object CloudSync {
         val user = AppState.user ?: return@withLock false
         val token = AppState.token ?: return@withLock false
         if (!Features.cloudSync.value) return@withLock false
+        exchange(user, token, push, null)
+    }
+
+    /** Données d'ici prises au moment de la déconnexion (dernier envoi). */
+    private class Snapshot(val history: List<HistoryItem>, val progress: Map<String, Double>,
+                           val base: Pair<Map<String, Double>, Map<String, Double>>?)
+
+    /** Déconnexion (Auth.logout) : ce qui attendait part sur le compte qui
+     *  s'en va, avec son jeton et les données d'ici prises maintenant ; rien
+     *  de son serveur n'entre plus ici. Comme finalCloudFlush sur iOS. */
+    fun finalFlush(): Job? {
+        if (!enabled) return null
+        val user = AppState.user ?: return null
+        val token = AppState.token ?: return null
+        pending?.cancel()
+        val snapshot = Snapshot(History.items.toList(), AppState.vodPositions().mapValues { it.value / 1000.0 }, loadBase(user.id))
+        return scope.launch { mutex.withLock { exchange(user, token, true, snapshot) } }
+    }
+
+    /** Un échange. `snapshot` : dernier envoi d'un compte déconnecté, qui ne
+     *  change rien ici. */
+    private suspend fun exchange(user: TwitchUser, token: String, push: Boolean, snapshot: Snapshot?): Boolean {
+        val live = snapshot == null
         val headers = mapOf("Authorization" to "Bearer $token")
         val r = Http.get("${Config.API_URL}/api/sync/get?userId=${user.id}", headers, timeout = 15)
         val json = if (r != null && r.code == 200) parseJson(r.body) else null
         if (json == null) {
             Logger.warn("SYNC", "Relecture impossible", r?.code?.let { "HTTP $it" } ?: "réseau")
-            failed = true
-            return@withLock false
+            if (live) failed = true
+            return false
         }
-        if (AppState.user?.id != user.id) return@withLock false
+        if (live && AppState.user?.id != user.id) return false
         val remoteHistory = json.arr("history")?.objects().orEmpty().mapNotNull { HistoryItem.from(it) }
         val remoteProgress = HashMap<String, Double>()
         json.obj("progress")?.let { p ->
@@ -75,27 +98,31 @@ object CloudSync {
                 if (v.isFinite() && v > 0) remoteProgress[id] = minOf(v, 7 * 24 * 3600.0)
             }
         }
-        val base = loadBase(user.id)
-        val merged = mergeHistory(History.items.toList(), remoteHistory, base?.first)
-        val localProgress = AppState.vodPositions().mapValues { it.value / 1000.0 }
+        val base = if (snapshot != null) snapshot.base else loadBase(user.id)
+        val merged = mergeHistory(snapshot?.history ?: History.items.toList(), remoteHistory, base?.first)
+        val localProgress = snapshot?.progress ?: AppState.vodPositions().mapValues { it.value / 1000.0 }
         val progress = mergeProgress(localProgress, remoteProgress, base?.second)
 
-        val known = History.items.map { it.key }.toHashSet()
         val revision = History.revision
-        History.replace(merged)
-        AppState.replaceVodPositions(progress.mapValues { (it.value * 1000).toLong() })
-        saveBase(user.id, remoteHistory, remoteProgress)
-        val added = merged.count { it.key !in known }
-        if (added > 0) Logger.info("SYNC", "Historique relu", "+$added")
+        if (live) {
+            val known = History.items.map { it.key }.toHashSet()
+            History.replace(merged)
+            AppState.replaceVodPositions(progress.mapValues { (it.value * 1000).toLong() })
+            saveBase(user.id, remoteHistory, remoteProgress)
+            val added = merged.count { it.key !in known }
+            if (added > 0) Logger.info("SYNC", "Historique relu", "+$added")
+        }
 
         val vodIds = merged.filter { it.type == "vod" }.map { it.term }.toHashSet()
         val sent = progress.filter { it.key in vodIds && it.value.isFinite() }.mapValues { Math.round(it.value).toDouble() }
         val changed = merged.map { it.key }.toSet() != remoteHistory.map { it.key }.toSet() ||
             sent.any { it.value > (remoteProgress[it.key] ?: 0.0) }
         if (!push || !changed) {
-            lastSync = System.currentTimeMillis()
-            failed = false
-            return@withLock true
+            if (live) {
+                lastSync = System.currentTimeMillis()
+                failed = false
+            }
+            return true
         }
         val hist = JSONArray()
         merged.forEach { hist.put(it.toJson()) }
@@ -105,18 +132,25 @@ object CloudSync {
         val post = Http.postJson("${Config.API_URL}/api/sync/post", body.toString(), headers, timeout = 20)
         if (post == null || post.code !in 200..299) {
             Logger.warn("SYNC", "Envoi refusé", post?.code?.let { "HTTP $it" } ?: "réseau")
-            failed = true
-            return@withLock false
+            if (live) failed = true
+            return false
         }
         // Le serveur a maintenant cette liste ; la progression, il garde la plus avancée.
         val nextProgress = HashMap(remoteProgress)
         sent.forEach { (id, t) -> nextProgress[id] = maxOf(nextProgress[id] ?: 0.0, t) }
+        Logger.success("SYNC", "Historique envoyé", "${merged.size} éléments")
+        if (!live) {
+            // Toujours déconnecté : sa base suit ce dernier envoi (reprise s'il revient).
+            if (AppState.token == null && parseJson(AppState.prefs.getString("sync_base", null))?.str("user") == user.id) {
+                saveBase(user.id, merged, nextProgress)
+            }
+            return true
+        }
         saveBase(user.id, merged, nextProgress)
         if (History.revision != revision) scheduleSoon()
-        Logger.success("SYNC", "Historique envoyé", "${merged.size} éléments")
         lastSync = System.currentTimeMillis()
         failed = false
-        true
+        return true
     }
 
     /**

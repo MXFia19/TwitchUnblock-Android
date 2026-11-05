@@ -141,21 +141,32 @@ object Auth {
     }
 
     suspend fun loadUser() {
+        val token = AppState.token ?: return
         val r = helix("https://api.twitch.tv/helix/users") ?: return
         if (r.code != 200) return
         val u = parseJson(r.body)?.arr("data")?.objects()?.firstOrNull() ?: return
-        AppState.updateUser(TwitchUser(u.str("id") ?: "", u.str("login") ?: "",
+        val id = u.str("id") ?: ""
+        // Autre compte en place depuis la requête (changement rapide) : réponse
+        // périmée, ignorée. Jeton renouvelé entre-temps : même compte, gardée.
+        if (AppState.token != token && AppState.user?.id != id) return
+        AppState.updateUser(TwitchUser(id, u.str("login") ?: "",
                                        u.str("display_name") ?: "", u.str("profile_image_url") ?: ""))
     }
 
     /** Déconnexion : jetons effacés de l'appareil, et le jeton révoqué chez
-     *  Twitch (sinon valable jusqu'à son expiration). Un renouvellement en
-     *  cours (verrou) ne remet pas le compte derrière : voir renew. */
+     *  Twitch (sinon valable jusqu'à son expiration). Ce qui attendait
+     *  (historique, réglages) part d'abord sur ce compte, avec ce jeton. Un
+     *  renouvellement en cours (verrou) ne remet pas le compte derrière : voir renew. */
     fun logout() {
         Logger.info("AUTH", "Déconnexion")
         val token = AppState.token
+        val flushes = listOfNotNull(SettingsSync.finalFlush(), CloudSync.finalFlush())
         AppState.clearAuth()
-        if (token != null) revoke(token)
+        if (token != null) background.launch {
+            // Révoqué après les derniers envois : le Worker vérifie ce jeton.
+            flushes.forEach { it.join() }
+            revoke(token)
+        }
     }
 
     /** Révocation chez Twitch, sans attendre (échec sans conséquence ici). */

@@ -101,4 +101,8 @@ const missing = [...used].filter((k) => !(k in tables.en)).sort()
 const untranslated = LANGS.flatMap((l) => [...used].filter((k) => k in tables.en && !(k in tables[l])).map((k) => `${l}:${k}`))
 console.log(`${used.size} clés utilisées`)
 if (missing.length) { console.error('ABSENTES : ' + missing.join(', ')); process.exitCode = 1 }
-if (untranslated.length) console.warn('Sans traduction (repli anglais) : ' + untranslated.join(', '))
+// Une langue sans le texte retombait en silence sur l'anglais : échec, comme une clé absente.
+if (untranslated.length) {
+  console.error('Sans traduction (repli anglais) : ' + untranslated.join(', '))
+  process.exitCode = 1
+}

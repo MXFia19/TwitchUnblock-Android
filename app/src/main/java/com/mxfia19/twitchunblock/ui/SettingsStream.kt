@@ -12,6 +12,7 @@ import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -43,6 +44,12 @@ fun StreamSettings() {
 private fun CustomSourceField() {
     var text by remember { mutableStateOf(StreamPrefs.customSource.value) }
     var refused by remember { mutableStateOf(false) }
+    // Adresse changée ailleurs (import, synchro des réglages) : le champ la
+    // reprend, sinon « Enregistrer » remettait l'ancienne.
+    LaunchedEffect(StreamPrefs.customSource.value) {
+        text = StreamPrefs.customSource.value
+        refused = false
+    }
     val apply = {
         refused = !StreamPrefs.setCustomSource(text)
         if (!refused) {

@@ -23,6 +23,8 @@ import com.mxfia19.twitchunblock.core.str
 import com.mxfia19.twitchunblock.core.boolPref
 import com.mxfia19.twitchunblock.core.stringPref
 import com.mxfia19.twitchunblock.web.WebSession
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
@@ -112,8 +114,12 @@ object Feedback {
                 (0 until (m.optJSONArray("ph")?.length() ?: 0)).map { m.optJSONArray("ph")!!.optInt(it) })
     } ?: emptyList()
 
-    /** Photo choisie : JPEG d'au plus 1600 px et ~470 Ko (le Worker refuse au-delà). */
-    fun photoBase64(context: Context, uri: Uri): String? = try {
+    /** Photo choisie : JPEG d'au plus 1600 px et ~470 Ko (le Worker refuse
+     *  au-delà). Hors du fil principal : lecture (Drive), décodage et
+     *  compressions figeaient l'écran. */
+    suspend fun photoBase64(context: Context, uri: Uri): String? = withContext(Dispatchers.IO) { encodePhoto(context, uri) }
+
+    private fun encodePhoto(context: Context, uri: Uri): String? = try {
         val bytes = context.contentResolver.openInputStream(uri)?.use { it.readBytes() } ?: return null
         // Dimensions d'abord : une photo de 50 à 200 Mpx décodée en entier
         // épuisait la mémoire. Réduite dès le décodage (par 2, 4, 8…), sans

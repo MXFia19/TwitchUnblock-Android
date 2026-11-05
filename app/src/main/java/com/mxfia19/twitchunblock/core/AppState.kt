@@ -128,6 +128,9 @@ object AppState {
     }
 
     fun updateUser(u: TwitchUser?) {
+        // Compte connu après une déconnexion : l'historique d'alors suit son
+        // compte, pas celui-ci (déjà fait par Accounts à la connexion).
+        if (u != null) Accounts.adoptDetached(u.id)
         user = u
         val json = u?.let {
             JSONObject().put("id", it.id).put("login", it.login).put("name", it.displayName).put("avatar", it.avatar).toString()
@@ -139,6 +142,8 @@ object AppState {
     }
 
     fun clearAuth() {
+        // Ce qui est ici est au compte qui s'en va (copie), pas au suivant.
+        Accounts.detach()
         token = null
         user = null
         sp.edit().remove("token").remove("refresh_token").remove("user").apply()

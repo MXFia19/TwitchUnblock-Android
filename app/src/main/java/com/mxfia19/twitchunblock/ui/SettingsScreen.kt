@@ -35,6 +35,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -73,6 +74,7 @@ import androidx.compose.ui.platform.LocalContext
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(nav: Navigator) {
@@ -81,27 +83,24 @@ fun SettingsScreen(nav: Navigator) {
     var backupMessage by remember { mutableStateOf<String?>(null) }
     // Déconnexion avec une session web connectée : son retrait est proposé.
     var askLogout by remember { mutableStateOf(false) }
+    // Fichiers lus et écrits hors du fil principal (Backup.readFrom/writeTo) :
+    // un document Drive pas en cache figeait l'écran.
+    val backupScope = rememberCoroutineScope()
     val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { target ->
         if (target == null) return@rememberLauncherForActivityResult
-        backupMessage = try {
-            context.contentResolver.openOutputStream(target)?.use { it.write(Backup.export().toByteArray(Charsets.UTF_8)) }
-            AppState.t("export_done")
-        } catch (e: Exception) {
-            Logger.warn("BACKUP", "Export impossible", e.message)
-            AppState.t("err_network")
+        val text = Backup.export()
+        backupScope.launch {
+            backupMessage = AppState.t(if (Backup.writeTo(context, target, text)) "export_done" else "err_network")
         }
     }
     val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { source ->
         if (source == null) return@rememberLauncherForActivityResult
-        val text = try {
-            context.contentResolver.openInputStream(source)?.use { it.readBytes().toString(Charsets.UTF_8) }
-        } catch (e: Exception) {
-            null
-        }
-        val result = text?.let { Backup.import(it) }
-        backupMessage = if (result == null) AppState.t("import_bad") else {
-            AppState.t("import_done").replace("%d", result.first.toString()) +
-                if (result.second > 0) " " + AppState.t("import_capped").replace("%d", result.second.toString()) else ""
+        backupScope.launch {
+            val result = Backup.readFrom(context, source)?.let { Backup.import(it) }
+            backupMessage = if (result == null) AppState.t("import_bad") else {
+                AppState.t("import_done").replace("%d", result.first.toString()) +
+                    if (result.second > 0) " " + AppState.t("import_capped").replace("%d", result.second.toString()) else ""
+            }
         }
     }
     Column(Modifier.fillMaxSize()) {
@@ -303,6 +302,13 @@ private fun WebSessionRow(nav: Navigator) {
 @Composable
 private fun WordsField(title: String, subtitle: String, pref: WordsPref) {
     var text by remember { mutableStateOf(pref.text) }
+    // Liste changée ailleurs (import, synchro des réglages) : le champ la
+    // reprend, sinon la frappe suivante l'écrasait avec l'ancien texte. Pas
+    // pendant la frappe : le texte tapé donne déjà cette liste.
+    LaunchedEffect(pref.value) {
+        val typed = text.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }.distinct()
+        if (typed != pref.value) text = pref.text
+    }
     Column(Modifier.padding(12.dp)) {
         Text(title, color = TU.text, fontSize = 15.sp)
         Text(subtitle, color = TU.muted, fontSize = 12.sp)

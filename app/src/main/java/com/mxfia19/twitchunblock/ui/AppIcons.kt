@@ -3,6 +3,9 @@ package com.mxfia19.twitchunblock.ui
 import android.content.ComponentName
 import android.content.Context
 import android.content.pm.PackageManager
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.setValue
 import com.mxfia19.twitchunblock.R
 import com.mxfia19.twitchunblock.core.Logger
 
@@ -30,6 +33,11 @@ enum class AppIcon(val id: String, val preview: Int) {
 }
 
 object AppIcons {
+    /** Change à chaque icône appliquée : les raccourcis de l'icône sont alors
+     *  republiés (BrowseEffects), Android retirant ceux de l'alias désactivé. */
+    var changes by mutableIntStateOf(0)
+        private set
+
     /** Icône en place : l'alias actif (celle par défaut tant qu'aucun n'a
      *  été changé, l'état du manifeste). */
     fun current(context: Context): AppIcon {
@@ -58,6 +66,7 @@ object AppIcons {
                                           PackageManager.DONT_KILL_APP)
         }
         Logger.success("ICON", "Icône changée", icon.id)
+        changes++
         null
     } catch (e: Exception) {
         Logger.warn("ICON", "Icône refusée par Android", "${icon.id} — ${e.javaClass.simpleName}: ${e.message}")

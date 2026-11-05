@@ -100,5 +100,6 @@ fun BrowseTabRail(current: Screen, nav: Navigator) {
 fun BrowseEffects() {
     val context = LocalContext.current
     val recent = History.channels.take(AppShortcuts.MAX).joinToString(",") { it.term + "|" + (it.avatar ?: "") }
-    LaunchedEffect(recent, Features.showRecent.value, AppState.lang) { AppShortcuts.update(context) }
+    // Icône changée (AppIcons.changes) : raccourcis republiés sur le nouvel alias.
+    LaunchedEffect(recent, Features.showRecent.value, AppState.lang, AppIcons.changes) { AppShortcuts.update(context) }
 }

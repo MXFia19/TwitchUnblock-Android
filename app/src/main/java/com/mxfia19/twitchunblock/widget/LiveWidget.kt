@@ -290,6 +290,9 @@ object AppShortcuts {
                 return
             }
             val max = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context).takeIf { it > 0 }?.coerceAtMost(MAX) ?: MAX
+            // Rattachés à l'alias de l'icône en place (seuls les alias sont des
+            // lanceurs) : sans lui, Android les gardait sur l'alias d'alors.
+            val launcher = com.mxfia19.twitchunblock.ui.AppIcons.current(context).component(context)
             val recent = History.channels.filter { Links.isValidLogin(it.term.lowercase()) }.take(max)
             val list = recent.mapIndexed { i, h ->
                 val login = h.term.lowercase()
@@ -299,6 +302,7 @@ object AppShortcuts {
                     .setLongLabel(AppState.t("br_shortcut_long").replace("{c}", name))
                     .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse("${BuildConfig.APP_SCHEME}://live/$login"))
                                    .setClass(context, MainActivity::class.java))
+                    .setActivity(launcher)
                     .setRank(i)
                 h.avatar?.takeIf { it.startsWith("https://") }?.let { url ->
                     loadBitmap(context, url, 192, 192, circle = true)?.let { b.setIcon(IconCompat.createWithBitmap(it)) }

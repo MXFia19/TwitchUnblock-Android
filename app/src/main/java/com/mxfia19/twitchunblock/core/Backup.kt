@@ -1,23 +1,65 @@
 package com.mxfia19.twitchunblock.core
 
+import android.content.Context
+import android.net.Uri
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.ByteArrayOutputStream
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
 
 /**
- * Sauvegarde dans un fichier : chaînes suivies, masquées et réglages, au
- * format du site et de l'app iPhone (« twitchunblock-backup ») : un fichier
- * de l'un s'importe dans l'autre. Réglages communs sous les mêmes noms,
- * ceux de l'app sous « android_… » (ceux de l'iPhone qui existent ici sont
- * repris aussi).
+ * Sauvegarde dans un fichier : chaînes suivies, masquées, réglages et
+ * « Continuer à regarder », au format du site et de l'app iPhone
+ * (« twitchunblock-backup ») : un fichier de l'un s'importe dans l'autre.
+ * Réglages communs sous les mêmes noms, ceux de l'app sous « android_… »
+ * (ceux de l'iPhone qui existent ici sont repris aussi).
  */
 object Backup {
     private const val FORMAT = "twitchunblock-backup"
+    /** Au-delà, ce n'est pas une sauvegarde (même borne qu'iOS). */
+    private const val MAX_BYTES = 2_000_000
 
     fun fileName(): String = "twitchunblock-" + SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date()) + ".json"
+
+    /** Écrit l'export dans le fichier choisi, hors du fil principal : un
+     *  document Drive peut faire attendre. false : écriture impossible. */
+    suspend fun writeTo(context: Context, target: Uri, text: String): Boolean = withContext(Dispatchers.IO) {
+        try {
+            context.contentResolver.openOutputStream(target)?.use { it.write(text.toByteArray(Charsets.UTF_8)) } != null
+        } catch (e: Exception) {
+            Logger.warn("BACKUP", "Export impossible", e.message)
+            false
+        }
+    }
+
+    /** Lit le fichier choisi hors du fil principal (Drive pas encore en
+     *  cache), MAX_BYTES au plus : un gros fichier pris par erreur est
+     *  refusé sans tout charger en mémoire. null : illisible ou trop gros. */
+    suspend fun readFrom(context: Context, source: Uri): String? = withContext(Dispatchers.IO) {
+        try {
+            context.contentResolver.openInputStream(source)?.use { input ->
+                val out = ByteArrayOutputStream()
+                val buf = ByteArray(64 * 1024)
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    if (out.size() > MAX_BYTES) return@use null
+                }
+                String(out.toByteArray(), Charsets.UTF_8)
+            }
+        } catch (e: Exception) {
+            Logger.warn("BACKUP", "Import illisible", e.message)
+            null
+        } catch (e: OutOfMemoryError) {
+            null
+        }
+    }
 
     fun export(): String {
         val settings = JSONObject()
@@ -79,6 +121,15 @@ object Backup {
             .put("vodSpeed", PlayerPrefs.vodSpeed.value / 100.0)
             .put("audioCompressor", PlayerPrefs.audioCompressor.value)
             .put("android_fillScreen", PlayerPrefs.fillScreen.value)
+            // Drops, synchro de l'historique et source du direct : perdus avant.
+            .put("android_dropsProgress", Features.dropsProgress.value)
+            .put("android_autoClaimDrops", Features.dropsAutoClaim.value)
+            .put("android_dropsNotify", Features.dropsNotify.value)
+            .put("android_cloudSync", Features.cloudSync.value)
+            .put("android_liveSource", AppState.liveSource)
+            // Ordre des sources, sous le nom de l'iPhone et du site (Ma source en tête, comme ici).
+            .put("liveSourceOrder", JSONArray(listOfNotNull("custom".takeIf { StreamPrefs.customSourceHost() != null }) +
+                                              AppState.liveSourceSteps().filter { it != "worker" }))
         val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val root = JSONObject()
             .put("format", FORMAT)
@@ -90,12 +141,60 @@ object Backup {
             .put("followedCategories", FollowedCategories.toJson())
             .put("hidden", Hidden.toJson())
             .put("settings", settings)
+            .put("continueWatching", continueJson())
         return root.toString(2)
+    }
+
+    /** « Continuer à regarder », comme l'iPhone : VODs de l'historique vues
+     *  plus de 30 s, avec leur position (s). Sans compte, c'est le seul moyen
+     *  de garder les reprises (TU Test, réinstallation). */
+    private fun continueJson(): JSONArray {
+        val positions = AppState.vodPositions()
+        val arr = JSONArray()
+        History.vods.filter { (positions[it.term] ?: 0L) > 30_000 }.take(50).forEach { h ->
+            arr.put(JSONObject().put("id", h.term).put("title", h.display)
+                        .put("position", Math.round((positions[h.term] ?: 0L) / 1000.0))
+                        .put("addedAt", h.addedAt).apply {
+                            h.thumb?.takeIf { it.isNotEmpty() }?.let { put("thumb", it) }
+                            h.streamer?.takeIf { it.isNotEmpty() }?.let { put("streamer", it) }
+                        })
+        }
+        return arr
+    }
+
+    /** VODs entamées d'une sauvegarde (continueWatching, l'iPhone compris) :
+     *  ajoutées à l'historique si elles n'y sont pas, position reprise si
+     *  elle est plus avancée que celle d'ici. Valeurs bornées comme iOS. */
+    private fun importContinue(raw: JSONArray?) {
+        if (raw == null) return
+        val items = ArrayList<HistoryItem>()
+        val incoming = HashMap<String, Long>()
+        for (o in raw.objects().take(50)) {
+            val id = o.str("id")?.takeIf { it.isNotEmpty() && it.length <= 20 && it.all { c -> c in '0'..'9' } } ?: continue
+            val position = o.dbl("position")?.takeIf { it.isFinite() && it > 30 && it < 7 * 24 * 3600 } ?: continue
+            if (id in incoming) continue
+            val title = (o.str("title") ?: "").take(300)
+            val thumb = o.str("thumb")?.takeIf { it.startsWith("https://") && it.length <= 500 }
+            val streamer = o.str("streamer")?.take(60)?.takeIf { it.isNotEmpty() }
+            val added = o.dbl("addedAt")?.takeIf { it.isFinite() && it > 0 && it < 1e14 } ?: 0.0
+            items += HistoryItem(id, "vod", title.ifEmpty { "VOD $id" }, thumb, streamer, added)
+            incoming[id] = Math.round(position * 1000)
+        }
+        if (items.isEmpty()) return
+        val known = History.items.map { it.key }.toHashSet()
+        val list = History.items.toList() + items.filter { it.key !in known }
+        // Tri stable : à date égale, l'ordre d'ici d'abord.
+        History.replace(list.sortedByDescending { it.addedAt }.take(50))
+        val positions = HashMap(AppState.vodPositions())
+        for ((id, ms) in incoming) if (ms > (positions[id] ?: 0L) + 1000) positions[id] = ms
+        AppState.replaceVodPositions(positions)
+        // Ajouts d'ici : partent sur le compte (synchro active).
+        CloudSync.scheduleSoon()
     }
 
     /** Fusionne une sauvegarde : (chaînes ajoutées, laissées de côté) ; null si le fichier n'en est pas une. */
     fun import(text: String): Pair<Int, Int>? {
-        if (text.length > 2_000_000) return null
+        if (text.length > MAX_BYTES) return null
         val root = parseJson(text) ?: return null
         if (root.str("format") != FORMAT) return null
 
@@ -108,6 +207,7 @@ object Backup {
         added.reversed().forEach { AppState.toggleLocalFollow(it) }
         Hidden.merge(root.obj("hidden"))
         FollowedCategories.merge(root.arr("followedCategories"))
+        importContinue(root.arr("continueWatching"))
 
         val s = root.obj("settings") ?: return Pair(added.size, fresh.size - added.size)
         fun bool(vararg keys: String, apply: (Boolean) -> Unit) {
@@ -148,7 +248,9 @@ object Backup {
         (s.str("android_cellularQuality") ?: s.str("ios_cellularQuality"))?.let {
             if (it in Quality.CELLULAR_PREFS) AppState.updateCellularQuality(it)
         }
-        s.int("android_chatFontSize")?.let { Features.chatFontSize.set(it) }
+        // Taille du chat de l'iPhone : en points aussi (10 à 20), bornée par IntPref.
+        (s.int("android_chatFontSize") ?: s.dbl("ios_chatFontSize")?.takeIf { it.isFinite() }?.let { Math.round(it).toInt() })
+            ?.let { Features.chatFontSize.set(it) }
         s.str("qualityPref")?.let { q ->
             when {
                 q in Quality.PREFS -> AppState.updateQualityPref(q)
@@ -206,5 +308,15 @@ object Backup {
         s.dbl("vodSpeed")?.takeIf { it in 0.25..2.0 }?.let { PlayerPrefs.vodSpeed.set(Math.round(it * 100).toInt()) }
         bool("audioCompressor") { PlayerPrefs.setCompressor(it) }
         bool("android_fillScreen", "ios_fillScreen") { PlayerPrefs.fillScreen.set(it) }
+        bool("android_dropsProgress", "ios_dropsProgress") { Features.dropsProgress.set(it) }
+        bool("android_autoClaimDrops", "ios_autoClaimDrops") { Features.dropsAutoClaim.set(it) }
+        bool("android_dropsNotify", "ios_dropsNotify") { Features.dropsNotify.set(it) }
+        bool("android_cloudSync") { Features.cloudSync.set(it) }
+        // Source du direct : celle d'Android, sinon la première connue de
+        // l'ordre de l'iPhone et du site (« as » en tête : l'ordre automatique).
+        val source = s.str("android_liveSource")?.takeIf { it in Config.LIVE_SOURCE_CHOICES }
+            ?: s.arr("liveSourceOrder")?.strings()?.firstOrNull { it in Config.LIVE_SOURCES }
+                ?.let { if (it == Config.LIVE_SOURCES.first()) "auto" else it }
+        source?.let { AppState.updateLiveSource(it) }
     }
 }
