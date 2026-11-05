@@ -48,6 +48,8 @@ object PlayerSpeed {
      *  (retour d'une fiche chaîne) ne la remet pas à zéro. */
     private var lastRequest: PlayRequest? = null
     private var lastPlayer: WeakReference<Player>? = null
+    /** Lecture dont la vitesse a été annoncée au lancement. */
+    private var announced: PlayRequest? = null
 
     /** Vitesse retenue des VODs (réglage), aussi celle du rattrapage d'un direct. */
     val vodSpeed: Float get() = nearest(PlayerPrefs.vodSpeed.value / 100f)
@@ -97,6 +99,14 @@ object PlayerSpeed {
         liveHeld = false
         catchingUp = false
         apply(player, wanted())
+    }
+
+    /** Lecture lancée (image là) à une autre vitesse que 1× : texte à annoncer,
+     *  une fois par lecture ; null sinon. Comme l'iPhone. */
+    fun launchNotice(req: PlayRequest): String? {
+        if (req === announced || req is PlayRequest.Live || current == 1f) return null
+        announced = req
+        return flashText(current)
     }
 
     private fun wanted(): Float = when (kind) {

@@ -259,7 +259,8 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
             val v = group.getChildAt(i)
             if (v.visibility != View.VISIBLE) continue
             if (x < v.left || x >= v.right || y < v.top || y >= v.bottom) continue
-            if (v.isClickable || v is TimeBar) return true
+            // Boutons et barre seulement : un conteneur, même cliquable, n'en est pas un.
+            if (v is TimeBar || (v.isClickable && v !is ViewGroup)) return true
             if (v is ViewGroup && hitsControl(v, x - v.left, y - v.top)) return true
         }
         return false

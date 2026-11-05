@@ -115,6 +115,11 @@ fun PlayerAddons(session: PlaybackSession, nav: Navigator) {
     val player = session.player
     val req = session.request
     LaunchedEffect(player, req) { if (req != null) PlayerSpeed.onOpen(player, req) }
+    // VOD lancée à une autre vitesse que 1× : on le dit, une fois l'image là.
+    val ready = session.state is PlaybackSession.State.Ready
+    LaunchedEffect(req, ready) {
+        if (ready && req != null) PlayerSpeed.launchNotice(req)?.let { PlayerUi.flash(it, 1_500) }
+    }
     // Recul voulu dans un direct (barre, double-tap) : rattrapé à la vitesse retenue.
     DisposableEffect(player) {
         val listener = object : Player.Listener {
