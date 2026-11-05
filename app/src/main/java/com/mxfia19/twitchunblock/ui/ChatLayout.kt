@@ -10,12 +10,17 @@ import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
@@ -153,7 +158,10 @@ fun LandscapePlayer(hasChat: Boolean, video: @Composable BoxScope.() -> Unit,
             // (saisie et défilement conservés) ; la poignée côté image.
             Row(Modifier.align(align).width(chatWidth + handle).fillMaxHeight(if (half == "full") 1f else 0.5f)) {
                 if (!onLeft) ResizeHandle(totalPx, chatOnLeft = false, current = { dragRatio ?: shown }, onDrag = { dragRatio = it }, onDone = save)
-                Box(Modifier.weight(1f).fillMaxHeight().imePadding()) { chat(Modifier.fillMaxSize(), overlay) }
+                // Écarté de l'encoche ou de la caméra de son côté (contenu sous
+                // l'encoche en paysage) ; l'image peut rester dessous.
+                val cutout = WindowInsets.displayCutout.only(if (onLeft) WindowInsetsSides.Start else WindowInsetsSides.End)
+                Box(Modifier.weight(1f).fillMaxHeight().windowInsetsPadding(cutout).imePadding()) { chat(Modifier.fillMaxSize(), overlay) }
                 if (onLeft) ResizeHandle(totalPx, chatOnLeft = true, current = { dragRatio ?: shown }, onDrag = { dragRatio = it }, onDone = save)
             }
         }

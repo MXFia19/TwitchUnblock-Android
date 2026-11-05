@@ -44,7 +44,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Shadow
@@ -135,11 +137,15 @@ fun chatLine(m: ChatMessage, emoteSize: TextUnit, timestamp: Boolean = false,
     val text = buildAnnotatedString {
         if (m.notice != null) {
             withStyle(SpanStyle(color = Color(0xFFBF94FF), fontWeight = FontWeight.SemiBold)) { append(m.notice) }
+            // Sans texte de la personne (abonnement offert, raid) : pas de
+            // ligne « Pseudo : » vide sous la notice.
+            if (m.tokens.isEmpty()) return@buildAnnotatedString
             if (m.login.isNotEmpty()) append("\n")
         }
         if (m.login.isEmpty()) return@buildAnnotatedString
         if (timestamp) {
-            withStyle(SpanStyle(color = TU.muted, fontSize = (emoteSize.value * 0.45f).sp)) { append(ChatClock.format(m.time, twelve) + " ") }
+            val time = m.timeLabel ?: ChatClock.format(m.time, twelve)
+            withStyle(SpanStyle(color = TU.muted, fontSize = (emoteSize.value * 0.45f).sp)) { append("$time ") }
         }
         m.badges.forEachIndexed { i, url ->
             val id = "b$i"
@@ -219,7 +225,9 @@ fun ChatMessageRow(m: ChatMessage, emoteSize: TextUnit = 24.sp, fontSize: TextUn
     val (text, inline) = remember(m, timestamp, keepDeleted, emoteSize, badgeSize, hiddenEmotes, twelve) {
         chatLine(m, emoteSize, timestamp, onEmote, onUser, badgeSize, twelve)
     }
+    val accent = m.accent?.let { Color(it) }
     val bg = when {
+        accent != null -> accent.copy(alpha = 0.16f)
         highlighted(m) -> TU.highlight
         m.notice != null -> TU.primaryDim
         else -> Color.Transparent
@@ -231,6 +239,8 @@ fun ChatMessageRow(m: ChatMessage, emoteSize: TextUnit = 24.sp, fontSize: TextUn
         lineHeight = maxOf(tallest + 4, fontSize.value * 1.3f).sp,
         style = if (shadow) LocalTextStyle.current.copy(shadow = Shadow(Color.Black, Offset(1f, 1f), 4f)) else LocalTextStyle.current,
         modifier = Modifier.fillMaxWidth().background(bg)
+            // Annonce : un trait de sa couleur à gauche, comme l'iPhone.
+            .then(if (accent != null) Modifier.drawBehind { drawRect(accent, size = Size(3.dp.toPx(), size.height)) } else Modifier)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 10.dp, vertical = vPad),
     )
@@ -255,8 +265,8 @@ fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onOpenChannel: 
     var stick by remember { mutableStateOf(true) }
     var userCard by remember { mutableStateOf<String?>(null) }
     var emoteCard by remember { mutableStateOf<ChatToken.Emote?>(null) }
-    // Saisie gardée ici : « Mentionner » (fiche d'une personne) y ajoute le pseudo.
-    var draft by remember(client) { mutableStateOf(TextFieldValue("")) }
+    // Saisie gardée dans le client (client.draft : rotation, récompenses) :
+    // « Mentionner » (fiche d'une personne) y ajoute le pseudo.
     // Rappels stables : les lignes déjà composées gardent les leurs.
     val openUser = remember { { login: String -> userCard = login } }
     val openEmote = remember { { e: ChatToken.Emote -> emoteCard = e } }
@@ -269,7 +279,8 @@ fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onOpenChannel: 
     LaunchedEffect(list) {
         snapshotFlow { list.isScrollInProgress }.collect { scrolling -> if (!scrolling) stick = atBottom(list) }
     }
-    LaunchedEffect(visible.size, visible.lastOrNull()?.id) {
+    // Messages refaits avec leurs emotes (plus hauts) : recollé en bas aussi.
+    LaunchedEffect(visible.size, visible.lastOrNull()?.id, client.assetsRevision) {
         if (stick && visible.isNotEmpty()) list.scrollToItem(visible.size - 1)
     }
     // Posé sur l'image : un dégradé qui assombrit le bas, là où les messages
@@ -304,11 +315,11 @@ fun ChatPanel(client: ChatClient, modifier: Modifier = Modifier, onOpenChannel: 
             }
         }
         // Zone d'envoi masquable (Réglages → Chat) : la place va aux messages.
-        if (ChatPrefs.showInput.value) ChatInput(client, draft, { draft = it }, onLogin, translucent, openEmote)
+        if (ChatPrefs.showInput.value) ChatInput(client, client.draft, { client.draft = it }, onLogin, translucent, openEmote)
     }
     userCard?.let { login ->
         UserCard(login, client,
-                 onMention = if (AppState.user != null) ({ name: String -> draft = withMention(draft, name) }) else null,
+                 onMention = if (AppState.user != null) ({ name: String -> client.draft = withMention(client.draft, name) }) else null,
                  onOpenChannel = onOpenChannel, onClose = { userCard = null })
     }
     emoteCard?.let { e -> EmoteCard(e) { emoteCard = null } }
@@ -353,7 +364,7 @@ private fun ChatInput(client: ChatClient, draft: TextFieldValue, onDraft: (TextF
     }
     // Autocomplétion : « @ » + pseudos récents du chat, « : » + 2 lettres → emotes.
     val word = currentWord(draft)?.second.orEmpty()
-    val suggestions = remember(word, client.roomId) { chatCompletions(word, client) }
+    val suggestions = remember(word, client.roomId, Emotes.version) { chatCompletions(word, client) }
     Column(Modifier.fillMaxWidth().background(barColor)) {
         if (picker) {
             EmotePicker(client.roomId, onEmoteInfo) { name ->
@@ -403,7 +414,8 @@ private fun ChatInput(client: ChatClient, draft: TextFieldValue, onDraft: (TextF
  *  favorites d'abord, dans l'ordre où elles ont été ajoutées. */
 @Composable
 private fun EmotePicker(channelId: String?, onInfo: (ChatToken.Emote) -> Unit, onPick: (String) -> Unit) {
-    val all = remember(channelId) { Emotes.all(channelId).distinctBy { it.name } }
+    // Ouvert avant la fin du chargement : refait quand les emotes arrivent.
+    val all = remember(channelId, Emotes.version) { Emotes.all(channelId).distinctBy { it.name } }
     val favoriteCodes = EmoteLists.favorites
     val favorites = remember(all, favoriteCodes) { favoriteEmotes(all, favoriteCodes) }
     var query by remember { mutableStateOf("") }

@@ -1,0 +1,11 @@
+{
+  "fc_points_redeemed": {
+    "fr": "« {t} » réclamé ✓",
+    "en": "“{t}” redeemed ✓",
+    "es": "«{t}» canjeado ✓",
+    "ru": "«{t}» получено ✓",
+    "it": "«{t}» riscattato ✓",
+    "ja": "「{t}」交換済み ✓",
+    "zh-Hant": "「{t}」已兌換 ✓"
+  }
+}

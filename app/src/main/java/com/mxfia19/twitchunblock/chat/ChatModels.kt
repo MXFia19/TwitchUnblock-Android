@@ -30,6 +30,13 @@ data class ChatMessage(
     val highlight: Boolean = false,
     val deleted: Boolean = false,
     val time: Long = System.currentTimeMillis(),
+    /** Badges tels que Twitch les donne (« subscriber/12 ») : les images sont
+     *  refaites une fois les badges chargés (ChatClient). */
+    val badgeIds: List<String> = emptyList(),
+    /** Annonce (/announce) : sa couleur (ARGB), un trait et un fond teinté. */
+    val accent: Int? = null,
+    /** À la place de l'heure (chat d'une VOD : sa position dans la vidéo). */
+    val timeLabel: String? = null,
 )
 
 /** Ligne IRC lue : tags, préfixe, commande, paramètres, texte final. */

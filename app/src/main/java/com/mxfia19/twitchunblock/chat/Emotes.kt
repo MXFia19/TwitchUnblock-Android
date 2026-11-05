@@ -1,5 +1,8 @@
 package com.mxfia19.twitchunblock.chat
 
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import com.mxfia19.twitchunblock.core.Http
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.arr
@@ -36,6 +39,10 @@ object Emotes {
     private val mutex = Mutex()
     @Volatile
     private var globalLoaded = false
+    /** Augmenté à chaque chargement fini : le sélecteur et l'autocomplétion,
+     *  ouverts avant, se refont (Emotes n'est pas un état Compose). */
+    var version by mutableStateOf(0)
+        private set
 
     fun find(name: String, channelId: String?): Emote? =
         (channelId?.let { channels[it]?.get(name) }) ?: global[name]
@@ -58,6 +65,7 @@ object Emotes {
             if (merged.isNotEmpty()) {
                 global.putAll(merged)
                 globalLoaded = true
+                version++
                 Logger.success("EMOTES", "Emotes globales chargées", "${merged.size}")
             }
         }
@@ -88,6 +96,7 @@ object Emotes {
             for (list in sources) list?.forEach { merged[it.name] = it }
             channels[channelId] = merged
             channelsUntil[channelId] = System.currentTimeMillis() + if (answered == sources.size) CHANNEL_TTL else RETRY_TTL
+            version++
             Logger.success("EMOTES", "Emotes de la chaîne chargées", "$channelId · ${merged.size}")
         }
     }

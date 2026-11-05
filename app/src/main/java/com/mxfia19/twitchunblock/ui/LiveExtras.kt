@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -126,39 +127,46 @@ fun LiveExtras(
     onOpenRewards: () -> Unit,
     onWebLogin: () -> Unit,
 ) {
-    var closed by remember { mutableStateOf(setOf<String>()) }
-    val close = { key: String -> closed = closed + key }
+    // Bandeaux fermés gardés par LiveEvents : ils ne reviennent pas à la
+    // rotation ni après le panneau des récompenses.
+    val closed = events.closed
+    val close = { key: String -> events.closed = events.closed + key }
     val now = rememberNow()
-    Column(Modifier.fillMaxWidth().heightIn(max = 340.dp).verticalScroll(rememberScrollState())) {
-        val raid = raids.raid
-        if (raid != null && Features.enableRaids.value && "raid:${raid.id}" !in closed) {
-            Banner("🚀", Color(0xFFFF8A3D), onClose = { close("raid:${raid.id}") }) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("${AppState.t("raid_to")} ${raid.targetName} · ${Format.viewers(raid.viewers)}", color = TU.text,
-                         fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
-                    TextButton(onClick = { onJoinRaid(raid.targetLogin) }) { Text(AppState.t("tv_watch_live"), color = TU.primary, fontSize = 13.sp) }
+    // Jamais plus de 40 % de la place (chat posé dans un coin en paysage,
+    // prédiction ouverte) : le chat garde ses messages et son champ.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        val cap = if (constraints.hasBoundedHeight) minOf(340.dp, maxHeight * 0.4f) else 340.dp
+        Column(Modifier.fillMaxWidth().heightIn(max = cap).verticalScroll(rememberScrollState())) {
+            val raid = raids.raid
+            if (raid != null && Features.enableRaids.value && "raid:${raid.id}" !in closed) {
+                Banner("🚀", Color(0xFFFF8A3D), onClose = { close("raid:${raid.id}") }) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text("${AppState.t("raid_to")} ${raid.targetName} · ${Format.viewers(raid.viewers)}", color = TU.text,
+                             fontSize = 13.sp, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { onJoinRaid(raid.targetLogin) }) { Text(AppState.t("tv_watch_live"), color = TU.primary, fontSize = 13.sp) }
+                    }
                 }
             }
-        }
-        val pin = pinned.pinned
-        if (pin != null && Features.showPinned.value && "pin:${pin.id}" !in closed) {
-            Banner("📌", purple, onClose = { close("pin:${pin.id}") }) { PinnedCard(pin, now) }
-        }
-        if (Features.showLiveEvents.value) {
-            val poll = events.poll
-            if (poll != null && poll.noticeKey !in closed) {
-                Banner("📊", TU.primary, onClose = { close(poll.noticeKey) }) { PollCard(poll, events, now) }
+            val pin = pinned.pinned
+            if (pin != null && Features.showPinned.value && "pin:${pin.id}" !in closed) {
+                Banner("📌", purple, onClose = { close("pin:${pin.id}") }) { PinnedCard(pin, now) }
             }
-            val pred = events.prediction
-            if (pred != null && pred.noticeKey !in closed) {
-                Banner("🔮", purple, onClose = { close(pred.noticeKey) }) { PredictionCard(pred, events, points, now, onWebLogin) }
+            if (Features.showLiveEvents.value) {
+                val poll = events.poll
+                if (poll != null && poll.noticeKey !in closed) {
+                    Banner("📊", TU.primary, onClose = { close(poll.noticeKey) }) { PollCard(poll, events, now) }
+                }
+                val pred = events.prediction
+                if (pred != null && pred.noticeKey !in closed) {
+                    Banner("🔮", purple, onClose = { close(pred.noticeKey) }) { PredictionCard(pred, events, points, now, onWebLogin) }
+                }
+                val hype = events.hype
+                if (hype != null && hype.noticeKey !in closed) {
+                    Banner("🚄", TU.live, onClose = { close(hype.noticeKey) }) { HypeCard(hype, now) }
+                }
             }
-            val hype = events.hype
-            if (hype != null && hype.noticeKey !in closed) {
-                Banner("🚄", TU.live, onClose = { close(hype.noticeKey) }) { HypeCard(hype, now) }
-            }
+            PointsBar(points, events, onOpenRewards, onWebLogin)
         }
-        PointsBar(points, events, onOpenRewards, onWebLogin)
     }
 }
 
@@ -506,7 +514,7 @@ fun RewardsPanel(points: ChannelPoints, modifier: Modifier = Modifier, onClose: 
                         } else {
                             scope.launch {
                                 done = null
-                                if (points.redeem(r, null)) done = "« ${r.title} » ${AppState.t("points_redeemed")}"
+                                if (points.redeem(r, null)) done = AppState.t("fc_points_redeemed").replace("{t}", r.title)
                             }
                         }
                     }
@@ -533,7 +541,7 @@ fun RewardsPanel(points: ChannelPoints, modifier: Modifier = Modifier, onClose: 
                     asking = null
                     scope.launch {
                         done = null
-                        if (points.redeem(r, text)) done = "« ${r.title} » ${AppState.t("points_redeemed")}"
+                        if (points.redeem(r, text)) done = AppState.t("fc_points_redeemed").replace("{t}", r.title)
                     }
                 }, enabled = text.isNotBlank()) { Text(AppState.t("points_redeem"), color = TU.primary) }
             },
