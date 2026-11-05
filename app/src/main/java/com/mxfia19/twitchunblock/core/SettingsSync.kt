@@ -126,6 +126,20 @@ object SettingsSync {
         bool("ios", "ios_enableRaids", Features.enableRaids, true)
         bool("ios", "ios_showWatchStreak", Features.showWatchStreak, true)
         bool("ios", "ios_subAdFree", Features.subAdFree, true)
+        // Emotes masquées et favorites (chat), les plus récentes à la fin.
+        register(Entry("common", "hiddenEmotes", read = { JSONArray(com.mxfia19.twitchunblock.chat.EmoteLists.hidden) },
+            write = { v -> (v as? JSONArray)?.let { com.mxfia19.twitchunblock.chat.EmoteLists.replaceHidden(it.strings()) } },
+            isDefault = { com.mxfia19.twitchunblock.chat.EmoteLists.hidden.isEmpty() },
+            unionMax = com.mxfia19.twitchunblock.chat.EmoteLists.MAX_HIDDEN, unionKeepsEnd = true))
+        register(Entry("common", "favoriteEmotes", read = { JSONArray(com.mxfia19.twitchunblock.chat.EmoteLists.favorites) },
+            write = { v -> (v as? JSONArray)?.let { com.mxfia19.twitchunblock.chat.EmoteLists.replaceFavorites(it.strings()) } },
+            isDefault = { com.mxfia19.twitchunblock.chat.EmoteLists.favorites.isEmpty() },
+            unionMax = com.mxfia19.twitchunblock.chat.EmoteLists.MAX_FAVORITES, unionKeepsEnd = true))
+        // Chaînes épinglées (accueil, Suivies, widget).
+        pinnedList = object : PinnedList {
+            override val logins: List<String> get() = BrowsePrefs.pinned.value
+            override fun replace(list: List<String>) = BrowsePrefs.pinned.set(list)
+        }
     }
 
     private fun sections(): List<String> =

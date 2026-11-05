@@ -47,6 +47,35 @@ object Backup {
             .put("android_autoPip", AppState.autoPip)
             .put("android_showChat", AppState.showChat)
             .put("android_downloadWifiOnly", Features.dlWifiOnly.value)
+        // Séries 5 à 7 : sous les noms du site et de l'iPhone quand ils les ont ;
+        // largeur et échelles du chat en facteur (0,32 ; 1,25), comme l'iPhone.
+        val theme = com.mxfia19.twitchunblock.ui.AppTheme
+        val chat = com.mxfia19.twitchunblock.chat.ChatPrefs
+        val emotes = com.mxfia19.twitchunblock.chat.EmoteLists
+        settings
+            .put("themeAccent", theme.accent.id)
+            .put("themeBg", theme.background.id)
+            .put("customSource", StreamPrefs.customSource.value.ifEmpty { null } ?: JSONObject.NULL)
+            .put("hiddenEmotes", JSONArray(emotes.hidden))
+            .put("favoriteEmotes", JSONArray(emotes.favorites))
+            .put("timeFormat", chat.timeFormat.value)
+            .put("pinned", JSONArray(BrowsePrefs.pinned.value))
+            .put("pinnedByViewers", BrowsePrefs.pinnedByViewers.value)
+            .put("homeList", BrowsePrefs.homeList.value)
+            .put("android_higherQualities", StreamPrefs.higherQualities.value)
+            .put("android_preferVertical", StreamPrefs.preferVertical.value)
+            .put("android_syncSettings", SettingsSync.enabled.value)
+            .put("android_hideAccount", NoAccount.pref.value)
+            .put("android_chatSync", chat.sync.value)
+            .put("android_chatSyncNudge", chat.syncNudge.value)
+            .put("android_chatShowInput", chat.showInput.value)
+            .put("android_landscapeChat", chat.landscape.value)
+            .put("android_chatOverlayLayout", chat.overlay.value)
+            .put("android_chatWidthRatio", chat.widthPercent.value / 100.0)
+            .put("android_chatSpacing", chat.spacing.value)
+            .put("android_chatBadgeScale", chat.badgeScale.value / 100.0)
+            .put("android_chatEmoteScale", chat.emoteScale.value / 100.0)
+            .put("android_customization", BrowsePrefs.customizationJson())
         val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val root = JSONObject()
             .put("format", FORMAT)
@@ -55,7 +84,7 @@ object Backup {
             .put("exportedAt", iso.format(Date()))
             .put("follows", JSONArray(AppState.localFollows.toList()))
             .put("accountFollows", JSONArray())
-            .put("followedCategories", JSONArray())
+            .put("followedCategories", FollowedCategories.toJson())
             .put("hidden", Hidden.toJson())
             .put("settings", settings)
         return root.toString(2)
@@ -75,6 +104,7 @@ object Backup {
         val added = fresh.take(room)
         added.reversed().forEach { AppState.toggleLocalFollow(it) }
         Hidden.merge(root.obj("hidden"))
+        FollowedCategories.merge(root.arr("followedCategories"))
 
         val s = root.obj("settings") ?: return Pair(added.size, fresh.size - added.size)
         fun bool(vararg keys: String, apply: (Boolean) -> Unit) {
@@ -126,6 +156,48 @@ object Backup {
                 }
             }
         }
+        importLater(s)
         return Pair(added.size, fresh.size - added.size)
+    }
+
+    /** Réglages des séries 5 à 7 : ceux de l'iPhone (ios_…) valent aussi
+     *  quand Android n'a pas les siens. Une valeur invalide est ignorée. */
+    private fun importLater(s: JSONObject) {
+        val chat = com.mxfia19.twitchunblock.chat.ChatPrefs
+        val emotes = com.mxfia19.twitchunblock.chat.EmoteLists
+        fun bool(vararg keys: String, apply: (Boolean) -> Unit) {
+            for (k in keys) s.bool(k)?.let { apply(it); return }
+        }
+        fun int(vararg keys: String): Int? = keys.firstNotNullOfOrNull { s.int(it) }
+        fun str(vararg keys: String): String? = keys.firstNotNullOfOrNull { s.str(it) }
+        /** Facteur (0,32 ; 1,25) → pour cent, comme les réglages d'Android. */
+        fun percent(vararg keys: String): Int? = keys.firstNotNullOfOrNull { s.dbl(it) }?.let { Math.round(it * 100).toInt() }
+
+        if (s.has("themeAccent") || s.has("themeBg")) {
+            com.mxfia19.twitchunblock.ui.AppTheme.applyBackup(s.str("themeAccent"), s.str("themeBg"))
+        }
+        if (s.isJsonNull("customSource")) StreamPrefs.setCustomSource("")
+        else s.str("customSource")?.let { StreamPrefs.setCustomSource(it) }
+        s.arr("hiddenEmotes")?.strings()?.let { emotes.replaceHidden(it) }
+        s.arr("favoriteEmotes")?.strings()?.let { emotes.replaceFavorites(it) }
+        s.str("timeFormat")?.takeIf { it in listOf("auto", "12", "24") }?.let { chat.timeFormat.set(it) }
+        s.arr("pinned")?.strings()?.let { Pins.merge(it) }
+        bool("pinnedByViewers") { BrowsePrefs.pinnedByViewers.set(it) }
+        bool("homeList") { BrowsePrefs.homeList.set(it) }
+        bool("android_higherQualities") { StreamPrefs.higherQualities.set(it) }
+        bool("android_preferVertical") { StreamPrefs.preferVertical.set(it) }
+        bool("android_syncSettings", "ios_syncSettings") { SettingsSync.enabled.set(it) }
+        (s.bool("android_hideAccount") ?: s.obj("ios_customization")?.bool("hideAccount"))?.let { NoAccount.pref.set(it) }
+        bool("android_chatSync", "ios_chatSync") { chat.sync.set(it) }
+        int("android_chatSyncNudge", "ios_chatSyncNudge")?.let { chat.syncNudge.set(it) }
+        bool("android_chatShowInput", "ios_chatShowInput") { chat.showInput.set(it) }
+        str("android_landscapeChat", "ios_landscapeChat")?.takeIf { it in listOf("column", "overlay", "hidden") }?.let { chat.landscape.set(it) }
+        str("android_chatOverlayLayout", "ios_chatOverlayLayout")
+            ?.takeIf { Regex("(left|right)-(full|top|bottom)").matches(it) }?.let { chat.overlay.set(it) }
+        percent("android_chatWidthRatio", "ios_chatWidthRatio")?.let { chat.widthPercent.set(it) }
+        int("android_chatSpacing", "ios_chatSpacing")?.let { chat.spacing.set(it) }
+        percent("android_chatBadgeScale", "ios_chatBadgeScale")?.let { chat.badgeScale.set(it) }
+        percent("android_chatEmoteScale", "ios_chatEmoteScale")?.let { chat.emoteScale.set(it) }
+        (s.obj("android_customization") ?: s.obj("ios_customization"))?.let { BrowsePrefs.applyCustomization(it) }
     }
 }

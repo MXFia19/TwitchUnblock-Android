@@ -107,36 +107,40 @@ fun SettingsScreen(nav: Navigator) {
     Column(Modifier.fillMaxSize()) {
         PageHeader(AppState.t("settings"), nav)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
-            Group(AppState.t("tv_account")) {
-                val user = AppState.user
-                if (user != null) {
-                    Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Avatar(user.avatar, 44.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(Modifier.weight(1f)) {
-                            Text(user.displayName, color = TU.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
-                            Text(AppState.t("account_api_sub"), color = TU.muted, fontSize = 12.sp)
+            // « Sans compte Twitch » (Réglages → Général) : ni le compte ni ses
+            // fonctions Twitch, comme sur l'iPhone ; jamais quand on est connecté.
+            if (!com.mxfia19.twitchunblock.core.NoAccount.active) {
+                Group(AppState.t("tv_account")) {
+                    val user = AppState.user
+                    if (user != null) {
+                        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Avatar(user.avatar, 44.dp)
+                            Spacer(Modifier.width(12.dp))
+                            Column(Modifier.weight(1f)) {
+                                Text(user.displayName, color = TU.text, fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
+                                Text(AppState.t("account_api_sub"), color = TU.muted, fontSize = 12.sp)
+                            }
+                            OutlinedButton(onClick = { if (WebSession.token != null) askLogout = true else Auth.logout() }) {
+                                Text(AppState.t("tv_logout"), color = TU.text)
+                            }
                         }
-                        OutlinedButton(onClick = { if (WebSession.token != null) askLogout = true else Auth.logout() }) {
-                            Text(AppState.t("tv_logout"), color = TU.text)
+                    } else {
+                        Column(Modifier.padding(12.dp)) {
+                            Text(AppState.t("login_intro"), color = TU.muted, fontSize = 13.sp)
+                            Button(onClick = { nav.push(Screen.Login) }, colors = ButtonDefaults.buttonColors(containerColor = TU.primary),
+                                   modifier = Modifier.padding(top = 8.dp)) { Text(AppState.t("tv_login")) }
                         }
                     }
-                } else {
-                    Column(Modifier.padding(12.dp)) {
-                        Text(AppState.t("login_intro"), color = TU.muted, fontSize = 13.sp)
-                        Button(onClick = { nav.push(Screen.Login) }, colors = ButtonDefaults.buttonColors(containerColor = TU.primary),
-                               modifier = Modifier.padding(top = 8.dp)) { Text(AppState.t("tv_login")) }
-                    }
+                    // Changer de compte, comptes gardés (SettingsAppLook.kt).
+                    SavedAccountsRows(nav)
+                    WebSessionRow(nav)
                 }
-                // Changer de compte, comptes gardés (SettingsAppLook.kt).
-                SavedAccountsRows(nav)
-                WebSessionRow(nav)
-            }
-            Group(AppState.t("settings_twitch_extras")) {
-                LinkRow(AppState.t("drops") + " · " + AppState.t("drops_sub")) { nav.push(Screen.Drops) }
-                LinkRow(AppState.t("points_tracker") + " · " + AppState.t("points_tracker_sub")) { nav.push(Screen.PointsTracker) }
-                Toggle(AppState.t("auto_claim"), AppState.t("auto_claim_sub"), Features.autoClaimChest.value) { Features.autoClaimChest.set(it) }
-                Toggle(AppState.t("sub_adfree"), AppState.t("sub_adfree_sub"), Features.subAdFree.value) { Features.subAdFree.set(it) }
+                Group(AppState.t("settings_twitch_extras")) {
+                    LinkRow(AppState.t("drops") + " · " + AppState.t("drops_sub")) { nav.push(Screen.Drops) }
+                    LinkRow(AppState.t("points_tracker") + " · " + AppState.t("points_tracker_sub")) { nav.push(Screen.PointsTracker) }
+                    Toggle(AppState.t("auto_claim"), AppState.t("auto_claim_sub"), Features.autoClaimChest.value) { Features.autoClaimChest.set(it) }
+                    Toggle(AppState.t("sub_adfree"), AppState.t("sub_adfree_sub"), Features.subAdFree.value) { Features.subAdFree.set(it) }
+                }
             }
             Group(AppState.t("settings_general")) {
                 Choice(AppState.t("language"), Lang.entries.map { it.code to it.label }, AppState.lang.code) { code ->
