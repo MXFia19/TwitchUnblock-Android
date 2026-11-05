@@ -349,7 +349,12 @@ fun ChannelScreen(login: String, nav: Navigator) {
                 containerColor = TU.surface, titleContentColor = TU.text,
             )
         }
-        RefreshBox(loading = model.refreshing, onRefresh = { model.refresh() }) {
+        RefreshBox(loading = model.refreshing, onRefresh = {
+            model.refresh()
+            // Onglet affiché relu aussi (temps forts, playlists).
+            if (tab == "highlights") lists.loadHighlights(force = true)
+            if (tab == "playlists") lists.loadPlaylists(force = true)
+        }) {
         LazyVerticalGrid(
             columns = BrowseGrid.cards,
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 16.dp),

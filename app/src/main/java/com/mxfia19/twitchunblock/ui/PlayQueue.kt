@@ -50,7 +50,11 @@ fun PlayQueueEffect(session: PlaybackSession?, nav: Navigator) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 if (playbackState != Player.STATE_ENDED || s == null) return
-                PlayQueue.next(s.request)?.let { nav.play(it) }
+                val next = PlayQueue.next(s.request) ?: return
+                // Tout de suite, même app en arrière-plan (la composition y est en
+                // pause) ; la pile suit, et PhoneApp ne relit pas ce qui est ouvert.
+                s.open(next)
+                nav.play(next)
             }
         }
         s?.player?.addListener(listener)
