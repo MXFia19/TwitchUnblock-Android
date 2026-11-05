@@ -172,8 +172,10 @@ object Backup {
             .put("android_cloudSync", Features.cloudSync.value)
             .put("android_liveSource", AppState.liveSource)
             // Ordre des sources, sous le nom de l'iPhone et du site (Ma source en tête, comme ici).
-            .put("liveSourceOrder", JSONArray(listOfNotNull("custom".takeIf { StreamPrefs.customSourceHost() != null }) +
-                                              AppState.liveSourceSteps().filter { it != "worker" }))
+            .put("liveSourceOrder", JSONArray(LiveSources.order()))
+            // Série 6 : son d'origine des passages coupés, chat du multi-live.
+            .put("android_restoreMuted", com.mxfia19.twitchunblock.player.VodUnmute.enabled.value)
+            .put("multiChat", com.mxfia19.twitchunblock.ui.MultiPicks.chat.value)
         val iso = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
         val root = JSONObject()
             .put("format", FORMAT)
@@ -431,16 +433,18 @@ object Backup {
         bool("android_dropsNotify", "ios_dropsNotify") { Features.dropsNotify.set(it) }
         bool("android_cloudSync") { Features.cloudSync.set(it) }
         bool("vodProgress") { VodResume.set(it) }
-        // Source du direct : celle d'Android, sinon la première connue de
-        // l'ordre de l'iPhone et du site (« as » en tête : l'ordre automatique).
-        val source = str("android_liveSource") { it in Config.LIVE_SOURCE_CHOICES }
-            ?: s.arr("liveSourceOrder")?.strings()?.firstOrNull { it in Config.LIVE_SOURCES }
-                ?.let { if (it == Config.LIVE_SOURCES.first()) "auto" else it }
-        if (source != null) {
-            AppState.updateLiveSource(source)
-            // L'ordre complet sert aussi (première source connue).
-            if (s.has("liveSourceOrder")) ok("liveSourceOrder")
+        // Sources du direct : l'ordre complet (iPhone, site, Android depuis la
+        // série 6) ; sinon la première source d'une ancienne sauvegarde Android.
+        val order = s.arr("liveSourceOrder")?.strings()?.takeIf { l -> l.any { it in Config.LIVE_SOURCES || it == "custom" } }
+        if (order != null) {
+            LiveSources.setOrder(order)
+            ok("liveSourceOrder")
+            if (s.has("android_liveSource")) ok("android_liveSource")
+        } else {
+            str("android_liveSource") { it in Config.LIVE_SOURCE_CHOICES }?.let { AppState.updateLiveSource(it) }
         }
+        bool("android_restoreMuted", "ios_restoreMuted") { com.mxfia19.twitchunblock.player.VodUnmute.enabled.set(it) }
+        bool("multiChat") { com.mxfia19.twitchunblock.ui.MultiPicks.chat.set(it) }
 
         // Ignorées : ni reprises, ni lues ailleurs (épinglées), ni doublon
         // d'un réglage repris sous l'autre nom (android_… / ios_…).
