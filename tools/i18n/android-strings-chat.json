@@ -1,0 +1,16 @@
+{
+  "_indirect": {
+    "keys": [
+      "chat_rej_followers", "chat_rej_followers_time", "chat_rej_subs", "chat_rej_emotes", "chat_rej_slow",
+      "chat_rej_unique", "chat_rej_duplicate", "chat_rej_verified", "chat_rej_timeout", "chat_rej_automod",
+      "chat_rej_ratelimit", "chat_rej_suspended", "chat_rej_generic",
+      "color_blue", "color_blue_violet", "color_cadet_blue", "color_chocolate", "color_coral", "color_dodger_blue",
+      "color_firebrick", "color_golden_rod", "color_green", "color_hot_pink", "color_orange_red", "color_red",
+      "color_sea_green", "color_spring_green", "color_yellow_green",
+      "color_needs_relogin", "color_network", "color_bad_request", "color_failed",
+      "chat_mode_column", "chat_mode_overlay", "chat_mode_hidden",
+      "chat_side_left", "chat_side_right", "chat_height_full", "chat_height_top", "chat_height_bottom",
+      "emotes_loading", "emotes_no_result"
+    ]
+  }
+}

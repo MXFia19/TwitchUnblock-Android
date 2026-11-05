@@ -44,6 +44,7 @@ import coil.compose.AsyncImage
 import com.mxfia19.twitchunblock.chat.ChatClient
 import com.mxfia19.twitchunblock.chat.ChatProfiles
 import com.mxfia19.twitchunblock.chat.ChatToken
+import com.mxfia19.twitchunblock.chat.EmoteLists
 import com.mxfia19.twitchunblock.chat.Emotes
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Features
@@ -143,7 +144,8 @@ fun EmoteCard(emote: ChatToken.Emote, onClose: () -> Unit) {
     AlertDialog(
         onDismissRequest = onClose,
         text = {
-            Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.CenterHorizontally) {
+            // Défilante : avec ses boutons, la fiche dépasse en paysage.
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
                 AsyncImage(model = largeEmoteUrl(emote), contentDescription = emote.name, contentScale = ContentScale.Fit,
                            modifier = Modifier.fillMaxWidth().height(112.dp))
                 Text(emote.name, color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold, textAlign = TextAlign.Center,
@@ -157,6 +159,8 @@ fun EmoteCard(emote: ChatToken.Emote, onClose: () -> Unit) {
                     Text(AppState.t(if (emote.source == "ffz") "emote_modifier" else "emote_zero_width"), color = TU.muted,
                          fontSize = 12.sp, textAlign = TextAlign.Center, modifier = Modifier.padding(top = 4.dp))
                 }
+                // ChatEmotesUi.kt : favoris, masquer.
+                EmoteCardActions(emote)
             }
         },
         confirmButton = { TextButton(onClick = onClose) { Text(AppState.t("close"), color = TU.primary) } },
@@ -209,7 +213,8 @@ fun currentWord(v: TextFieldValue): Pair<Int, String>? {
 /**
  * « @ » propose les pseudos récents du chat (les plus récents d'abord),
  * « : » suivi de 2 lettres les emotes disponibles (7TV, BTTV, FFZ de la
- * chaîne puis globales ; celles qui commencent ainsi d'abord).
+ * chaîne puis globales ; les favorites, puis celles qui commencent ainsi
+ * d'abord).
  */
 fun chatCompletions(word: String, client: ChatClient): List<ChatCompletion> {
     if (word.startsWith("@")) {
@@ -232,7 +237,12 @@ fun chatCompletions(word: String, client: ChatClient): List<ChatCompletion> {
         val all = Emotes.all(client.roomId).distinctBy { it.name }
         val first = all.filter { it.name.startsWith(q, ignoreCase = true) }
         val inside = all.filter { !it.name.startsWith(q, ignoreCase = true) && it.name.contains(q, ignoreCase = true) }
-        return (first + inside).take(20).map { ChatCompletion(it.name, it.name, it.url) }
+        // Favorites en tête (EmoteLists) ; celles de Twitch, hors de la liste, avec leur image gardée.
+        val favorites = EmoteLists.favorites
+        val names = all.mapTo(HashSet()) { it.name }
+        val twitchFavorites = favoriteEmotes(emptyList(), favorites.filter { it !in names && it.contains(q, ignoreCase = true) })
+        val ranked = twitchFavorites + (first + inside).sortedBy { if (it.name in favorites) 0 else 1 }
+        return ranked.take(20).map { ChatCompletion(it.name, it.name, it.url) }
     }
     return emptyList()
 }
