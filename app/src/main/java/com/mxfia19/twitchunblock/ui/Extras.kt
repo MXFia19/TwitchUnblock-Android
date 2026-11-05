@@ -286,8 +286,16 @@ fun FeedbackScreen(nav: Navigator) {
     val photos = remember { mutableStateListOf<String>() }
     var sending by remember { mutableStateOf(false) }
     var result by remember { mutableStateOf<String?>(null) }
+    // Photos préparées en arrière-plan (Feedback.photoBase64) : ajout et envoi
+    // attendent la fin, avec un indicateur.
+    var adding by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(3)) { uris: List<Uri> ->
-        for (u in uris) if (photos.size < 3) Feedback.photoBase64(context, u)?.let { photos += it }
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        adding = true
+        scope.launch {
+            for (u in uris) if (photos.size < 3) Feedback.photoBase64(context, u)?.let { photos += it }
+            adding = false
+        }
     }
     LaunchedEffect(Unit) { Feedback.refresh() }
     Column(Modifier.fillMaxSize()) {
@@ -327,8 +335,12 @@ fun FeedbackScreen(nav: Navigator) {
             )
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 8.dp)) {
                 OutlinedButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
-                               enabled = photos.size < 3) {
+                               enabled = photos.size < 3 && !adding) {
                     Text(AppState.t("fb_add_photos") + if (photos.isNotEmpty()) " (${photos.size})" else "", color = TU.text)
+                }
+                if (adding) {
+                    androidx.compose.material3.CircularProgressIndicator(color = TU.primary, strokeWidth = 2.dp,
+                                                                         modifier = Modifier.padding(start = 8.dp).size(18.dp))
                 }
                 if (photos.isNotEmpty()) {
                     TextButton(onClick = { photos.clear() }) { Text(AppState.t("remove"), color = TU.danger) }
@@ -346,7 +358,7 @@ fun FeedbackScreen(nav: Navigator) {
                         if (error == null) { message = ""; photos.clear() }
                     }
                 },
-                enabled = !sending && message.isNotBlank(),
+                enabled = !sending && !adding && message.isNotBlank(),
                 colors = ButtonDefaults.buttonColors(containerColor = TU.primary),
                 modifier = Modifier.padding(top = 10.dp),
             ) { Text(AppState.t("fb_send")) }
@@ -381,8 +393,15 @@ fun FeedbackThreadScreen(id: String, nav: Navigator) {
     val photos = remember { mutableStateListOf<String>() }
     var error by remember { mutableStateOf<String?>(null) }
     var sending by remember { mutableStateOf(false) }
+    // Photos préparées en arrière-plan, comme FeedbackScreen.
+    var adding by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.PickMultipleVisualMedia(3)) { uris: List<Uri> ->
-        for (u in uris) if (photos.size < 3) Feedback.photoBase64(context, u)?.let { photos += it }
+        if (uris.isEmpty()) return@rememberLauncherForActivityResult
+        adding = true
+        scope.launch {
+            for (u in uris) if (photos.size < 3) Feedback.photoBase64(context, u)?.let { photos += it }
+            adding = false
+        }
     }
     LaunchedEffect(id) {
         Feedback.refresh()
@@ -434,8 +453,13 @@ fun FeedbackThreadScreen(id: String, nav: Navigator) {
                     modifier = Modifier.fillMaxWidth(),
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) }) {
+                    TextButton(onClick = { picker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                               enabled = !adding) {
                         Text(AppState.t("fb_add_photos") + if (photos.isNotEmpty()) " (${photos.size})" else "", color = TU.text)
+                    }
+                    if (adding) {
+                        androidx.compose.material3.CircularProgressIndicator(color = TU.primary, strokeWidth = 2.dp,
+                                                                             modifier = Modifier.size(18.dp))
                     }
                     androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
                     Button(
@@ -449,7 +473,7 @@ fun FeedbackThreadScreen(id: String, nav: Navigator) {
                                 if (e == null) { reply = ""; photos.clear() }
                             }
                         },
-                        enabled = !sending && (reply.isNotBlank() || photos.isNotEmpty()),
+                        enabled = !sending && !adding && (reply.isNotBlank() || photos.isNotEmpty()),
                         colors = ButtonDefaults.buttonColors(containerColor = TU.primary),
                     ) { Text(AppState.t("fb_reply_send")) }
                 }

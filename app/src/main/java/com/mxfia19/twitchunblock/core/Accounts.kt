@@ -29,6 +29,13 @@ object Accounts {
     private const val LIST_KEY = "accounts_saved"
     /** Au-delà, le plus ancien est oublié (son jeton révoqué). */
     private const val MAX = 5
+    /** Copie de l'historique et de la reprise prise quand le compte en place
+     *  perd son jeton (déconnexion, jeton refusé) : elle est à lui, ce qui
+     *  est vu ensuite non (adoptDetached ; markSyncDetached sur iOS). */
+    private const val DETACHED_KEY = "sync_detached"
+    /** Copies (sans jetons) des comptes déconnectés puis remplacés par un
+     *  autre, reprises s'ils reviennent : les MAX plus récentes. */
+    private const val LEFT_KEY = "sync_left"
 
     /** Lue à la création de l'objet (premier accès, après AppState.init). */
     val saved = mutableStateListOf<Saved>().apply {
@@ -76,6 +83,8 @@ object Accounts {
         Auth.exclusive {
             val current = AppState.user
             val parkedCurrent = AppState.token != null && current != null && current.id != user.id && parkCurrent()
+            // Connexion après une déconnexion : l'historique d'alors suit son compte.
+            adoptDetached(user.id)
             // Ce compte était de côté : ses jetons d'avant ne servent plus
             // (révoqués), sa session web et son historique reviennent.
             val parked = take(user.id)
@@ -142,6 +151,7 @@ object Accounts {
         val token = access
         Auth.exclusive {
             val parkedCurrent = parkCurrent()
+            adoptDetached(id)
             val parked = take(id)
             storeTokens(token, refresh)
             restore(parked, replaceHistory = parkedCurrent)
@@ -198,6 +208,13 @@ object Accounts {
         if (webIsHis) Secrets.put(ed, key(user.id, "web"), web!!) else ed.remove(key(user.id, "web"))
         val sync = Features.cloudSync.value
         if (sync) ed.putString(key(user.id, "stash"), stashJson().toString()) else ed.remove(key(user.id, "stash"))
+        // Une ancienne copie de lui (déconnexion d'avant) ne vaut plus : celle-ci la remplace.
+        parseJson(sp.getString(LEFT_KEY, null))?.let { left ->
+            if (left.has(user.id)) {
+                left.remove(user.id)
+                ed.putString(LEFT_KEY, left.toString())
+            }
+        }
         ed.apply()
         saved.removeAll { it.user.id == user.id }
         saved.add(0, Saved(user, if (webIsHis) webLogin else null, System.currentTimeMillis()))
@@ -222,8 +239,16 @@ object Accounts {
 
     /** Retire un compte de la liste et rend ce qui était gardé pour lui. */
     private fun take(id: String): Parked? {
-        if (saved.none { it.user.id == id }) return null
         val sp = AppState.prefs
+        if (saved.none { it.user.id == id }) {
+            // Déconnecté puis remplacé par un autre (adoptDetached) : seul son
+            // historique a été gardé.
+            val left = parseJson(sp.getString(LEFT_KEY, null)) ?: return null
+            val stash = left.optJSONObject(id) ?: return null
+            left.remove(id)
+            sp.edit().putString(LEFT_KEY, left.toString()).apply()
+            return Parked(null, null, null, stash)
+        }
         val entry = saved.first { it.user.id == id }
         val parked = Parked(Secrets.read(sp, key(id, "token")), Secrets.read(sp, key(id, "web")), entry.webLogin,
                             parseJson(sp.getString(key(id, "stash"), null)))
@@ -240,28 +265,13 @@ object Accounts {
         if (parked == null) return
         val stash = parked.stash
         if (stash != null) {
-            val items = stash.arr("history")?.objects().orEmpty().mapNotNull { HistoryItem.from(it) }
-            val progress = HashMap<String, Long>()
-            stash.obj("progress")?.let { p ->
-                val keys = p.keys()
-                while (keys.hasNext()) {
-                    val k = keys.next()
-                    p.long(k)?.let { progress[k] = it }
-                }
-            }
+            val items = stashHistory(stash)
+            val progress = stashProgress(stash)
             if (replaceHistory) {
                 History.replace(items)
                 AppState.replaceVodPositions(progress)
             } else {
-                val byKey = LinkedHashMap<String, HistoryItem>()
-                (History.items.toList() + items).forEach { h ->
-                    val old = byKey[h.key]
-                    if (old == null || h.addedAt > old.addedAt) byKey[h.key] = h
-                }
-                History.replace(byKey.values.sortedByDescending { it.addedAt }.take(50))
-                val merged = HashMap(AppState.vodPositions())
-                progress.forEach { (k, v) -> merged[k] = maxOf(merged[k] ?: 0L, v) }
-                AppState.replaceVodPositions(merged)
+                mergeIntoLocal(items, progress)
             }
             // Base de la synchronisation (ce que son serveur avait) : ses
             // suppressions faites ici ne reviennent pas.
@@ -270,6 +280,104 @@ object Accounts {
         }
         val web = parked.web
         if (web != null && WebSession.token == null) WebSession.save(web, parked.webLogin)
+    }
+
+    private fun stashHistory(stash: JSONObject): List<HistoryItem> =
+        stash.arr("history")?.objects().orEmpty().mapNotNull { HistoryItem.from(it) }
+
+    private fun stashProgress(stash: JSONObject): Map<String, Long> {
+        val progress = HashMap<String, Long>()
+        stash.obj("progress")?.let { p ->
+            val keys = p.keys()
+            while (keys.hasNext()) {
+                val k = keys.next()
+                p.long(k)?.let { progress[k] = it }
+            }
+        }
+        return progress
+    }
+
+    /** Ajouté à ce qui est ici : le plus récent de chaque élément, la
+     *  position la plus avancée. */
+    private fun mergeIntoLocal(items: List<HistoryItem>, progress: Map<String, Long>) {
+        val byKey = LinkedHashMap<String, HistoryItem>()
+        (History.items.toList() + items).forEach { h ->
+            val old = byKey[h.key]
+            if (old == null || h.addedAt > old.addedAt) byKey[h.key] = h
+        }
+        History.replace(byKey.values.sortedByDescending { it.addedAt }.take(50))
+        val merged = HashMap(AppState.vodPositions())
+        progress.forEach { (k, v) -> merged[k] = maxOf(merged[k] ?: 0L, v) }
+        AppState.replaceVodPositions(merged)
+    }
+
+    // ── Déconnexion ──
+
+    /** Le compte en place perd son jeton (AppState.clearAuth) : copie de ce
+     *  qui est ici, à lui. La première perte compte. Synchronisation coupée :
+     *  l'historique reste celui de l'appareil, comme parkCurrent. */
+    fun detach() {
+        val user = AppState.user ?: return
+        if (AppState.token == null || !validId(user.id) || !Features.cloudSync.value) return
+        val sp = AppState.prefs
+        if (sp.contains(DETACHED_KEY)) return
+        sp.edit().putString(DETACHED_KEY, stashJson().put("user", user.id).toString()).apply()
+    }
+
+    /** Compte connu après une déconnexion (connexion, changement de compte,
+     *  profil relu) : sa copie revient au même compte, sans rien lui retirer
+     *  de ce qui a été retiré sans lui. Pour un autre compte, elle est mise
+     *  de côté pour le sien, avec sa base, et seul ce qui a été vu depuis
+     *  reste ici : rien du précédent ne part sur celui-ci (adoptSyncOwner
+     *  sur iOS). */
+    fun adoptDetached(id: String) {
+        val sp = AppState.prefs
+        val copy = parseJson(sp.getString(DETACHED_KEY, null)) ?: return
+        sp.edit().remove(DETACHED_KEY).apply()
+        val owner = copy.str("user")
+        val items = stashHistory(copy)
+        if (owner == id) {
+            mergeIntoLocal(items, stashProgress(copy))
+            Logger.info("SYNC", "Même compte : historique d'avant la déconnexion repris", "${items.size}")
+            return
+        }
+        // Absent de la copie, ou revu depuis : vu sans lui, ça reste ici.
+        val was = items.associate { it.key to it.addedAt }
+        val kept = History.items.filter { h -> was[h.key]?.let { h.addedAt > it + 1 } ?: true }
+        val keptTerms = kept.map { it.term }.toHashSet()
+        if (owner != null && validId(owner)) {
+            // Base de son dernier échange (dernier envoi de la déconnexion compris).
+            val live = sp.getString("sync_base", null)?.takeIf { parseJson(it)?.str("user") == owner }
+            val base = live ?: copy.str("base")?.takeIf { parseJson(it)?.str("user") == owner }
+            copy.remove("user")
+            copy.remove("base")
+            base?.let { copy.put("base", it) }
+            keepLeft(owner, copy)
+        }
+        History.replace(kept)
+        AppState.replaceVodPositions(AppState.vodPositions().filterKeys { it in keptTerms })
+        sp.edit().remove("sync_base").apply()
+        Logger.info("SYNC", "Autre compte : historique du précédent mis de côté", if (kept.isEmpty()) null else "${kept.size} gardé(s)")
+    }
+
+    /** Copie d'un compte parti, gardée pour son retour (take) : les MAX plus récentes. */
+    private fun keepLeft(owner: String, stash: JSONObject) {
+        val sp = AppState.prefs
+        val all = parseJson(sp.getString(LEFT_KEY, null)) ?: JSONObject()
+        all.put(owner, stash.put("at", System.currentTimeMillis()))
+        while (all.length() > MAX) {
+            var oldest: String? = null
+            var oldestAt = Long.MAX_VALUE
+            for (k in all.keys()) {
+                val at = all.optJSONObject(k)?.long("at") ?: 0L
+                if (at < oldestAt) {
+                    oldestAt = at
+                    oldest = k
+                }
+            }
+            all.remove(oldest ?: break)
+        }
+        sp.edit().putString(LEFT_KEY, all.toString()).apply()
     }
 
     /** Historique, reprise des VODs et base de synchronisation d'ici. */

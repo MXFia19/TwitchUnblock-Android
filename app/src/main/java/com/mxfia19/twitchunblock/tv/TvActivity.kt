@@ -52,6 +52,9 @@ class TvActivity : ComponentActivity() {
             com.mxfia19.twitchunblock.core.Updates.check()
             com.mxfia19.twitchunblock.core.News.refresh()
             com.mxfia19.twitchunblock.core.Usage.ping(this@TvActivity)
+            // Historique et reprise vus ailleurs (téléphone, iPhone, site) :
+            // relus au retour, comme MainActivity.
+            com.mxfia19.twitchunblock.core.CloudSync.syncNow()
         }
     }
 

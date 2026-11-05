@@ -227,11 +227,12 @@ object SettingsSync {
     /** Le compte va changer (Accounts) : ce qui attendait part avec son
      *  jeton, sans relecture ; le Worker ne garde une section que si elle
      *  est plus récente que la sienne. Pas les masquées ni les épinglées :
-     *  elles se fusionnent, elles partiront au prochain échange du compte. */
-    fun finalFlush() {
+     *  elles se fusionnent, elles partiront au prochain échange du compte.
+     *  L'envoi lancé (la déconnexion l'attend avant de révoquer le jeton). */
+    fun finalFlush(): Job? {
         noteChanges()
-        val t = target() ?: return
-        if (owner != t.userId) return
+        val t = target() ?: return null
+        if (owner != t.userId) return null
         val send = JSONObject()
         val sentFrom = HashMap<String, Long>()
         for (name in listOf("common", "ios")) {
@@ -240,8 +241,8 @@ object SettingsSync {
             send.put(name, JSONObject().put("at", s.at).put("data", outgoing(name, s.serverData)))
             sentFrom[name] = s.at
         }
-        if (send.length() == 0) return
-        scope.launch {
+        if (send.length() == 0) return null
+        return scope.launch {
             val res = push(t, send) ?: return@launch
             accepted(t.userId, sentFrom, res)
         }

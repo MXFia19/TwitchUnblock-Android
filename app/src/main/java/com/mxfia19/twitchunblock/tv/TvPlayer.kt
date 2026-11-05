@@ -80,6 +80,9 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
             TvKeys.menuOpen = false
             TvKeys.controllerVisible = false
             session.release()
+            // Session « main = false » : release() n'envoie rien. La position
+            // gardée de la VOD part sur le compte, comme sur le téléphone.
+            com.mxfia19.twitchunblock.core.CloudSync.scheduleSoon()
         }
     }
     // Pas de session média sur la TV : rien ne joue derrière le lanceur.
