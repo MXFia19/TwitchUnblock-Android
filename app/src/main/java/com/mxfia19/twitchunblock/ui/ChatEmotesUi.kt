@@ -206,7 +206,7 @@ private fun HiddenEmotesDialog(onClose: () -> Unit) {
             confirmButton = {
                 TextButton(onClick = {
                     confirmClear = false
-                    EmoteLists.setHidden(emptyList())
+                    EmoteLists.replaceHidden(emptyList())
                 }) { Text(AppState.t("hidden_emotes_clear"), color = TU.danger) }
             },
             dismissButton = { TextButton(onClick = { confirmClear = false }) { Text(AppState.t("cancel"), color = TU.text) } },

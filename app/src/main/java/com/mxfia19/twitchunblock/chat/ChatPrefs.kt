@@ -122,16 +122,16 @@ object EmoteLists {
     fun toggleHidden(code: String) {
         val c = codes(listOf(code)).firstOrNull() ?: return
         if (c in hiddenSet) {
-            setHidden(hidden - c)
+            replaceHidden(hidden - c)
             Logger.info("CHAT", "Emote réaffichée", c)
         } else {
-            setHidden(hidden + c)
+            replaceHidden(hidden + c)
             Logger.info("CHAT", "Emote masquée", c)
         }
     }
 
     /** Liste entière (« Tout réafficher », import d'une sauvegarde). */
-    fun setHidden(list: List<String>) {
+    fun replaceHidden(list: List<String>) {
         hidden = codes(list).takeLast(MAX_HIDDEN)
         hiddenSet = hidden.toHashSet()
         AppState.prefs.edit().putString(HIDDEN_KEY, JSONArray(hidden).toString()).apply()
@@ -144,18 +144,18 @@ object EmoteLists {
     fun toggleFavorite(code: String, url: String?) {
         val c = codes(listOf(code)).firstOrNull() ?: return
         if (c in favorites) {
-            setFavorites(favorites - c)
+            replaceFavorites(favorites - c)
             Logger.info("CHAT", "Emote retirée des favoris", c)
         } else {
             if (!url.isNullOrEmpty()) urls = urls + (c to url)
-            setFavorites(favorites + c)
+            replaceFavorites(favorites + c)
             Logger.info("CHAT", "Emote ajoutée aux favoris", c)
         }
     }
 
     /** Liste entière (import d'une sauvegarde). Les images des favorites
      *  retirées sont oubliées. */
-    fun setFavorites(list: List<String>) {
+    fun replaceFavorites(list: List<String>) {
         favorites = codes(list).takeLast(MAX_FAVORITES)
         urls = urls.filterKeys { it in favorites }
         val o = JSONObject()
