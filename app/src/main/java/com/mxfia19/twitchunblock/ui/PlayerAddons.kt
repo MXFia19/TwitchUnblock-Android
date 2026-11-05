@@ -129,7 +129,10 @@ fun PlayerAddons(session: PlaybackSession, nav: Navigator) {
             }
         }
         player.addListener(listener)
-        onDispose { player.removeListener(listener) }
+        onDispose {
+            player.removeListener(listener)
+            PlayerSpeed.onHidden(player)
+        }
     }
     LaunchedEffect(player) {
         while (true) {
@@ -202,8 +205,11 @@ fun PlayerVideoOverlay(session: PlaybackSession) {
         }
         // Passage dont Twitch a coupé le son : on le dit (sinon on croit à une
         // panne) et on propose de le sauter.
-        val t = (scrub ?: PlayerUi.positionMs) / 1000.0
-        val muted = if (ready && !session.isLive) markers?.muted?.firstOrNull { it.contains(t) } else null
+        // Position relue seulement s'il y a des passages coupés (pas de
+        // recomposition toutes les 0,5 s pendant un direct).
+        val ranges = if (ready && !session.isLive) markers?.muted.orEmpty() else emptyList()
+        val t = if (ranges.isEmpty()) 0.0 else (scrub ?: PlayerUi.positionMs) / 1000.0
+        val muted = ranges.firstOrNull { it.contains(t) }
         if (muted != null) {
             val top = when {
                 scrub != null -> 44.dp

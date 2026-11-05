@@ -139,6 +139,21 @@ object PlayerSpeed {
         return kind != Kind.LIVE || catchingUp
     }
 
+    /** Écran du lecteur quitté (fiche chaîne par-dessus) : plus de relevé
+     *  toutes les 0,5 s, donc plus rien en accéléré qui finirait au bord. */
+    fun onHidden(player: Player) {
+        if (player !== lastPlayer?.get()) return
+        if (catchingUp) {
+            catchingUp = false
+            liveHeld = false
+            apply(player, 1f)
+        } else if (kind == Kind.VOD && !edgeHeld && current > 1f && player.isCurrentMediaItemDynamic) {
+            // Rendue par tick() au retour, loin du bord de l'enregistrement.
+            edgeHeld = true
+            apply(player, 1f)
+        }
+    }
+
     /** Saut dans la lecture (barre, double-tap, retour au bord) : un direct
      *  reculé de plus de 3 s l'a été exprès. */
     fun onSeek(player: Player) {
