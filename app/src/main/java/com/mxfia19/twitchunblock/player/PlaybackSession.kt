@@ -155,6 +155,25 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
         if (main) PlayerHolder.attach(context, this)
     }
 
+    /** Session web changée (autre compte, déconnexion, refus) pendant un
+     *  direct : la progression des drops repart avec la nouvelle session (ou
+     *  s'arrête), et un direct lu par le compte, signé pour l'ancienne, est
+     *  relu (nouvelle session ou sources habituelles). Comme l'iPhone. */
+    init {
+        if (main) scope.launch {
+            val web = com.mxfia19.twitchunblock.web.WebSession
+            var last: Pair<String?, Boolean>? = null
+            androidx.compose.runtime.snapshotFlow { web.token to web.expired }.collect { now ->
+                val before = last
+                last = now
+                val login = channelLogin
+                if (before == null || !isLive || login == null || state !is State.Ready) return@collect
+                if (now.first != before.first && source == "account") retry()
+                else com.mxfia19.twitchunblock.drops.DropsHeartbeat.start(login, pollSegments = source != "account")
+            }
+        }
+    }
+
     val isLive: Boolean get() = request is PlayRequest.Live
 
     /** Identifiant de la VOD lue (chat rejoué, téléchargement). */

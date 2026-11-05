@@ -232,10 +232,11 @@ object Drops {
         val mark = "${drop.id}-${if (claimed) "claimed" else "ready"}"
         val seen = parseJsonArray(AppState.prefs.getString("drops_notified", null))?.strings()?.toMutableList() ?: mutableListOf()
         if (mark in seen) return
-        seen += mark
-        AppState.prefs.edit().putString("drops_notified", JSONArray(seen.takeLast(300)).toString()).apply()
         val context: Context = App.instance
-        if (!LiveNotifier.canNotify(context)) return
+        // Sans autorisation (Android 13+) ou notifications coupées : pas de
+        // marque. Posée avant, le drop passait pour signalé sans que rien ne
+        // s'affiche, et ne l'était jamais une fois l'autorisation donnée.
+        if (!LiveNotifier.canNotify(context) || !NotificationManagerCompat.from(context).areNotificationsEnabled()) return
         if (Build.VERSION.SDK_INT >= 26) {
             val nm = context.getSystemService(NotificationManager::class.java)
             if (nm != null && nm.getNotificationChannel("drops") == null) {
@@ -252,7 +253,10 @@ object Drops {
             NotificationManagerCompat.from(context).notify(mark.hashCode(), n)
         } catch (e: SecurityException) {
             Logger.warn("DROPS", "Notification refusée par Android")
+            return
         }
+        seen += mark
+        AppState.prefs.edit().putString("drops_notified", JSONArray(seen.takeLast(300)).toString()).apply()
     }
 
     private fun campaign(c: JSONObject): DropCampaign? {
@@ -311,9 +315,13 @@ object DropsHeartbeat {
     private var job: Job? = null
     private val seen = ArrayList<String>()
 
+    /** Aussi à chaque changement de session web (PlaybackSession) : repart
+     *  avec la nouvelle, ou reste arrêté sans session valable. */
     fun start(channel: String, pollSegments: Boolean) {
         stop()
         val token = WebSession.token ?: return
+        // Session refusée par Twitch (401) : ses requêtes le seraient chaque minute.
+        if (WebSession.expired) return
         if (!Features.dropsProgress.value) return
         val l = channel.lowercase()
         login = l
@@ -338,7 +346,7 @@ object DropsHeartbeat {
         var offlineHits = 0
         var refusals = 0
         while (scope.isActive) {
-            if (WebSession.token != token) {
+            if (WebSession.token != token || WebSession.expired) {
                 stop()
                 return
             }
