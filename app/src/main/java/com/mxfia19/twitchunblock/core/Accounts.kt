@@ -30,8 +30,14 @@ object Accounts {
     /** Au-delà, le plus ancien est oublié (son jeton révoqué). */
     private const val MAX = 5
 
-    val saved = mutableStateListOf<Saved>()
-    private var loaded = false
+    /** Lue à la création de l'objet (premier accès, après AppState.init). */
+    val saved = mutableStateListOf<Saved>().apply {
+        parseJsonArray(AppState.prefs.getString(LIST_KEY, null))?.objects()?.forEach { o ->
+            val id = o.str("id")?.takeIf { validId(it) } ?: return@forEach
+            val user = TwitchUser(id, o.str("login") ?: "", o.str("name") ?: "", o.str("avatar") ?: "")
+            add(Saved(user, o.str("web"), o.long("at") ?: 0L))
+        }
+    }
     private val background = CoroutineScope(SupervisorJob() + Dispatchers.Main)
 
     private fun key(id: String, what: String) = "acct_${id}_$what"
@@ -39,21 +45,9 @@ object Accounts {
     /** Identifiant Twitch (des chiffres) : seul accepté dans les noms de clés. */
     private fun validId(id: String) = id.isNotEmpty() && id.length <= 20 && id.all { it.isDigit() }
 
-    fun ensureLoaded() {
-        if (loaded) return
-        loaded = true
-        saved.clear()
-        parseJsonArray(AppState.prefs.getString(LIST_KEY, null))?.objects()?.forEach { o ->
-            val id = o.str("id")?.takeIf { validId(it) } ?: return@forEach
-            val user = TwitchUser(id, o.str("login") ?: "", o.str("name") ?: "", o.str("avatar") ?: "")
-            saved += Saved(user, o.str("web"), o.long("at") ?: 0L)
-        }
-    }
-
     /** Comptes à proposer : sans celui en place. */
     val others: List<Saved>
         get() {
-            ensureLoaded()
             val current = AppState.user?.id?.takeIf { AppState.token != null }
             return saved.filter { it.user.id != current }
         }
@@ -73,7 +67,6 @@ object Accounts {
      *  que celui en place le met de côté, puis prend sa place. Compte du
      *  jeton inconnu (réseau) : comme avant, le jeton remplace l'ancien. */
     suspend fun adoptLogin(access: String, refresh: String?) {
-        ensureLoaded()
         val user = fetchUser(access)
         if (user == null) {
             Auth.exclusive { storeTokens(access, refresh) }
@@ -103,7 +96,6 @@ object Accounts {
     /** Mené à terme même si l'écran se ferme : un jeton de renouvellement
      *  consommé sans être gardé perdrait le compte. */
     private suspend fun switchToInner(id: String): SwitchResult {
-        ensureLoaded()
         if (AppState.token != null && AppState.user?.id == id) return SwitchResult.DONE
         val entry = saved.firstOrNull { it.user.id == id } ?: return SwitchResult.EXPIRED
         val sp = AppState.prefs
@@ -164,7 +156,6 @@ object Accounts {
     /** Oublie un compte gardé : ses jetons (révoqués chez Twitch), sa session
      *  web et son historique mis de côté. */
     fun forget(id: String, revokeToken: Boolean = true) {
-        ensureLoaded()
         val sp = AppState.prefs
         if (revokeToken) Secrets.read(sp, key(id, "token"))?.let { revoke(it) }
         sp.edit().remove(key(id, "token")).remove(key(id, "refresh")).remove(key(id, "web")).remove(key(id, "stash")).apply()

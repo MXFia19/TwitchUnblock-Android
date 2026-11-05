@@ -297,7 +297,7 @@ object SettingsSync {
             s.sum = digest(digestData(name))
             s.srv = r.at
             setBase(s, name, r.data)
-            if (canonical(next) == canonical(r.data)) {
+            if (same(name, next, r.data)) {
                 s.at = r.at
             } else {
                 // Ce qui vient d'ici s'y est ajouté (première rencontre,
@@ -469,6 +469,19 @@ object SettingsSync {
             "pinned" -> JSONArray(logins(data))
             else -> null
         }
+    }
+
+    /** Même contenu ? Les masquées sans tenir compte de l'ordre : une
+     *  réunion seulement réordonnée n'est pas un changement à renvoyer. */
+    private fun same(name: String, a: Any, b: Any): Boolean {
+        if (name != "hidden") return canonical(a) == canonical(b)
+        fun norm(v: Any): String {
+            val o = v as? JSONObject
+            return canonical(JSONObject()
+                .put("channels", JSONArray(channelsOf(o).sortedBy { it.login }.map { "${it.login}|${it.name}|${it.at}" }))
+                .put("categories", JSONArray(categoriesOf(o).sortedBy { it.id }.map { "${it.id}|${it.name}|${it.box}|${it.at}" })))
+        }
+        return norm(a) == norm(b)
     }
 
     // ── Masquées ──
