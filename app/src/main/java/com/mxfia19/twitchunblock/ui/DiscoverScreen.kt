@@ -138,18 +138,23 @@ object DiscoverFeed {
         if (livesLoading) return
         livesLoading = true
         livesFailed = false
-        val page = BrowseApi.topStreams(lang, null)
-        if (page != null && !page.refused) {
-            lives.clear()
-            lives.addAll(page.items.distinctBy { it.login })
-            next = page.next
-            loadedLang = lang
-            loadedAt = now
-            livePage = 0
-        } else if (lives.isEmpty()) {
-            livesFailed = true
+        // finally : onglet quitté pendant la requête (effet annulé), le
+        // drapeau ne reste pas posé (sinon spinner sans fin au retour).
+        try {
+            val page = BrowseApi.topStreams(lang, null)
+            if (page != null && !page.refused) {
+                lives.clear()
+                lives.addAll(page.items.distinctBy { it.login })
+                next = page.next
+                loadedLang = lang
+                loadedAt = now
+                livePage = 0
+            } else if (lives.isEmpty()) {
+                livesFailed = true
+            }
+        } finally {
+            livesLoading = false
         }
-        livesLoading = false
     }
 
     /** Près de la fin : la page suivante du top. */
@@ -157,13 +162,16 @@ object DiscoverFeed {
         val cursor = next ?: return
         if (loadingMore) return
         loadingMore = true
-        val page = BrowseApi.topStreams(TopLanguage.resolved(), cursor)
-        if (page != null) {
-            val seen = lives.map { it.login }.toHashSet()
-            lives.addAll(page.items.filter { it.login !in seen }.distinctBy { it.login })
-            next = if (page.refused) null else page.next
+        try {
+            val page = BrowseApi.topStreams(TopLanguage.resolved(), cursor)
+            if (page != null) {
+                val seen = lives.map { it.login }.toHashSet()
+                lives.addAll(page.items.filter { it.login !in seen }.distinctBy { it.login })
+                next = if (page.refused) null else page.next
+            }
+        } finally {
+            loadingMore = false
         }
-        loadingMore = false
     }
 
     /** Clips les plus vus des dernières 24 h des 20 premières chaînes du top. */
@@ -178,16 +186,19 @@ object DiscoverFeed {
         }
         clipsLoading = true
         clipsFailed = false
-        val list = topClips(logins)
-        if (list != null) {
-            clips.clear()
-            clips.addAll(list.distinctBy { it.slug })
-            clipsFor = key
-            clipPage = 0
-        } else {
-            clipsFailed = clips.isEmpty()
+        try {
+            val list = topClips(logins)
+            if (list != null) {
+                clips.clear()
+                clips.addAll(list.distinctBy { it.slug })
+                clipsFor = key
+                clipPage = 0
+            } else {
+                clipsFailed = clips.isEmpty()
+            }
+        } finally {
+            clipsLoading = false
         }
-        clipsLoading = false
     }
 
     /** 10 chaînes par requête (Twitch refuse plus de 15 alias). null : aucune réponse. */
@@ -262,7 +273,6 @@ fun DiscoverScreen(nav: Navigator) {
     val player = remember { PlayerFactory.build(context, audioFocus = false) }
     var firstFrame by remember { mutableStateOf(false) }
     var previewFailed by remember { mutableStateOf(false) }
-    var resumed by remember { mutableStateOf(true) }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onRenderedFirstFrame() {
@@ -287,8 +297,8 @@ fun DiscoverScreen(nav: Navigator) {
     DisposableEffect(lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_STOP -> { resumed = false; player.pause() }
-                Lifecycle.Event.ON_START -> { resumed = true; if (player.mediaItemCount > 0) player.play() }
+                Lifecycle.Event.ON_STOP -> player.pause()
+                Lifecycle.Event.ON_START -> if (player.mediaItemCount > 0) player.play()
                 else -> {}
             }
         }
@@ -330,7 +340,7 @@ fun DiscoverScreen(nav: Navigator) {
             count == 0 && failed -> MessageBox(AppState.t("err_network"), action = AppState.t("retry"), onAction = retry)
             count == 0 -> MessageBox(AppState.t("discover_empty"), action = AppState.t("retry"), onAction = retry)
             else -> key(feed.mode) {
-                FeedPager(count, live, lives, clips, player, firstFrame, previewFailed, resumed, nav,
+                FeedPager(count, live, lives, clips, player, firstFrame, previewFailed, nav,
                           onStart = { firstFrame = false; previewFailed = false }, onFail = { previewFailed = true })
             }
         }
@@ -341,7 +351,7 @@ fun DiscoverScreen(nav: Navigator) {
 @androidx.annotation.OptIn(UnstableApi::class)
 @Composable
 private fun FeedPager(count: Int, live: Boolean, lives: List<TwitchStream>, clips: List<FeedClip>, player: ExoPlayer,
-                      firstFrame: Boolean, previewFailed: Boolean, resumed: Boolean, nav: Navigator,
+                      firstFrame: Boolean, previewFailed: Boolean, nav: Navigator,
                       onStart: () -> Unit, onFail: () -> Unit) {
     val feed = DiscoverFeed
     val pager = rememberPagerState(initialPage = (if (live) feed.livePage else feed.clipPage).coerceIn(0, count - 1)) { count }
@@ -357,6 +367,7 @@ private fun FeedPager(count: Int, live: Boolean, lives: List<TwitchStream>, clip
         }
     }
     val currentKey = if (live) "live:" + lives[settled].login.lowercase() else "clip:" + clips[settled].slug
+    val lifecycle = LocalLifecycleOwner.current.lifecycle
     // Aperçu de la page affichée seulement.
     LaunchedEffect(currentKey) {
         onStart()
@@ -372,7 +383,9 @@ private fun FeedPager(count: Int, live: Boolean, lives: List<TwitchStream>, clip
         // Un clip tourne en boucle.
         player.repeatMode = if (live) Player.REPEAT_MODE_OFF else Player.REPEAT_MODE_ONE
         player.prepare()
-        player.playWhenReady = resumed
+        // État lu maintenant, pas au lancement de l'effet : app quittée
+        // pendant la recherche de l'adresse, l'aperçu attend le retour (ON_START).
+        player.playWhenReady = lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)
     }
     VerticalPager(
         state = pager,

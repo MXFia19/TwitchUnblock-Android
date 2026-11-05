@@ -29,11 +29,15 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -45,6 +49,8 @@ import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Category
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.player.PlaybackSession
+import com.mxfia19.twitchunblock.player.PlayerHolder
+import kotlinx.coroutines.CoroutineScope
 
 /** Écrans du téléphone. Les quatre onglets, puis les pages empilées. */
 sealed class Screen {
@@ -95,6 +101,13 @@ class Navigator {
     fun play(request: PlayRequest) {
         stack.removeAll { it is Screen.Player || it is Screen.MultiLive }
         stack.add(Screen.Player(request))
+        // Même lecture redemandée (notification, widget) : la session reste la
+        // même et rien ne la relance ; en erreur ou finie, elle repart.
+        val session = PlayerHolder.current
+        if (session != null && session.request == request &&
+            (session.state is PlaybackSession.State.Error || session.player.playbackState == androidx.media3.common.Player.STATE_ENDED)) {
+            session.retry()
+        }
     }
 
     /** Multi-live à la place de la lecture en cours. */
@@ -113,6 +126,21 @@ fun PhoneApp(nav: Navigator) {
     val following = remember { FollowingModel(scope) }
     val screen = nav.current
     BackHandler(enabled = nav.stack.size > 1) { nav.pop() }
+    // Pages de la pile : défilement, onglet et modèles gardés pendant qu'une
+    // autre est ouverte par-dessus (comme la pile de l'iPhone), oubliés quand
+    // elles en sortent (une page rouverte repart de zéro).
+    val pages = rememberSaveableStateHolder()
+    val models = remember { HashMap<String, PageModels>() }
+    val keys = nav.stack.mapIndexed { i, s -> pageKey(i, s) }
+    val stacked = remember { ArrayList<String>() }
+    SideEffect {
+        for (k in stacked) if (k !in keys) {
+            pages.removeState(k)
+            models.remove(k)
+        }
+        stacked.clear()
+        stacked.addAll(keys)
+    }
 
     // Lecture principale, portée ici et non par l'écran du lecteur : elle
     // continue sous une fiche chaîne, la connexion ou la session web, et
@@ -153,6 +181,9 @@ fun PhoneApp(nav: Navigator) {
         Row(Modifier.padding(padding).fillMaxSize()) {
           if (isTab && wide) BrowseTabRail(screen, nav)
           Box(Modifier.weight(1f).fillMaxSize()) {
+            val key = keys.last()
+            pages.SaveableStateProvider(key) {
+            CompositionLocalProvider(LocalPageModels provides models.getOrPut(key) { PageModels(scope) }) {
             when (screen) {
                 Screen.Home -> HomeScreen(home, nav)
                 Screen.Discover -> DiscoverScreen(nav)
@@ -173,8 +204,40 @@ fun PhoneApp(nav: Navigator) {
                 is Screen.CategoryPage -> CategoryScreen(screen.category, nav)
                 is Screen.Player, is Screen.MultiLive -> {}
             }
+            }
+            }
           }
         }
+    }
+}
+
+/** Clé d'une page de la pile : sa place et ce qu'elle montre (texte simple,
+ *  gardé dans l'état sauvegardé de l'activité). */
+private fun pageKey(index: Int, s: Screen): String = "$index:" + when (s) {
+    is Screen.Channel -> "channel:" + s.login
+    is Screen.CategoryPage -> "category:" + s.category.id
+    is Screen.FeedbackThread -> "thread:" + s.id
+    else -> s.javaClass.name
+}
+
+/** Modèles d'une page de la pile (chaîne, catégorie), gardés tant qu'elle y
+ *  reste : au retour d'un live ou d'un clip, rien n'est relu. Portée de
+ *  l'app : un chargement n'est pas coupé quand une page passe dessous. */
+class PageModels(val scope: CoroutineScope) {
+    val map = HashMap<String, Any>()
+}
+
+val LocalPageModels = staticCompositionLocalOf<PageModels?> { null }
+
+/** Modèle d'une page : celui gardé pour sa place dans la pile (téléphone),
+ *  sinon créé avec la portée de l'écran (TV). */
+@Suppress("UNCHECKED_CAST")
+@Composable
+fun <T : Any> rememberPageModel(name: String, create: (CoroutineScope) -> T): T {
+    val page = LocalPageModels.current
+    val own = rememberCoroutineScope()
+    return remember(page, name) {
+        if (page != null) page.map.getOrPut(name) { create(page.scope) } as T else create(own)
     }
 }
 

@@ -1,5 +1,6 @@
 package com.mxfia19.twitchunblock.ui
 
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Favorite
@@ -77,7 +78,8 @@ object TabTop {
  *  paysage) : toute la hauteur reste au contenu. Même ordre que la barre. */
 @Composable
 fun BrowseTabRail(current: Screen, nav: Navigator) {
-    NavigationRail(containerColor = TU.surface) {
+    // Marges des barres système déjà comptées par le Scaffold (PhoneApp).
+    NavigationRail(containerColor = TU.surface, windowInsets = WindowInsets(0, 0, 0, 0)) {
         for (key in BrowsePrefs.visibleTabs) {
             val target = BrowseTabs.screen(key)
             NavigationRailItem(

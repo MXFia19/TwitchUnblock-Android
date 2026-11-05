@@ -17,8 +17,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -71,8 +69,9 @@ class CategoryModel(val category: Category, private val scope: CoroutineScope) {
 
 @Composable
 fun CategoryScreen(category: Category, nav: Navigator) {
-    val scope = rememberCoroutineScope()
-    val model = remember(category.id) { CategoryModel(category, scope) }
+    // Gardé tant que la page reste dans la pile (PhoneApp) : au retour d'un
+    // live, les directs déjà chargés et la position restent.
+    val model = rememberPageModel("category:" + category.id) { CategoryModel(category, it) }
     val context = androidx.compose.ui.platform.LocalContext.current
     LaunchedEffect(category.id) { model.load() }
     val list = BrowsePrefs.homeList.value

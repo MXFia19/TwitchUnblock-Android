@@ -35,6 +35,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -82,6 +83,9 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
         private set
     var period by mutableStateOf("LAST_WEEK")
         private set
+    /** Twitch n'a pas répondu pour les clips : Réessayer, pas « Aucun clip ». */
+    var clipsFailed by mutableStateOf(false)
+        private set
     private var clipsLoadedFor: String? = null
     /** Diffusions passées retrouvables (VODs retirées) ; null : pas encore lues. */
     var recovered by mutableStateOf<List<RecoverableStream>?>(null)
@@ -104,9 +108,9 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
     }
 
     fun load() {
-        if (info != null) return
-        scope.launch { info = BrowseApi.channelInfo(login) }
-        moreVideos()
+        if (info == null) scope.launch { info = BrowseApi.channelInfo(login) }
+        // Modèle gardé (retour sur la page) : pas de page de vidéos en plus.
+        if (videos.isEmpty()) moreVideos()
     }
 
     fun moreVideos() {
@@ -129,15 +133,23 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
         val fresh = p != clipsLoadedFor
         period = p
         clipsLoading = true
+        clipsFailed = false
         scope.launch {
             val page = BrowseApi.clips(login, p, if (fresh) null else clipsNext)
-            if (fresh) clips.clear()
+            if (fresh) {
+                clips.clear()
+                // Rien de lu pour cette période tant que Twitch n'a pas répondu.
+                clipsLoadedFor = null
+                clipsNext = null
+            }
             if (page != null) {
                 val seen = clips.map { it.slug }.toHashSet()
                 clips.addAll(page.items.filter { it.slug !in seen }.distinctBy { it.slug })
                 clipsNext = if (page.refused) null else page.next
+                clipsLoadedFor = p
+            } else {
+                clipsFailed = true
             }
-            clipsLoadedFor = p
             clipsLoading = false
         }
     }
@@ -149,13 +161,16 @@ private val periods = listOf("LAST_DAY" to "clips_day", "LAST_WEEK" to "clips_we
 @Composable
 fun ChannelScreen(login: String, nav: Navigator) {
     val scope = rememberCoroutineScope()
-    val model = remember(login) { ChannelModel(login, scope) }
-    var tab by remember { mutableStateOf(0) }
+    // Gardés tant que la page reste dans la pile (PhoneApp) : au retour d'un
+    // live ou d'un clip, même onglet, même période, rien n'est relu.
+    val model = rememberPageModel("channel:$login") { ChannelModel(login, it) }
+    var tab by rememberSaveable { mutableStateOf(0) }
     LaunchedEffect(login) { model.load() }
     // Planning (onglet 3, s'il y en a un) et À propos (onglet 4) : ChannelPanels.kt.
-    val extras = remember(login) { ChannelExtrasModel(login, scope) }
+    val extras = rememberPageModel("extras:$login") { ChannelExtrasModel(login, it) }
     LaunchedEffect(tab) {
-        if (tab == 1) model.loadClips()
+        // Clips déjà là (retour sur la page) : pas de page en plus.
+        if (tab == 1 && model.clips.isEmpty()) model.loadClips()
         if (tab == 2) model.loadRecovered()
         if (tab == 4) extras.loadAbout()
     }
@@ -285,9 +300,10 @@ fun ChannelScreen(login: String, nav: Navigator) {
                 }
                 when {
                     model.videosLoading -> item(span = FullSpan) { LoadingBox() }
-                    model.videos.isEmpty() -> item(span = FullSpan) {
-                        MessageBox(AppState.t(if (model.videosError == "network") "err_network" else "tv_no_videos"))
+                    model.videos.isEmpty() && model.videosError == "network" -> item(span = FullSpan) {
+                        MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.moreVideos() }
                     }
+                    model.videos.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("tv_no_videos")) }
                     model.videosNext != null -> item(span = FullSpan) { MoreButton(false) { model.moreVideos() } }
                 }
             } else {
@@ -299,6 +315,9 @@ fun ChannelScreen(login: String, nav: Navigator) {
                 items(model.clips, key = { "c-" + it.slug }) { c -> ClipCard(c) { nav.play(PlayRequest.Clip(c.slug)) } }
                 when {
                     model.clipsLoading -> item(span = FullSpan) { LoadingBox() }
+                    model.clipsFailed && model.clips.isEmpty() -> item(span = FullSpan) {
+                        MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.loadClips(model.period) }
+                    }
                     model.clips.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("no_clips")) }
                     model.clipsNext != null -> item(span = FullSpan) { MoreButton(false) { model.loadClips() } }
                 }

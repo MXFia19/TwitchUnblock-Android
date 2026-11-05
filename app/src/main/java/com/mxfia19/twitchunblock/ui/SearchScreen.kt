@@ -124,6 +124,8 @@ fun SearchScreen(model: SearchModel, nav: Navigator) {
     LaunchedEffect(Unit) { model.loadTop() }
     val q = model.query.trim()
     val vodId = if (Links.isVod(q)) Links.vodId(q) else null
+    // Lien avec ?t= : la VOD démarre à ce moment (clavier comme ligne touchée).
+    val vodStartMs = (Links.vodStart(q) ?: -1).let { if (it > 0) it * 1000L else -1L }
     val clip = Links.clipSlug(q)
     Column(Modifier.fillMaxSize()) {
         OutlinedTextField(
@@ -140,7 +142,7 @@ fun SearchScreen(model: SearchModel, nav: Navigator) {
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
             keyboardActions = KeyboardActions(onSearch = {
                 when {
-                    vodId != null -> nav.play(PlayRequest.Vod(vodId, startMs = (Links.vodStart(q) ?: -1).let { if (it > 0) it * 1000L else -1L }))
+                    vodId != null -> nav.play(PlayRequest.Vod(vodId, startMs = vodStartMs))
                     clip != null -> nav.play(PlayRequest.Clip(clip))
                     Links.isValidLogin(Links.login(q)) -> nav.push(Screen.Channel(Links.login(q)))
                 }
@@ -163,7 +165,7 @@ fun SearchScreen(model: SearchModel, nav: Navigator) {
             modifier = Modifier.fillMaxSize(),
         ) {
             if (vodId != null) {
-                item(span = FullSpan) { ActionRow(AppState.t("watch_vod") + " " + vodId) { nav.play(PlayRequest.Vod(vodId)) } }
+                item(span = FullSpan) { ActionRow(AppState.t("watch_vod") + " " + vodId) { nav.play(PlayRequest.Vod(vodId, startMs = vodStartMs)) } }
             }
             if (clip != null) {
                 item(span = FullSpan) { ActionRow(AppState.t("watch_clip")) { nav.play(PlayRequest.Clip(clip)) } }

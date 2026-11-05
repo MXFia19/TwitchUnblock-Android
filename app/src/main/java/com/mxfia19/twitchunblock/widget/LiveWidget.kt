@@ -54,9 +54,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import org.json.JSONArray
 import org.json.JSONObject
-import java.text.SimpleDateFormat
 import java.util.Date
-import java.util.Locale
 import java.util.concurrent.TimeUnit
 
 /** Image réduite (miniature, avatar) en bitmap logiciel : widget, raccourcis. */
@@ -106,22 +104,24 @@ object LiveWidget {
         return Pair(items, o.long("at") ?: 0L)
     }
 
-    /** Directs suivis : compte (Helix) et appareil (GQL). null : Twitch n'a pas répondu. */
+    /** Directs suivis : compte (Helix) et appareil (GQL). null : une des
+     *  deux parties n'a pas répondu (les directs de l'autre ne suffisent pas :
+     *  le widget garderait une liste fausse). */
     suspend fun fetch(): List<TwitchStream>? {
-        var reached = false
         val out = mutableListOf<TwitchStream>()
-        if (AppState.token != null && AppState.user != null) {
-            try {
-                BrowseApi.followedStreams()?.let { out += it; reached = true }
+        if (AppState.user != null) {
+            val account = try {
+                if (AppState.token != null) BrowseApi.followedStreams() else null
             } catch (e: AuthExpiredException) {
                 Logger.warn("WIDGET", "Session Twitch refusée")
+                null
             }
+            out += account ?: return null
         }
         val known = out.map { it.login.lowercase() }.toHashSet()
         val local = AppState.localFollows.filter { it !in known }
-        if (local.isEmpty()) reached = reached || AppState.user == null
-        else BrowseApi.liveByLogins(local)?.let { out += it; reached = true }
-        return if (reached) out.distinctBy { it.login.lowercase() } else null
+        if (local.isNotEmpty()) out += BrowseApi.liveByLogins(local) ?: return null
+        return out.distinctBy { it.login.lowercase() }
     }
 
     fun refresh(context: Context) {
@@ -156,7 +156,9 @@ object LiveWidget {
             val views = RemoteViews(context.packageName, R.layout.widget_live)
             views.setTextViewText(R.id.widget_title,
                                   AppState.t("br_widget_title") + if (items.isNotEmpty()) " · ${items.size}" else "")
-            views.setTextViewText(R.id.widget_time, if (at > 0) SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(at)) else "")
+            // Heure au format du téléphone (12 h ou 24 h).
+            views.setTextViewText(R.id.widget_time,
+                                  if (at > 0) android.text.format.DateFormat.getTimeFormat(context).format(Date(at)) else "")
             val setup = AppState.user == null && AppState.localFollows.isEmpty()
             views.setTextViewText(R.id.widget_empty, AppState.t(if (setup) "br_widget_setup" else "br_widget_empty"))
             views.setContentDescription(R.id.widget_refresh, AppState.t("drops_refresh"))
