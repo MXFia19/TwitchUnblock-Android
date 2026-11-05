@@ -104,7 +104,10 @@ jobs:
 
       # Version publiée : « vX.Y.N » (main) ou pré-version « test-N » (TU Test).
       # Notes : lignes « Changelog: » du message du commit.
+      # Branche de travail (wip-…) : compilée et vérifiée, jamais publiée —
+      # seules main et test-17d298 donnent une version installable.
       - name: Publish release
+        if: github.ref_name == 'main' || github.ref_name == 'test-17d298'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |

@@ -62,7 +62,7 @@ object AppState {
 
     fun init(context: Context) {
         sp = context.getSharedPreferences("tu_prefs", Context.MODE_PRIVATE)
-        lang = Lang.of(sp.getString("lang", null)) ?: Lang.of(Locale.getDefault().language) ?: Lang.EN
+        lang = Lang.of(sp.getString("lang", null)) ?: Lang.fromLocale(Locale.getDefault()) ?: Lang.EN
         qualityPref = sp.getString("quality_pref", null)?.takeIf { it in Quality.PREFS } ?: "auto"
         cellularQuality = sp.getString("quality_cellular", null)?.takeIf { it in Quality.CELLULAR_PREFS } ?: "auto"
         liveSource = sp.getString("live_source", null)?.takeIf { it in Config.LIVE_SOURCE_CHOICES } ?: "auto"

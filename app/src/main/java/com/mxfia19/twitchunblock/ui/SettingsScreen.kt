@@ -151,6 +151,10 @@ fun SettingsScreen(nav: Navigator) {
                 LinkRow(AppState.t("hidden_title") + if (Hidden.isEmpty) "" else " (${Hidden.channels.size + Hidden.categories.size})") {
                     nav.push(Screen.Hidden)
                 }
+                // Réglages ajoutés depuis la série 5 : chaque partie de l'app a
+                // son fichier (SettingsBrowse.kt, SettingsAppLook.kt…).
+                BrowseSettings(nav)
+                AppLookSettings(nav)
             }
             Group(AppState.t("settings_player")) {
                 Choice(AppState.t("pref_quality"), Quality.PREFS.map { it to Quality.prefLabel(it, AppState.lang) },
@@ -167,6 +171,9 @@ fun SettingsScreen(nav: Navigator) {
                 Toggle(AppState.t("dl_wifi_only"), AppState.t("dl_wifi_only_sub"), Features.dlWifiOnly.value) {
                     Downloads.updateWifiOnly(it)
                 }
+                // SettingsPlayer.kt et SettingsStream.kt
+                PlayerControlsSettings()
+                StreamSettings()
             }
             Group(AppState.t("settings_chat")) {
                 Toggle(AppState.t("cfg_timestamps"), AppState.t("cfg_timestamps_sub"), Features.chatTimestamps.value) { Features.chatTimestamps.set(it) }
@@ -193,6 +200,8 @@ fun SettingsScreen(nav: Navigator) {
                         colors = SliderDefaults.colors(thumbColor = TU.primary, activeTrackColor = TU.primary),
                     )
                 }
+                // SettingsChatExtra.kt
+                ChatExtraSettings()
             }
             Group(AppState.t("settings_events")) {
                 Toggle(AppState.t("cfg_pinned"), AppState.t("cfg_pinned_sub"), Features.showPinned.value) { Features.showPinned.set(it) }

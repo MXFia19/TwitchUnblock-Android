@@ -7,10 +7,22 @@ enum class Lang(val code: String, val label: String) {
     FR("fr", "Français"),
     EN("en", "English"),
     ES("es", "Español"),
-    RU("ru", "Русский");
+    RU("ru", "Русский"),
+    // Comme l'app iPhone : textes traduits automatiquement.
+    IT("it", "Italiano"),
+    JA("ja", "日本語"),
+    ZH_HANT("zh-Hant", "繁體中文");
 
     companion object {
-        fun of(code: String?): Lang? = entries.firstOrNull { it.code == code?.lowercase() }
+        fun of(code: String?): Lang? = entries.firstOrNull { it.code.equals(code, ignoreCase = true) }
+
+        /** Langue de l'appareil : le chinois seulement en écriture
+         *  traditionnelle (Taïwan, Hong Kong, Macao), comme l'iPhone. */
+        fun fromLocale(locale: java.util.Locale): Lang? {
+            if (locale.language != "zh") return of(locale.language)
+            val traditional = locale.script.equals("Hant", ignoreCase = true) || locale.country in setOf("TW", "HK", "MO")
+            return if (traditional) ZH_HANT else null
+        }
     }
 }
 

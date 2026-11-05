@@ -23,7 +23,8 @@ installable à côté de l'autre.
   qualité Auto (suit le débit) ou fixe, qualité en données mobiles, VODs (passages coupés lisibles, reprise),
   clips, recherche (chaînes, catégories, liens collés), catégories, chaînes suivies (compte Twitch ou appareil),
   page de chaîne (VODs, clips), chat (emotes Twitch, 7TV, BTTV, FFZ, badges, historique récent, écrire avec
-  un compte), connexion Twitch par code, réglages, journal, 4 langues (français, anglais, espagnol, russe).
+  un compte), connexion Twitch par code, réglages, journal, 7 langues (français, anglais, espagnol, russe ; italien, japonais et chinois traditionnel
+  traduits automatiquement, comme sur l'iPhone).
   Interface Android TV : onglets, rangées à la télécommande, lecteur plein écran avec le chat, connexion par
   QR code.
 - **Série 2** : image dans l'image, lecture en arrière-plan, minuterie, multi-live, téléchargements hors ligne,
@@ -51,7 +52,7 @@ Les textes viennent des dictionnaires de l'app iPhone et de l'Apple TV :
 node tools/i18n/gen-i18n.mjs ../TwitchUnblock
 ```
 
-(textes propres à Android : `tools/i18n/android-strings.json`).
+(textes propres à Android : `tools/i18n/android-strings.json`, et un `android-strings-<partie>.json` par partie de l'app).
 
 ## Clé de signature
 

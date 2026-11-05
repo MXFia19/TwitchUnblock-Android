@@ -1,9 +1,10 @@
 // Textes de l'app Android, repris des dictionnaires de l'app iPhone et de
-// l'Apple TV (Constants.swift, RussianStrings.swift, TVStrings.swift), plus
-// ceux propres à Android (android-strings.json, prioritaires).
+// l'Apple TV (Constants.swift, Localization/*Strings.swift, TVStrings.swift),
+// plus ceux propres à Android (android-strings.json et android-strings-*.json,
+// un fichier par partie de l'app ; prioritaires).
 // Usage : node tools/i18n/gen-i18n.mjs <dépôt iOS>
-// Écrit app/src/main/assets/i18n/{fr,en,es,ru}.json, puis vérifie que chaque
-// clé utilisée dans le code Kotlin existe en anglais.
+// Écrit app/src/main/assets/i18n/<langue>.json (7 langues, comme l'iPhone),
+// puis vérifie que chaque clé utilisée dans le code Kotlin existe en anglais.
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -13,7 +14,9 @@ if (!ios) { console.error('Usage : node tools/i18n/gen-i18n.mjs <dépôt iOS>');
 const here = path.dirname(fileURLToPath(import.meta.url))
 const repo = path.resolve(here, '..', '..')
 const outDir = path.join(repo, 'app', 'src', 'main', 'assets', 'i18n')
-const LANGS = ['fr', 'en', 'es', 'ru']
+const LANGS = ['fr', 'en', 'es', 'ru', 'it', 'ja', 'zh-Hant']
+/** Nom du bloc Swift d'une langue (« .zhHant: [ »). */
+const swiftName = (l) => (l === 'zh-Hant' ? 'zhHant' : l)
 
 const unescapeSwift = (s) => s
   .replace(/\\u\{([0-9a-fA-F]+)\}/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
@@ -47,14 +50,33 @@ const start = constants.indexOf('private let translations:')
 const ruMark = constants.indexOf('.ru: kRussianStrings')
 const main = blocks(constants.slice(start, ruMark > 0 ? ruMark : undefined), ['fr', 'en', 'es'])
 main.ru = entries(read('Sources/Localization/RussianStrings.swift'))
-const tv = blocks(read('TV/TVStrings.swift'), LANGS)
-const android = JSON.parse(fs.readFileSync(path.join(here, 'android-strings.json'), 'utf8'))
+main.it = entries(read('Sources/Localization/ItalianStrings.swift'))
+main.ja = entries(read('Sources/Localization/JapaneseStrings.swift'))
+main['zh-Hant'] = entries(read('Sources/Localization/TraditionalChineseStrings.swift'))
+const tvBlocks = blocks(read('TV/TVStrings.swift'), LANGS.map(swiftName))
+const tv = Object.fromEntries(LANGS.map((l) => [l, tvBlocks[swiftName(l)]]))
+
+// Textes propres à Android : android-strings.json, puis un fichier par partie
+// de l'app (android-strings-player.json…). Une clé dans deux fichiers : erreur.
+const android = {}
+const indirect = []
+const androidFiles = fs.readdirSync(here).filter((f) => /^android-strings(-[a-z0-9-]+)?\.json$/.test(f)).sort()
+for (const f of androidFiles) {
+  const part = JSON.parse(fs.readFileSync(path.join(here, f), 'utf8'))
+  indirect.push(...(part._indirect?.keys ?? []))
+  for (const [k, v] of Object.entries(part)) {
+    if (k === '_indirect') continue
+    if (k in android) { console.error(`Clé en double : ${k} (${f})`); process.exitCode = 1 }
+    android[k] = v
+  }
+}
+android._indirect = { keys: indirect }
 
 fs.mkdirSync(outDir, { recursive: true })
 const tables = {}
 for (const l of LANGS) {
   const t = { ...(main[l] || {}), ...(tv[l] || {}) }
-  for (const [k, v] of Object.entries(android)) if (v[l] != null) t[k] = v[l]
+  for (const [k, v] of Object.entries(android)) if (k !== '_indirect' && v[l] != null) t[k] = v[l]
   tables[l] = t
   const keys = Object.keys(t).sort()
   fs.writeFileSync(path.join(outDir, `${l}.json`),
