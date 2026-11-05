@@ -852,6 +852,8 @@
   "pinned_short": "Épinglé",
   "pip_on_leave": "PiP en quittant le lecteur",
   "pip_on_leave_sub": "Réduire un direct ou une VOD (glissé vers le bas, flèche retour) l'ouvre en image dans l'image au lieu du mini-lecteur, si la vidéo joue. Lecteur immersif seulement.",
+  "pl_audio_comp": "Compresseur audio",
+  "pl_audio_comp_sub": "Rabote les pics de son et remonte les passages calmes, comme celui de FrankerFaceZ. Directs, VODs et multi-live.",
   "play_all": "Tout lire",
   "player_failed": "La lecture s'est arrêtée (réseau ou flux indisponible).",
   "player_muted": "Son coupé",

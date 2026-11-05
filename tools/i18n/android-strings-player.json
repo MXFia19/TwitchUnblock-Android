@@ -1,0 +1,4 @@
+{
+  "pl_audio_comp": {"fr": "Compresseur audio", "en": "Audio compressor", "es": "Compresor de audio", "ru": "Аудиокомпрессор", "it": "Compressore audio", "ja": "オーディオコンプレッサー", "zh-Hant": "音訊壓縮器"},
+  "pl_audio_comp_sub": {"fr": "Rabote les pics de son et remonte les passages calmes, comme celui de FrankerFaceZ. Directs, VODs et multi-live.", "en": "Evens out loud peaks and brings up quiet parts, like FrankerFaceZ’s. Lives, VODs and multi-live.", "es": "Suaviza los picos de sonido y sube las partes tranquilas, como el de FrankerFaceZ. Directos, VODs y multi-live.", "ru": "Сглаживает громкие пики и поднимает тихие места, как в FrankerFaceZ. Трансляции, VOD и мульти-просмотр.", "it": "Smussa i picchi di volume e alza i passaggi silenziosi, come quello di FrankerFaceZ. Live, VOD e dirette multiple.", "ja": "FrankerFaceZ のように、大きな音のピークを抑えて静かな部分を持ち上げます。ライブ、VOD、マルチライブ。", "zh-Hant": "像 FrankerFaceZ 一樣，壓低過大的音量峰值並拉高安靜的段落。直播、VOD 與多直播。"}
+}

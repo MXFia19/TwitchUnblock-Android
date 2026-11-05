@@ -813,6 +813,8 @@
   "pinned_short": "Fissato",
   "pip_on_leave": "PiP all’uscita dal lettore",
   "pip_on_leave_sub": "Riducendo una diretta o un VOD (scorri verso il basso, freccia indietro) si apre in Picture in Picture invece del mini lettore, se il video è in riproduzione. Solo con il lettore immersivo.",
+  "pl_audio_comp": "Compressore audio",
+  "pl_audio_comp_sub": "Smussa i picchi di volume e alza i passaggi silenziosi, come quello di FrankerFaceZ. Live, VOD e dirette multiple.",
   "play_all": "Riproduci tutto",
   "player_failed": "Riproduzione interrotta (rete o contenuto non disponibile).",
   "player_muted": "Audio disattivato",

@@ -66,7 +66,8 @@ import kotlinx.coroutines.CoroutineScope
 
 /**
  * Multi-live : jusqu'à 4 directs côte à côte, un seul avec le son (toucher
- * une vidéo pour l'entendre). Chaque tuile est en qualité Auto, plafonnée
+ * une vidéo pour l'entendre ; sur le téléphone, le haut-parleur d'une tuile en
+ * ajoute d'autres : MultiSound.kt). Chaque tuile est en qualité Auto, plafonnée
  * (720p à 2, 480p à 3 ou 4) pour que le débit et le décodeur suivent.
  * Partagé avec la TV.
  */
@@ -82,29 +83,43 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
 
     val full: Boolean get() = tiles.size >= MAX
 
+    /** Tuiles qui ont le son et leur volume (MultiSound.kt). */
+    val sound = MultiSound()
+
     fun add(input: String): Boolean {
         val login = Links.login(input)
         if (!Links.isValidLogin(login) || tiles.any { it.login == login } || full) return false
         val session = PlaybackSession(context, scope, main = false, audioFocus = false).apply { forceAuto = true }
         tiles += Tile(login, session)
+        sound.watch(session.player) { applyVolumes() }
         session.open(PlayRequest.Live(login))
-        if (tiles.size == 1) audio = 0
+        if (tiles.size == 1) {
+            audio = 0
+            sound.only(login)
+        }
         layout()
         return true
     }
 
     fun remove(index: Int) {
         if (index !in tiles.indices) return
-        tiles.removeAt(index).session.release()
+        val wasMain = index == audio
+        val gone = tiles.removeAt(index)
+        sound.forget(gone.login, gone.session.player)
+        gone.session.release()
         // Tuile retirée avant celle qui a le son : le son reste sur la même chaîne.
         if (index < audio) audio--
         if (audio >= tiles.size) audio = maxOf(0, tiles.size - 1)
+        // Principale retirée : la nouvelle a le son, comme avant.
+        if (wasMain) tiles.getOrNull(audio)?.let { sound.add(it.login) }
         layout()
     }
 
     fun selectAudio(index: Int) {
         if (index !in tiles.indices) return
         audio = index
+        // Toucher une tuile : elle seule a le son, comme avant.
+        sound.only(tiles[index].login)
         layout()
     }
 
@@ -112,13 +127,39 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
         val cap = if (tiles.size <= 2) 720 else 480
         tiles.forEachIndexed { i, t ->
             t.session.setMaxHeight(cap)
-            t.session.setVolume(if (i == audio) 1f else 0f)
             if (i != audio) t.session.handleAudioFocus(false)
         }
         // Focus audio : rendu par les autres tuiles, puis pris par celle qui a
         // le son. Pris par chaque tuile, il passait à la dernière ajoutée
         // (muette) et les autres s'arrêtaient.
         tiles.getOrNull(audio)?.session?.handleAudioFocus(true)
+        applyVolumes()
+    }
+
+    /** Son de chaque tuile : celles de `sound.on`, à leur volume (les autres
+     *  se taisent quand la principale perd le focus audio). */
+    private fun applyVolumes() {
+        val main = tiles.getOrNull(audio)?.session?.player
+        tiles.forEachIndexed { i, t -> t.session.setVolume(sound.volumeFor(t.login, i == audio, main)) }
+    }
+
+    /** Haut-parleur d'une tuile (téléphone) : son ajouté aux autres, ou coupé. */
+    fun toggleSound(index: Int) {
+        val t = tiles.getOrNull(index) ?: return
+        sound.toggle(t.login)
+        applyVolumes()
+    }
+
+    /** Volume d'une tuile (appui long sur son haut-parleur) ; il lui rend le son. */
+    fun setVolume(index: Int, volume: Float) {
+        val t = tiles.getOrNull(index) ?: return
+        sound.setVolume(t.login, volume)
+        applyVolumes()
+    }
+
+    fun soundOf(index: Int): TileSound {
+        val login = tiles[index].login
+        return TileSound(login in sound.on, sound.volume(login), { toggleSound(index) }, { setVolume(index, it) })
     }
 
     fun pauseAll() = tiles.forEach { it.session.player.pause() }
@@ -146,7 +187,8 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
 /** Une tuile : l'image (sans commandes), le nom, le son, le bouton retirer. */
 @OptIn(UnstableApi::class)
 @Composable
-fun MultiTile(tile: MultiLiveModel.Tile, hasAudio: Boolean, modifier: Modifier, onSelect: () -> Unit, onRemove: (() -> Unit)?) {
+fun MultiTile(tile: MultiLiveModel.Tile, hasAudio: Boolean, modifier: Modifier, onSelect: () -> Unit, onRemove: (() -> Unit)?,
+              sound: TileSound? = null) {
     Box(
         modifier
             .background(Color.Black)
@@ -178,7 +220,7 @@ fun MultiTile(tile: MultiLiveModel.Tile, hasAudio: Boolean, modifier: Modifier, 
             PlaybackSession.State.Ready -> {}
         }
         Text(
-            (if (hasAudio) "🔊 " else "") + tile.login,
+            (if (hasAudio && sound == null) "🔊 " else "") + tile.login,
             color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
             modifier = Modifier.align(Alignment.TopStart).padding(4.dp).clip(RoundedCornerShape(4.dp))
                 .background(Color(0x99000000)).padding(horizontal = 6.dp, vertical = 2.dp),
@@ -188,6 +230,8 @@ fun MultiTile(tile: MultiLiveModel.Tile, hasAudio: Boolean, modifier: Modifier, 
                 Icon(Icons.Filled.Close, contentDescription = AppState.t("multi_remove"), tint = Color.White)
             }
         }
+        // Téléphone : haut-parleur de la tuile (plusieurs sons, volume).
+        if (sound != null) TileSoundButton(sound, Modifier.align(Alignment.BottomStart).padding(6.dp))
     }
 }
 
@@ -197,7 +241,8 @@ fun MultiGrid(model: MultiLiveModel, landscape: Boolean, modifier: Modifier, rem
     val tiles = model.tiles
     @Composable
     fun tile(i: Int, m: Modifier) = MultiTile(tiles[i], i == model.audio, m, { model.selectAudio(i) },
-                                              if (removable) ({ model.remove(i) }) else null)
+                                              if (removable) ({ model.remove(i) }) else null,
+                                              if (removable) model.soundOf(i) else null)
     when (tiles.size) {
         0 -> Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
             Text(AppState.t("multi_add_sub"), color = TU.muted, fontSize = 14.sp)

@@ -813,6 +813,8 @@
   "pinned_short": "已釘選",
   "pip_on_leave": "離開播放器時進入子母畫面",
   "pip_on_leave_sub": "縮小直播或 VOD（向下滑動、返回箭頭）時，若影片正在播放，會改以子母畫面顯示，而不是迷你播放器。僅限沉浸式播放器。",
+  "pl_audio_comp": "音訊壓縮器",
+  "pl_audio_comp_sub": "像 FrankerFaceZ 一樣，壓低過大的音量峰值並拉高安靜的段落。直播、VOD 與多直播。",
   "play_all": "全部播放",
   "player_failed": "播放已停止（網路問題或直播無法使用）。",
   "player_muted": "已靜音",

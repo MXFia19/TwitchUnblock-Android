@@ -46,7 +46,8 @@ object PlayerFactory {
             .setUpstreamDataSourceFactory(upstream(context))
             .setCacheWriteDataSinkFactory(null)
             .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
-        return ExoPlayer.Builder(context)
+        // Renderers par défaut, compresseur audio en plus dans la sortie son (AudioCompressor.kt).
+        return ExoPlayer.Builder(context, AudioCompressor.renderers(context))
             .setMediaSourceFactory(DefaultMediaSourceFactory(source))
             .setAudioAttributes(audio, audioFocus)
             .setHandleAudioBecomingNoisy(true)

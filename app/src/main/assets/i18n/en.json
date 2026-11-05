@@ -852,6 +852,8 @@
   "pinned_short": "Pinned",
   "pip_on_leave": "PiP when leaving the player",
   "pip_on_leave_sub": "Minimizing a live stream or VOD (swipe down, back arrow) opens it in Picture in Picture instead of the mini player, while the video is playing. Immersive player only.",
+  "pl_audio_comp": "Audio compressor",
+  "pl_audio_comp_sub": "Evens out loud peaks and brings up quiet parts, like FrankerFaceZ’s. Lives, VODs and multi-live.",
   "play_all": "Play all",
   "player_failed": "Playback stopped (network or stream unavailable).",
   "player_muted": "Sound off",
