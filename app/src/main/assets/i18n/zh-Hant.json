@@ -1,4 +1,11 @@
 {
+  "a6_activate_browser": "改用我的瀏覽器開啟",
+  "a6_activate_in_app": "其他帳號？在 App 內開啟（Twitch 會詢問要用哪個帳號）",
+  "a6_activate_page_sub": "這個頁面不會沿用瀏覽器的帳號：請用想要的帳號登入，再確認代碼。App 不會讀取也不會保存你的登入資料。",
+  "a6_ob_library_text": "你下載的 VOD（可連同聊天室離線觀看），以及你看到一半的 VOD。",
+  "a6_switch_account_sub": "在另一個帳號連線前，這個帳號會保留：在 App 內開啟的 twitch.tv/activate 頁面上，Twitch 會詢問帳號，請用另一個帳號登入。這個帳號會保存在下方，方便切換回來。",
+  "a6_vod_progress": "從上次位置繼續 VOD",
+  "a6_vod_progress_sub": "記住你在每部 VOD 停下的位置：首頁的「繼續觀看」與縮圖上的進度條。關閉後，這台裝置不會保留任何位置（也不會傳送到你的帳號），VOD 會從頭開始播放。",
   "about": "關於",
   "about_channel": "關於 {u}",
   "about_desc": "以完整畫質觀看 Twitch VOD 與直播，不需訂閱，也不用任何設定。",

@@ -31,6 +31,12 @@ object Auth {
 
     enum class Renewal { RENEWED, REFUSED, UNREACHABLE }
 
+    /** Déconnexion ou changement de compte déjà faits : la connexion suivante
+     *  passe d'abord par la page de l'app aux cookies vidés (ActivatePage),
+     *  où Twitch demande le compte au lieu de reprendre celui du navigateur.
+     *  Gardé ensuite, comme la session privée de l'iPhone. */
+    val chooseAccount = boolPref("auth_private_session", false)
+
     suspend fun requestCode(): DeviceCode? {
         val r = Http.postForm("https://id.twitch.tv/oauth2/device",
                               mapOf("client_id" to Config.HELIX_CLIENT_ID, "scopes" to SCOPES)) ?: return null
@@ -159,6 +165,7 @@ object Auth {
      *  renouvellement en cours (verrou) ne remet pas le compte derrière : voir renew. */
     fun logout() {
         Logger.info("AUTH", "Déconnexion")
+        chooseAccount.set(true)
         val token = AppState.token
         val flushes = listOfNotNull(SettingsSync.finalFlush(), CloudSync.finalFlush())
         AppState.clearAuth()

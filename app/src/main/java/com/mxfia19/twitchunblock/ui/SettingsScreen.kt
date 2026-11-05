@@ -57,6 +57,7 @@ import com.mxfia19.twitchunblock.core.Auth
 import com.mxfia19.twitchunblock.core.Config
 import com.mxfia19.twitchunblock.core.Lang
 import com.mxfia19.twitchunblock.core.Logger
+import com.mxfia19.twitchunblock.core.LogText
 import com.mxfia19.twitchunblock.core.Quality
 import com.mxfia19.twitchunblock.core.Backup
 import com.mxfia19.twitchunblock.core.CloudSync
@@ -79,30 +80,8 @@ import kotlinx.coroutines.launch
 @Composable
 fun SettingsScreen(nav: Navigator) {
     val uri = LocalUriHandler.current
-    val context = LocalContext.current
-    var backupMessage by remember { mutableStateOf<String?>(null) }
     // Déconnexion avec une session web connectée : son retrait est proposé.
     var askLogout by remember { mutableStateOf(false) }
-    // Fichiers lus et écrits hors du fil principal (Backup.readFrom/writeTo) :
-    // un document Drive pas en cache figeait l'écran.
-    val backupScope = rememberCoroutineScope()
-    val exporter = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) { target ->
-        if (target == null) return@rememberLauncherForActivityResult
-        val text = Backup.export()
-        backupScope.launch {
-            backupMessage = AppState.t(if (Backup.writeTo(context, target, text)) "export_done" else "err_network")
-        }
-    }
-    val importer = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { source ->
-        if (source == null) return@rememberLauncherForActivityResult
-        backupScope.launch {
-            val result = Backup.readFrom(context, source)?.let { Backup.import(it) }
-            backupMessage = if (result == null) AppState.t("import_bad") else {
-                AppState.t("import_done").replace("%d", result.first.toString()) +
-                    if (result.second > 0) " " + AppState.t("import_capped").replace("%d", result.second.toString()) else ""
-            }
-        }
-    }
     Column(Modifier.fillMaxSize()) {
         PageHeader(AppState.t("settings"), nav)
         Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(bottom = 24.dp)) {
@@ -216,25 +195,12 @@ fun SettingsScreen(nav: Navigator) {
             }
             NotificationSettings()
             Group(AppState.t("backup")) {
-                Text(AppState.t("backup_sub"), color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp, end = 12.dp, top = 10.dp))
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(12.dp)) {
-                    OutlinedButton(onClick = { exporter.launch(Backup.fileName()) }) { Text(AppState.t("export_data"), color = TU.text) }
-                    OutlinedButton(onClick = { importer.launch(arrayOf("application/json", "text/plain", "application/octet-stream")) }) {
-                        Text(AppState.t("import_data"), color = TU.text)
-                    }
-                }
-                backupMessage?.let { Text(it, color = TU.primary, fontSize = 13.sp, modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp)) }
-                Toggle(AppState.t("cloud_sync"), AppState.t("cloud_sync_sub"), Features.cloudSync.value) {
-                    Features.cloudSync.set(it)
-                    if (it) CloudSync.syncNow()
-                }
-                CloudSync.lastSync?.let { at ->
-                    Text(AppState.t("cloud_sync_last").replace("{t}", SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(at))),
-                         color = TU.muted, fontSize = 12.sp, modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 10.dp))
-                }
+                // Import « Tout » ou « Chaînes seulement », résumé (SettingsApp.kt).
+                BackupRows()
             }
             Group(AppState.t("expert_worker")) {
-                WorkerField()
+                // Vérifié, « Tout passer par ce Worker » (SettingsApp.kt).
+                CustomWorkerField()
             }
             Group(AppState.t("about")) {
                 Text("TwitchUnblock ${BuildConfig.VERSION_NAME}" + if (BuildConfig.CHANNEL == "test") " · TU Test" else "",
@@ -243,6 +209,8 @@ fun SettingsScreen(nav: Navigator) {
                 LinkRow("Discord") { uri.openUri(Config.DISCORD_URL) }
                 LinkRow(AppState.t("feedback")) { nav.push(Screen.Feedback) }
                 LinkRow(AppState.t("logs")) { nav.push(Screen.Logs) }
+                // Journal des modifications, revoir le tutoriel (SettingsApp.kt).
+                AboutExtraRows()
             }
         }
     }
@@ -376,42 +344,6 @@ fun LinkRow(text: String, onClick: () -> Unit) {
          modifier = Modifier.fillMaxWidth().focusCard(onClick, RoundedCornerShape(0.dp)).padding(12.dp))
 }
 
-/** Worker personnel : essayé en premier pour la lecture. */
-@Composable
-private fun WorkerField() {
-    var text by remember { mutableStateOf(AppState.customWorker ?: "") }
-    // Trafic en clair bloqué par Android : une adresse en http:// échouait
-    // sans rien dire. Refusée, avec la raison.
-    var http by remember { mutableStateOf(false) }
-    Column(Modifier.padding(12.dp)) {
-        Text(AppState.t("expert_worker_sub"), color = TU.muted, fontSize = 12.sp)
-        OutlinedTextField(
-            value = text, onValueChange = { text = it }, singleLine = true,
-            placeholder = { Text("https://…workers.dev", color = TU.muted) },
-            colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = TU.primary, unfocusedBorderColor = TU.line,
-                                                      focusedTextColor = TU.text, unfocusedTextColor = TU.text),
-            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-        )
-        if (http) {
-            Text(AppState.t("expert_http_android"), color = TU.danger, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
-            TextButton(onClick = {
-                http = text.trim().lowercase().startsWith("http://")
-                if (!http) {
-                    AppState.updateCustomWorker(normalizeWorker(text))
-                    text = AppState.customWorker ?: ""
-                }
-            }) {
-                Text(AppState.t("save"), color = TU.primary)
-            }
-            if (AppState.customWorker != null) {
-                TextButton(onClick = { AppState.updateCustomWorker(null); text = ""; http = false }) { Text(AppState.t("remove"), color = TU.danger) }
-            }
-        }
-    }
-}
-
 /** « https:// » ajouté, « / » et « /api » finaux ôtés ; null si ce n'est pas une adresse. */
 fun normalizeWorker(raw: String): String? {
     var s = raw.trim()
@@ -471,11 +403,8 @@ fun LoginPanel(onDone: () -> Unit, showQr: Boolean) {
                 Text(AppState.t("tv_login_steps") + " twitch.tv/activate " + AppState.t("tv_login_code"),
                      color = TU.text, fontSize = 14.sp)
                 Text(c.userCode, color = TU.text, fontSize = 34.sp, fontWeight = FontWeight.Bold, fontFamily = FontFamily.Monospace)
-                if (!showQr) {
-                    Button(onClick = { uri.openUri(c.verificationUri) }, colors = ButtonDefaults.buttonColors(containerColor = TU.primary)) {
-                        Text(AppState.t("open_activate"))
-                    }
-                }
+                // Navigateur, ou page de l'app sans compte de twitch.tv (ActivatePage.kt).
+                if (!showQr) ActivateButtons(c.verificationUri)
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     CircularProgressIndicator(color = TU.primary, modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
@@ -496,17 +425,12 @@ fun LoginScreen(nav: Navigator) {
 
 @Composable
 fun LogsScreen(nav: Navigator) {
-    val clipboard = LocalClipboardManager.current
     var entries by remember { mutableStateOf(Logger.snapshot().reversed()) }
     val time = remember { SimpleDateFormat("HH:mm:ss", Locale.US) }
     Column(Modifier.fillMaxSize()) {
         PageHeader(AppState.t("logs"), nav) {
-            TextButton(onClick = {
-                val text = Logger.snapshot().joinToString("\n") {
-                    "${time.format(Date(it.time))} ${it.level.mark} [${it.tag}] ${it.message}" + (it.detail?.let { d -> " — $d" } ?: "")
-                }
-                clipboard.setText(AnnotatedString("TwitchUnblock ${BuildConfig.VERSION_NAME} (Android)\n$text"))
-            }) { Text(AppState.t("btn_copy"), color = TU.primary) }
+            // Copier, partager, fichier .txt ; dans la langue de l'app (LogsExport.kt).
+            LogsExportMenu()
             TextButton(onClick = { Logger.clear(); entries = emptyList() }) { Text(AppState.t("logs_clear_btn"), color = TU.danger) }
         }
         LazyColumn(Modifier.fillMaxSize()) {
@@ -518,8 +442,8 @@ fun LogsScreen(nav: Navigator) {
                     else -> TU.text
                 }
                 Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp)) {
-                    Text("${time.format(Date(e.time))} ${e.level.mark} [${e.tag}] ${e.message}", color = color, fontSize = 12.sp)
-                    e.detail?.let { Text(it, color = TU.muted, fontSize = 11.sp) }
+                    Text("${time.format(Date(e.time))} ${e.level.mark} [${e.tag}] ${LogText.tr(e.message)}", color = color, fontSize = 12.sp)
+                    e.detail?.let { Text(LogText.tr(it), color = TU.muted, fontSize = 11.sp) }
                 }
             }
         }

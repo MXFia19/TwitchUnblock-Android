@@ -159,11 +159,14 @@ object AppState {
     }
 
     // ── Reprise des VODs ──
-    /** Position gardée d'une VOD (ms), 0 sans reprise. */
-    fun vodPosition(id: String): Long = parseJson(sp.getString("vod_progress", null))?.long(id) ?: 0L
+    /** Position gardée d'une VOD (ms), 0 sans reprise (« Reprendre les VODs »
+     *  coupé : aucune, VodResume). */
+    fun vodPosition(id: String): Long =
+        if (!VodResume.enabled) 0L else parseJson(sp.getString("vod_progress", null))?.long(id) ?: 0L
 
     /** Toutes les positions gardées (ms), pour la synchronisation. */
     fun vodPositions(): Map<String, Long> {
+        if (!VodResume.enabled) return emptyMap()
         val all = parseJson(sp.getString("vod_progress", null)) ?: return emptyMap()
         val out = HashMap<String, Long>()
         val keys = all.keys()
@@ -176,14 +179,21 @@ object AppState {
 
     /** Positions après une fusion avec le serveur (300 VODs au plus, les plus récentes). */
     fun replaceVodPositions(positions: Map<String, Long>) {
+        if (!VodResume.enabled) return
         val all = JSONObject()
         positions.entries.sortedByDescending { it.key.toLongOrNull() ?: 0L }.take(300).forEach { all.put(it.key, it.value) }
         sp.edit().putString("vod_progress", all.toString()).apply()
     }
 
+    /** « Reprendre les VODs » coupé : les positions d'ici s'effacent. */
+    fun clearVodPositions() {
+        sp.edit().remove("vod_progress").apply()
+    }
+
     /** Garde la position (300 VODs au plus) ; effacée près de la fin, et
      *  avant 30 s (revue depuis le début : l'ancienne position ne sert plus). */
     fun saveVodPosition(id: String, positionMs: Long, durationMs: Long) {
+        if (!VodResume.enabled) return
         val all = parseJson(sp.getString("vod_progress", null)) ?: JSONObject()
         if (durationMs > 0 && positionMs > durationMs - 60_000) all.remove(id)
         else if (positionMs > 30_000) all.put(id, positionMs)

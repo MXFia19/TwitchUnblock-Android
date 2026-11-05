@@ -226,35 +226,19 @@ object Drops {
         }
     }
 
-    /** Un drop prêt ou réclamé : une notification, une seule fois. */
+    /** Un drop prêt ou réclamé : un avis, une seule fois. App à l'écran :
+     *  bandeau, même sans autorisation de notifier ; en arrière-plan :
+     *  notification, sinon bandeau au retour (InAppNotices). */
     private fun notify(drop: TimedDrop, claimed: Boolean) {
         if (!Features.dropsNotify.value) return
         val mark = "${drop.id}-${if (claimed) "claimed" else "ready"}"
         val seen = parseJsonArray(AppState.prefs.getString("drops_notified", null))?.strings()?.toMutableList() ?: mutableListOf()
         if (mark in seen) return
-        val context: Context = App.instance
-        // Sans autorisation (Android 13+) ou notifications coupées : pas de
-        // marque. Posée avant, le drop passait pour signalé sans que rien ne
-        // s'affiche, et ne l'était jamais une fois l'autorisation donnée.
-        if (!LiveNotifier.canNotify(context) || !NotificationManagerCompat.from(context).areNotificationsEnabled()) return
-        if (Build.VERSION.SDK_INT >= 26) {
-            val nm = context.getSystemService(NotificationManager::class.java)
-            if (nm != null && nm.getNotificationChannel("drops") == null) {
-                nm.createNotificationChannel(NotificationChannel("drops", AppState.t("drops"), NotificationManager.IMPORTANCE_DEFAULT))
-            }
-        }
-        val n = NotificationCompat.Builder(context, "drops")
-            .setSmallIcon(android.R.drawable.star_on)
-            .setContentTitle(AppState.t(if (claimed) "drops_notif_claimed" else "drops_notif_ready"))
-            .setContentText(drop.name)
-            .setAutoCancel(true)
-            .build()
-        try {
-            NotificationManagerCompat.from(context).notify(mark.hashCode(), n)
-        } catch (e: SecurityException) {
-            Logger.warn("DROPS", "Notification refusée par Android")
-            return
-        }
+        val notice = com.mxfia19.twitchunblock.notify.InAppNotice(
+            if (claimed) com.mxfia19.twitchunblock.notify.InAppNotice.Kind.DROP_CLAIMED
+            else com.mxfia19.twitchunblock.notify.InAppNotice.Kind.DROP_READY,
+            AppState.t(if (claimed) "drops_notif_claimed" else "drops_notif_ready"), drop.name)
+        com.mxfia19.twitchunblock.notify.InAppNotices.deliver(notice, mark)
         seen += mark
         AppState.prefs.edit().putString("drops_notified", JSONArray(seen.takeLast(300)).toString()).apply()
     }

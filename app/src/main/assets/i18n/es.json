@@ -1,4 +1,11 @@
 {
+  "a6_activate_browser": "Abrirlo mejor en mi navegador",
+  "a6_activate_in_app": "¿Otra cuenta? Abrirlo en la app (Twitch pedirá la cuenta)",
+  "a6_activate_page_sub": "Una página sin la cuenta de tu navegador: inicia sesión con la cuenta que quieras y confirma el código. La app no lee ni guarda tus credenciales.",
+  "a6_ob_library_text": "Tus VOD descargados, para ver sin conexión con su chat, y los que empezaste.",
+  "a6_switch_account_sub": "Esta cuenta se queda hasta que la otra esté conectada: en la página twitch.tv/activate abierta en la app, Twitch pide la cuenta; inicia sesión con la otra. Esta se guarda abajo para volver a ella.",
+  "a6_vod_progress": "Reanudar los VOD",
+  "a6_vod_progress_sub": "Recuerda dónde te quedaste en cada VOD: «Seguir viendo» en la portada y la barra de progreso de las miniaturas. Desactivado, no se guarda ninguna posición en este dispositivo (ni se envía a tu cuenta) y los VOD empiezan desde el principio.",
   "about": "Acerca de",
   "about_channel": "Acerca de {u}",
   "about_desc": "Ve VODs y directos de Twitch sin suscripción, con acceso a todas las calidades. Nada que configurar.",
