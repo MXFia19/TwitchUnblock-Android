@@ -40,6 +40,33 @@ installable à côté de l'autre.
   (badges, création du compte, date de suivi, derniers messages, Mentionner, Masquer, Sa chaîne), fiche d'une
   emote (source, auteur), autocomplétion (`@` pseudos récents, `:` et 2 lettres pour les emotes).
 
+- **Série 5** (menée en cinq parties en parallèle) :
+  - *Direct* : un direct bloqué dans ton pays est dit tel quel ; pauses pub de la chaîne expliquées (bandeau,
+    compte à rebours, son coupé le temps de la pause, une ligne sur les tuiles du multi-live) ; image verticale des
+    directs en Dual Format (bouton sur l'image, choix retenu) ; barre de toute la diffusion quand l'enregistrement
+    existe (avant la fenêtre du direct, l'enregistrement prend le relais ; au bout, retour au direct) ; Ma source
+    (ton serveur luminous-ttv, essayé en premier) ; qualités supérieures (1440p…) par ton compte quand il regarde
+    sans pub ; diffusion d'un direct sur un Chromecast (menu ⋮).
+  - *Chat* : emotes favorites (appui long ou fiche), en tête du sélecteur et de l'autocomplétion ; emotes masquées
+    affichées comme le mot tapé (Réglages → Chat → Emotes masquées pour les réafficher) ; banni d'un chat, il reste
+    lisible sans le compte (« Réessayer avec mon compte ») ; chat synchronisé avec la vidéo (pastille ⏱ : toucher
+    pour le temps réel, appui long pour ±1 s) ; modes du salon au-dessus du champ, règles à accepter, refus de
+    Twitch expliqués ; en paysage, chat en colonne, posé sur l'image (gauche, droite, coin) ou replié, largeur à la
+    poignée ; zone d'envoi masquable ; tailles (espace, badges, emotes, 12/24 h) avec aperçu ; couleur du pseudo.
+  - *Navigation* : chaînes épinglées en tête des suivies (appui long, menu ⋮ de la chaîne) ; lives en liste ou en
+    grille avec la durée du direct ; « Continuer à regarder » (appui long : reprendre, retirer) ; retour en haut en
+    touchant l'onglet affiché ; catégories suivies (♡ sur leur page, rangée de l'accueil avec celles du compte
+    Twitch) ; page d'une chaîne : Planning et À propos ; onglet Découvrir (un direct ou un clip par écran, aperçu
+    muet, son au toucher) ; Personnaliser l'app (ordre et onglets masqués, onglet au lancement, parties de
+    l'accueil) ; grands écrans (plus de colonnes, onglets à gauche) ; widget des chaînes suivies en direct et
+    raccourcis de l'icône.
+  - *App* : thèmes (7 couleurs d'accent, fonds sombre, noir OLED et ardoise) et icône de l'app au choix (celles de
+    l'iPhone) ; changer de compte sans se reconnecter (les autres comptes restent gardés avec leur session web et
+    leur historique) ; réglages synchronisés avec le compte Twitch, partagés avec le site et l'app iPhone ; session
+    web vérifiée au lancement et à la connexion ; signalements signés avec le compte Twitch ou un pseudo ; option
+    « Sans compte Twitch » qui masque les invitations à se connecter.
+  - Sauvegarde : ces réglages sont dans le fichier, sous les noms du site et de l'iPhone quand ils les ont.
+
 ## Construire
 
 Le projet (Kotlin, Jetpack Compose, Media3) se construit avec la CI GitHub (`.github/workflows/build.yml`) :
