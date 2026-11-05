@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -35,20 +36,28 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.repeatOnLifecycle
 import com.mxfia19.twitchunblock.core.AppState
+import com.mxfia19.twitchunblock.core.BrowseRules
 import com.mxfia19.twitchunblock.core.Category
 import com.mxfia19.twitchunblock.core.ContinueWatching
+import com.mxfia19.twitchunblock.core.Hidden
 import com.mxfia19.twitchunblock.core.History
+import com.mxfia19.twitchunblock.core.Vod
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.ui.CategoryCard
 import com.mxfia19.twitchunblock.ui.CategoryModel
@@ -67,10 +76,13 @@ import com.mxfia19.twitchunblock.ui.SuggestionRow
 import com.mxfia19.twitchunblock.ui.TU
 import com.mxfia19.twitchunblock.ui.VodCard
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
 
 sealed class TvScreen {
     object Tabs : TvScreen()
-    data class Channel(val login: String) : TvScreen()
+    /** `autoplay` : ouverte avec la touche Lecture (le direct, sinon la dernière vidéo). */
+    data class Channel(val login: String, val autoplay: Boolean = false) : TvScreen()
     data class CategoryPage(val category: Category) : TvScreen()
     data class Player(val request: PlayRequest) : TvScreen()
     data class MultiLive(val first: String?) : TvScreen()
@@ -84,6 +96,23 @@ class TvNav {
     }
     fun pop() {
         if (stack.size > 1) stack.removeAt(stack.lastIndex)
+    }
+
+    /** « Voir la chaîne » dans le lecteur : il se ferme et la page de la
+     *  chaîne s'ouvre, sauf si on en vient (elle est juste dessous) ; Retour
+     *  ramène ensuite aux onglets. Comme l'Apple TV. */
+    fun channelFromPlayer(login: String) {
+        if (stack.last() is TvScreen.Player) stack.removeAt(stack.lastIndex)
+        val top = stack.last()
+        if (top is TvScreen.Channel && top.login.equals(login, ignoreCase = true)) return
+        stack.add(TvScreen.Channel(login))
+    }
+
+    /** Page ouverte avec Lecture : sa lecture est partie, elle ne repart pas
+     *  au retour du lecteur. */
+    fun autoplayed(login: String) {
+        val i = stack.indexOfLast { it is TvScreen.Channel && it.login == login && it.autoplay }
+        if (i >= 0) stack[i] = TvScreen.Channel(login)
     }
 }
 
@@ -123,7 +152,11 @@ fun TvApp(nav: TvNav) {
     Box(Modifier.fillMaxSize().background(TU.bg)) {
         when (val s = nav.stack.last()) {
             TvScreen.Tabs -> Column(Modifier.fillMaxSize()) {
-                TvTabBar(tab, back) { tab = it }
+                TvTabBar(tab, back) {
+                    // Suivies choisie de nouveau : la liste est relue (comme l'Apple TV).
+                    if (it == tab && it == 2) following.load(force = true)
+                    tab = it
+                }
                 tabsState.SaveableStateProvider(tab) {
                     when (tab) {
                         0 -> TvHome(home, search, nav, back)
@@ -133,9 +166,10 @@ fun TvApp(nav: TvNav) {
                     }
                 }
             }
-            is TvScreen.Channel -> TvChannel(s.login, nav)
+            is TvScreen.Channel -> TvChannel(s.login, s.autoplay, nav)
             is TvScreen.CategoryPage -> TvCategory(s.category, nav)
-            is TvScreen.Player -> TvPlayer(s.request, onMulti = { nav.push(TvScreen.MultiLive(it)) }) { nav.pop() }
+            is TvScreen.Player -> TvPlayer(s.request, onMulti = { nav.push(TvScreen.MultiLive(it)) },
+                                           onChannel = { nav.channelFromPlayer(it) }) { nav.pop() }
             is TvScreen.MultiLive -> TvMultiLive(s.first) { nav.pop() }
         }
     }
@@ -196,33 +230,28 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav, back: TvRet
         home.load()
         search.loadTop()
     }
-    // Reprendre : VODs entamées, en tête ; durées demandées pour les nouvelles.
-    val resume = ContinueWatching.items()
+    // Reprendre : VODs entamées. Leur rangée au-dessus des directs, dessous ou
+    // masquée (Compte), comme l'Apple TV ; retirées d'ici : cachées tout de suite.
+    val place = TvHomePrefs.resumePlace
+    var removed by remember { mutableStateOf(emptySet<String>()) }
+    val resume = if (place == "hidden") emptyList<ContinueWatching.Entry>() else ContinueWatching.items().filter { it.id !in removed }
     LaunchedEffect(History.vods.joinToString(",") { it.term }) { ContinueWatching.load() }
+    // Appui long : masquer une chaîne ou une catégorie, reprendre ou retirer une VOD.
+    val menus = remember { TvMenus() }
+    TvMenuHost(menus)
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 40.dp)) {
-        if (resume.isNotEmpty()) {
-            item { RowTitle(AppState.t("tv_resume")) }
-            item {
-                LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                    items(resume, key = { it.id }) { e ->
-                        ContinueCard(e, Modifier.width(300.dp).reopen(back, "cw-" + e.id)) {
-                            back.key = "cw-" + e.id
-                            nav.push(TvScreen.Player(PlayRequest.Vod(e.id, e.title, e.channel)))
-                        }
-                    }
-                }
-            }
-        }
+        if (place == "top") resumeRow(resume, nav, back, menus) { removed = removed + it }
         item { Box(Modifier.padding(horizontal = 40.dp)) { Column { com.mxfia19.twitchunblock.ui.NewsCards() } } }
         if (home.followed.isNotEmpty()) {
             item { RowTitle(AppState.t("home_followed")) }
             item {
                 LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                     items(home.followed, key = { it.login }) { s ->
-                        StreamCard(s, Modifier.width(300.dp).reopen(back, "f-" + s.login)) {
+                        val open = {
                             back.key = "f-" + s.login
                             nav.push(TvScreen.Player(PlayRequest.Live(s.login)))
                         }
+                        StreamCard(s, Modifier.width(300.dp).reopen(back, "f-" + s.login).onPlayKey(open), onClick = open)
                     }
                 }
             }
@@ -233,23 +262,54 @@ private fun TvHome(home: HomeModel, search: SearchModel, nav: TvNav, back: TvRet
             else if (home.failed) MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { home.load(force = true) }
             else LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(home.visibleTop, key = { it.login }) { s ->
-                    StreamCard(s, Modifier.width(300.dp).reopen(back, "t-" + s.login)) {
+                    val open = {
                         back.key = "t-" + s.login
                         nav.push(TvScreen.Player(PlayRequest.Live(s.login)))
                     }
+                    StreamCard(s, Modifier.width(300.dp).reopen(back, "t-" + s.login).onPlayKey(open),
+                               onLongClick = { menus.hideStream(s) }, onClick = open)
                 }
                 if (home.hasMore) item { Box(Modifier.width(160.dp)) { com.mxfia19.twitchunblock.ui.MoreButton(home.loadingMore) { home.more() } } }
             }
         }
+        if (place == "bottom") resumeRow(resume, nav, back, menus) { removed = removed + it }
         item { RowTitle(AppState.t("top_categories")) }
         item {
             LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(search.visibleTop, key = { it.id }) { c ->
-                    CategoryCard(c, Modifier.width(150.dp).reopen(back, "c-" + c.id)) {
+                    CategoryCard(c, Modifier.width(150.dp).reopen(back, "c-" + c.id), onLongClick = { menus.hideCategory(c) }) {
                         back.key = "c-" + c.id
                         nav.push(TvScreen.CategoryPage(c))
                     }
                 }
+            }
+        }
+    }
+}
+
+/** Rangée « Reprendre » : le bouton central ou Lecture reprennent la VOD ;
+ *  appui long : reprendre, ou la retirer de la liste (sa position est
+ *  oubliée), comme l'Apple TV. */
+private fun LazyListScope.resumeRow(resume: List<ContinueWatching.Entry>, nav: TvNav, back: TvReturn, menus: TvMenus,
+                                    onRemove: (String) -> Unit) {
+    if (resume.isEmpty()) return
+    item { RowTitle(AppState.t("tv_resume")) }
+    item {
+        LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+            items(resume, key = { it.id }) { e ->
+                val play = {
+                    back.key = "cw-" + e.id
+                    nav.push(TvScreen.Player(PlayRequest.Vod(e.id, e.title, e.channel)))
+                }
+                ContinueCard(e, Modifier.width(300.dp).reopen(back, "cw-" + e.id).onPlayKey(play), onLongClick = {
+                    menus.open(e.title, listOf(
+                        TvAction(AppState.t("tv_resume_play")) { play() },
+                        TvAction(AppState.t("tv_resume_remove"), removesCard = true) {
+                            AppState.saveVodPosition(e.id, 0, 0)
+                            onRemove(e.id)
+                        },
+                    ))
+                }, onClick = play)
             }
         }
     }
@@ -268,7 +328,11 @@ private fun TvSearch(model: SearchModel, nav: TvNav, back: TvReturn) {
         LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 12.dp)) {
             if (model.searching && model.channels.isEmpty()) item { LoadingBox() }
             items(model.channels, key = { "u-" + it.login }) { s ->
-                SuggestionRow(s, Modifier.reopen(back, "u-" + s.login)) {
+                // Lecture : le direct, sinon la page de la chaîne et sa dernière vidéo.
+                SuggestionRow(s, Modifier.reopen(back, "u-" + s.login).onPlayKey {
+                    back.key = "u-" + s.login
+                    nav.push(if (s.viewers != null) TvScreen.Player(PlayRequest.Live(s.login)) else TvScreen.Channel(s.login, autoplay = true))
+                }) {
                     back.key = "u-" + s.login
                     nav.push(TvScreen.Channel(s.login))
                 }
@@ -291,7 +355,23 @@ private fun TvSearch(model: SearchModel, nav: TvNav, back: TvReturn) {
 
 @Composable
 private fun TvFollowing(model: FollowingModel, nav: TvNav, back: TvReturn) {
-    LaunchedEffect(AppState.user?.id) { model.load() }
+    // Relue toute seule, comme l'Apple TV : en revenant sur l'onglet (lue il y
+    // a plus de 2 min), au retour dans l'app, et toutes les 2 minutes tant
+    // qu'elle est affichée ; les directs finis n'y restent pas.
+    val owner = LocalLifecycleOwner.current
+    LaunchedEffect(AppState.user?.id, AppState.localFollows.size, owner) {
+        var again = false
+        owner.lifecycle.repeatOnLifecycle(Lifecycle.State.STARTED) {
+            model.load(force = again)
+            again = true
+            while (true) {
+                delay(120_000)
+                model.load(force = true)
+            }
+        }
+    }
+    // Descendue de la barre des onglets : relue si elle date de plus de 2 min.
+    var focused by remember { mutableStateOf(false) }
     when {
         model.isEmptySetup -> MessageBox(AppState.t("tv_need_login"))
         model.loading && model.channels.isEmpty() -> LoadingBox()
@@ -302,9 +382,17 @@ private fun TvFollowing(model: FollowingModel, nav: TvNav, back: TvReturn) {
             contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.onFocusChanged { f ->
+                if (f.hasFocus && !focused) model.load()
+                focused = f.hasFocus
+            },
         ) {
             items(model.channels, key = { it.login }) { b ->
-                ChannelRow(b, Modifier.reopen(back, "fo-" + b.login)) {
+                ChannelRow(b, Modifier.reopen(back, "fo-" + b.login).onPlayKey {
+                    // Lecture : le direct, sinon la page de la chaîne et sa dernière vidéo.
+                    back.key = "fo-" + b.login
+                    nav.push(if (b.stream != null) TvScreen.Player(PlayRequest.Live(b.login)) else TvScreen.Channel(b.login, autoplay = true))
+                }) {
                     back.key = "fo-" + b.login
                     if (b.stream != null) nav.push(TvScreen.Player(PlayRequest.Live(b.login))) else nav.push(TvScreen.Channel(b.login))
                 }
@@ -313,18 +401,42 @@ private fun TvFollowing(model: FollowingModel, nav: TvNav, back: TvReturn) {
     }
 }
 
+/** Périodes des clips, mêmes textes que l'Apple TV. */
+private val clipPeriods = listOf("LAST_DAY" to "period_day", "LAST_WEEK" to "period_week",
+                                 "LAST_MONTH" to "period_month", "ALL_TIME" to "period_all")
+
 @Composable
-private fun TvChannel(login: String, nav: TvNav) {
+private fun TvChannel(login: String, autoplay: Boolean, nav: TvNav) {
     val scope = rememberCoroutineScope()
     val model = remember(login) { ChannelModel(login, scope) }
+    val clips = remember(login) { TvClips(login, scope) }
+    var collections by remember(login) { mutableStateOf<List<TvApi.Playlist>>(emptyList()) }
     LaunchedEffect(login) {
         model.load()
-        model.loadClips()
+        clips.load()
     }
+    // Collections avec la page (une requête) : leurs rangées n'apparaissent
+    // qu'avec elles, la plupart des chaînes n'en ont aucune.
+    LaunchedEffect(login) { collections = TvApi.collections(login).orEmpty() }
+    // Ouverte avec Lecture : le direct s'il a commencé, sinon la dernière
+    // vidéo, une fois chargés ; une seule fois (pas au retour du lecteur).
+    LaunchedEffect(login, autoplay) {
+        if (!autoplay) return@LaunchedEffect
+        val info = snapshotFlow { model.info }.filterNotNull().first()
+        val request = if (info.error == null) PlayRequest.Live(login) else {
+            snapshotFlow { model.videosLoading }.first { !it }
+            model.videos.firstOrNull()?.let { PlayRequest.Vod(it.id, it.title, login) }
+        }
+        nav.autoplayed(login)
+        if (request != null) nav.push(TvScreen.Player(request))
+    }
+    val live = model.info?.error == null && model.info != null
+    val watchLive = { nav.push(TvScreen.Player(PlayRequest.Live(login))) }
+    val playVod = { v: Vod -> nav.push(TvScreen.Player(PlayRequest.Vod(v.id, v.title, login))) }
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(vertical = 24.dp)) {
         item {
-            Box(Modifier.padding(horizontal = 40.dp)) {
-                ChannelHeader(login, model.info) { nav.push(TvScreen.Player(PlayRequest.Live(login))) }
+            Box(Modifier.padding(horizontal = 40.dp).onPlayKey { if (live) watchLive() }) {
+                ChannelHeader(login, model.info) { watchLive() }
             }
         }
         item {
@@ -340,19 +452,51 @@ private fun TvChannel(login: String, nav: TvNav) {
             else if (model.videos.isEmpty()) MessageBox(AppState.t("tv_no_videos"))
             else LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
                 items(model.videos, key = { it.id }) { v ->
-                    VodCard(v, Modifier.width(300.dp)) { nav.push(TvScreen.Player(PlayRequest.Vod(v.id, v.title, login))) }
+                    VodCard(v, Modifier.width(300.dp).onPlayKey { playVod(v) }) { playVod(v) }
                 }
                 if (model.videosNext != null) item {
                     Box(Modifier.width(160.dp)) { com.mxfia19.twitchunblock.ui.MoreButton(model.videosLoading) { model.moreVideos() } }
                 }
             }
         }
-        item { RowTitle(AppState.t("clips")) }
+        // Clips : les plus vus sur 24 h, 7 jours, 30 jours ou depuis toujours.
+        item { RowTitle(AppState.t("tv_clips")) }
         item {
-            if (model.clips.isEmpty()) MessageBox(AppState.t(if (model.clipsLoading) "loading" else "no_clips"))
-            else LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
-                items(model.clips, key = { it.slug }) { c ->
-                    ClipCard(c, Modifier.width(300.dp)) { nav.push(TvScreen.Player(PlayRequest.Clip(c.slug))) }
+            Row(Modifier.padding(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                for ((period, key) in clipPeriods) {
+                    TvButton(AppState.t(key), selected = clips.period == period) { if (clips.period != period) clips.load(period) }
+                }
+            }
+        }
+        item {
+            val list = clips.clips
+            if (list == null) {
+                if (clips.failed) MessageBox(AppState.t("tv_error"), action = AppState.t("retry")) { clips.load() }
+                else LoadingBox()
+            } else if (list.isEmpty()) {
+                MessageBox(AppState.t("tv_no_clips"))
+            } else {
+                LazyRow(contentPadding = PaddingValues(horizontal = 40.dp, vertical = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    items(list, key = { it.slug }) { c ->
+                        val play = { nav.push(TvScreen.Player(PlayRequest.Clip(c.slug))) }
+                        ClipCard(c, Modifier.width(300.dp).onPlayKey(play), onClick = play)
+                    }
+                }
+            }
+        }
+        // Collections : une rangée chacune, avec son titre et son nombre de vidéos.
+        collections.forEach { p ->
+            item(key = "col-" + p.id) {
+                Column {
+                    RowTitle(p.title.ifEmpty { AppState.t("tv_collections") })
+                    Text(AppState.t("videos_count").replace("%d", "${p.total}"), color = TU.muted, fontSize = 14.sp,
+                         modifier = Modifier.padding(start = 40.dp, bottom = 8.dp))
+                    LazyRow(contentPadding = PaddingValues(horizontal = 40.dp), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        items(p.videos, key = { it.id }) { v ->
+                            VodCard(v, Modifier.width(300.dp).onPlayKey { playVod(v) }) { playVod(v) }
+                        }
+                    }
                 }
             }
         }
@@ -364,6 +508,9 @@ private fun TvCategory(category: Category, nav: TvNav) {
     val scope = rememberCoroutineScope()
     val model = remember(category.id) { CategoryModel(category, scope) }
     LaunchedEffect(category.id) { model.load() }
+    // Appui long : masquer la chaîne ; masquées écartées (ce qu'on suit reste).
+    val menus = remember { TvMenus() }
+    TvMenuHost(menus)
     Column(Modifier.fillMaxSize()) {
         RowTitle(category.name)
         LazyVerticalGrid(
@@ -372,8 +519,9 @@ private fun TvCategory(category: Category, nav: TvNav) {
             horizontalArrangement = Arrangement.spacedBy(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            items(model.streams, key = { it.login }) { s ->
-                StreamCard(s) { nav.push(TvScreen.Player(PlayRequest.Live(s.login))) }
+            items(model.streams.filter { BrowseRules.follows(it.login) || !Hidden.hidesChannel(it.login) }, key = { it.login }) { s ->
+                val open = { nav.push(TvScreen.Player(PlayRequest.Live(s.login))) }
+                StreamCard(s, Modifier.onPlayKey(open), onLongClick = { menus.hideStream(s, withCategory = false) }, onClick = open)
             }
             if (model.next != null) item(span = com.mxfia19.twitchunblock.ui.FullSpan) {
                 com.mxfia19.twitchunblock.ui.MoreButton(model.loading) { model.more() }
@@ -413,9 +561,10 @@ private fun TvAccount() {
                         it to if (it == "auto") AppState.t("source_auto") else com.mxfia19.twitchunblock.ui.sourceName(it)
                     }, AppState.liveSource) { AppState.updateLiveSource(it) }
                 com.mxfia19.twitchunblock.ui.Toggle(AppState.t("low_latency"), null, AppState.lowLatency) { AppState.updateLowLatency(it) }
-                com.mxfia19.twitchunblock.ui.Toggle(AppState.t("tv_chat_show"), null, AppState.showChat) { AppState.updateShowChat(it) }
             }
         }
+        // Chat du lecteur (par défaut), place de « Reprendre », masquées.
+        item { TvMoreSettings() }
         item {
             Text("TwitchUnblock ${com.mxfia19.twitchunblock.BuildConfig.VERSION_NAME}", color = TU.muted, fontSize = 14.sp,
                  modifier = Modifier.padding(top = 16.dp))

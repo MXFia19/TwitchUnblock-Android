@@ -56,11 +56,11 @@ import com.mxfia19.twitchunblock.ui.TU
 import com.mxfia19.twitchunblock.ui.sourceName
 import kotlinx.coroutines.delay
 
-/** Lecteur TV : image plein écran, chat à droite (réglage), menu qualité
- *  et chat par ↑ ou la touche Menu. */
+/** Lecteur TV : image plein écran, chat posé dessus (place au choix, retenue
+ *  par chaîne), menu qualité, chat et chaîne par ↑ ou la touche Menu. */
 @OptIn(UnstableApi::class)
 @Composable
-fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -> Unit) {
+fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onChannel: (String) -> Unit = {}, onClose: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     // Pas de session média ni d'image dans l'image sur la TV.
@@ -68,6 +68,8 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
     var menu by remember { mutableStateOf(false) }
     var refocus by remember { mutableStateOf(0) }
     var hint by remember { mutableStateOf(true) }
+    // Commandes du lecteur affichées : le chat posé en bas leur laisse la place.
+    var controls by remember { mutableStateOf(false) }
     LaunchedEffect(request) { session.open(request) }
     LaunchedEffect(Unit) {
         delay(6000)
@@ -117,40 +119,55 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
         chat?.start(session.channelId)
         onDispose { chat?.stop() }
     }
-    val vodChat = com.mxfia19.twitchunblock.ui.rememberVodChat(session, AppState.showChat)
+    // Affiché ou masqué, et sa place : ceux de la chaîne, sinon ceux par défaut.
+    val chatShown = TvChatPrefs.shown(session.channelLogin)
+    val vodChat = com.mxfia19.twitchunblock.ui.rememberVodChat(session, chatShown)
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        Row(Modifier.fillMaxSize()) {
-            AndroidView(
-                factory = { ctx ->
-                    PlayerView(ctx).apply {
-                        player = session.player
-                        setShowNextButton(false)
-                        setShowPreviousButton(false)
-                        setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
-                            TvKeys.controllerVisible = visibility == android.view.View.VISIBLE
-                        })
-                        isFocusable = true
-                        isFocusableInTouchMode = true
-                        // Après l'attache à la fenêtre : demandé dans factory,
-                        // le focus restait ailleurs et la télécommande ne
-                        // pilotait pas les commandes du lecteur.
-                        post { requestFocus() }
-                    }
-                },
-                update = { view ->
-                    if (view.player !== session.player) view.player = session.player
-                    if (!menu && refocus > 0) view.post { view.requestFocus() }
-                },
-                // Vue retirée : elle lâche le lecteur (écouteurs, activité retenue).
-                onRelease = { view -> view.player = null },
-                modifier = Modifier.weight(1f).fillMaxHeight(),
-            )
-            if (chat != null && AppState.showChat) {
-                TvChat(chat, Modifier.width(360.dp).fillMaxHeight())
-            } else if (vodChat != null) {
-                com.mxfia19.twitchunblock.ui.VodChatList(vodChat, Modifier.width(360.dp).fillMaxHeight(), emoteSize = 26, fontSize = 16)
+        AndroidView(
+            factory = { ctx ->
+                PlayerView(ctx).apply {
+                    player = session.player
+                    setShowNextButton(false)
+                    setShowPreviousButton(false)
+                    setControllerVisibilityListener(PlayerView.ControllerVisibilityListener { visibility ->
+                        TvKeys.controllerVisible = visibility == android.view.View.VISIBLE
+                        controls = visibility == android.view.View.VISIBLE
+                    })
+                    isFocusable = true
+                    isFocusableInTouchMode = true
+                    // Après l'attache à la fenêtre : demandé dans factory,
+                    // le focus restait ailleurs et la télécommande ne
+                    // pilotait pas les commandes du lecteur.
+                    post { requestFocus() }
+                }
+            },
+            update = { view ->
+                if (view.player !== session.player) view.player = session.player
+                if (!menu && refocus > 0) view.post { view.requestFocus() }
+            },
+            // Vue retirée : elle lâche le lecteur (écouteurs, activité retenue).
+            onRelease = { view -> view.player = null },
+            modifier = Modifier.fillMaxSize(),
+        )
+        // Chat posé sur l'image, comme l'Apple TV (direct, ou chat rejoué d'une VOD).
+        val place = TvChatPrefs.place(session.channelLogin)
+        val chatOn = chatShown && (chat != null || vodChat != null)
+        if (chatOn) {
+            TvChatOverlay(place, bottomInset = if (controls) 100.dp else 0.dp) {
+                if (chat != null) TvChat(chat, Modifier.fillMaxSize())
+                else if (vodChat != null) {
+                    com.mxfia19.twitchunblock.ui.VodChatList(vodChat, Modifier.fillMaxSize(), emoteSize = 26, fontSize = 16,
+                                                              background = Color.Transparent)
+                }
             }
+        }
+        // Pause pub de la chaîne : bandeau en haut, à côté d'un chat posé en haut.
+        if (session.isLive) {
+            val beside = chatOn && place.height != "bottom"
+            TvAdBreakBanner(session.adBreaks, Modifier.align(Alignment.TopCenter)
+                .padding(top = 28.dp, start = if (beside && place.side == "left") 340.dp else 24.dp,
+                         end = if (beside && place.side == "right") 340.dp else 24.dp))
         }
         PlayerOverlay(session, Modifier.align(Alignment.Center))
         if (hint && session.state is PlaybackSession.State.Ready) {
@@ -166,7 +183,8 @@ fun TvPlayer(request: PlayRequest, onMulti: (String) -> Unit = {}, onClose: () -
         }
         if (menu) {
             TvPlayerMenu(session, hasChat = chat != null || session.vodId != null, modifier = Modifier.align(Alignment.CenterEnd),
-                         onMulti = { login -> menu = false; onMulti(login) }) {
+                         onMulti = { login -> menu = false; onMulti(login) },
+                         onChannel = { login -> menu = false; onChannel(login) }) {
                 menu = false
                 refocus++
             }
@@ -195,23 +213,28 @@ private fun TvChat(chat: ChatClient, modifier: Modifier) {
     LaunchedEffect(chat.messages.size, chat.messages.lastOrNull()?.id) {
         if (chat.messages.isNotEmpty()) list.scrollToItem(chat.messages.size - 1)
     }
-    LazyColumn(state = list, modifier = modifier.background(Color(0xE6000000)).padding(vertical = 8.dp)) {
+    // Posé sur l'image (fond de TvChatOverlay) ; peu de messages : calés en bas.
+    LazyColumn(state = list, modifier = modifier.padding(vertical = 8.dp), verticalArrangement = Arrangement.Bottom) {
         items(chat.messages, key = { it.id }) { m -> ChatMessageRow(m, emoteSize = 26.sp, fontSize = 16.sp) }
     }
 }
 
 @Composable
 private fun TvPlayerMenu(session: PlaybackSession, hasChat: Boolean, modifier: Modifier, onMulti: (String) -> Unit,
-                         onDone: () -> Unit) {
+                         onChannel: (String) -> Unit, onDone: () -> Unit) {
     val first = remember { FocusRequester() }
     var sleep by remember { mutableStateOf(false) }
-    LaunchedEffect(sleep) { runCatching { first.requestFocus() } }
+    // Sous-menu Chat : affiché ou masqué, et sa place (TvChatMenu).
+    var chatMenu by remember { mutableStateOf(false) }
+    LaunchedEffect(sleep, chatMenu) { runCatching { first.requestFocus() } }
     Column(
         modifier.padding(24.dp).width(320.dp).clip(RoundedCornerShape(14.dp)).background(Color(0xF0181818)).padding(16.dp)
             .verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        if (sleep) {
+        if (chatMenu) {
+            TvChatMenu(session.channelLogin, first, onDone)
+        } else if (sleep) {
             Text(AppState.t("sleep_timer"), color = TU.muted, fontSize = 14.sp)
             com.mxfia19.twitchunblock.ui.sleepChoices.forEachIndexed { i, m ->
                 TvButton(com.mxfia19.twitchunblock.ui.sleepLabel(m),
@@ -227,31 +250,40 @@ private fun TvPlayerMenu(session: PlaybackSession, hasChat: Boolean, modifier: M
                 }
             }
         } else {
-            MainMenu(session, hasChat, first, onMulti, onDone) { sleep = true }
+            MainMenu(session, hasChat, first, onMulti, onChannel, onDone, onChat = { chatMenu = true }) { sleep = true }
         }
     }
 }
 
 @Composable
 private fun MainMenu(session: PlaybackSession, hasChat: Boolean, first: FocusRequester, onMulti: (String) -> Unit,
-                     onDone: () -> Unit, onSleep: () -> Unit) {
+                     onChannel: (String) -> Unit, onDone: () -> Unit, onChat: () -> Unit, onSleep: () -> Unit) {
+        // Focus sur le premier bouton du menu, même sans qualités (encore en chargement).
+        val firstOn = if (session.qualities.isEmpty()) (if (hasChat) "chat" else "sleep") else "quality"
         Text(AppState.t("quality"), color = TU.muted, fontSize = 14.sp)
         session.qualities.forEachIndexed { i, q ->
             TvButton(Quality.label(q, AppState.lang, session.currentMaster.variants) + if (q == session.quality) "  ✓" else "",
                      selected = q == session.quality,
                      modifier = (if (i == 0) Modifier.focusRequester(first) else Modifier).fillMaxWidth()) {
                 session.selectQuality(q)
+                keepTvQuality(session, q)
                 onDone()
             }
         }
         if (hasChat) {
-            TvButton(AppState.t(if (AppState.showChat) "hide_chat" else "tv_chat_show"), modifier = Modifier.fillMaxWidth()) {
-                AppState.updateShowChat(!AppState.showChat)
-                onDone()
+            val shown = TvChatPrefs.shown(session.channelLogin)
+            TvButton(AppState.t("tv_chat") + " : " + AppState.t(if (shown) "tv_chat_on" else "tv_chat_off"),
+                     modifier = (if (firstOn == "chat") Modifier.focusRequester(first) else Modifier).fillMaxWidth()) {
+                onChat()
             }
         }
-        TvButton(AppState.t("sleep_timer") + (session.sleepAt?.let { "  ✓" } ?: ""), modifier = Modifier.fillMaxWidth()) {
+        TvButton(AppState.t("sleep_timer") + (session.sleepAt?.let { "  ✓" } ?: ""),
+                 modifier = (if (firstOn == "sleep") Modifier.focusRequester(first) else Modifier).fillMaxWidth()) {
             onSleep()
+        }
+        // Page de la chaîne (vidéos, clips, collections) : le lecteur se ferme.
+        session.channelLogin?.let { channel ->
+            TvButton(AppState.t("tv_open_channel"), modifier = Modifier.fillMaxWidth()) { onChannel(channel) }
         }
         val login = session.channelLogin
         if (session.isLive && login != null) {

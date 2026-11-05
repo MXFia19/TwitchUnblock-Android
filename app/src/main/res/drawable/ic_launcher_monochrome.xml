@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Couche monochrome de l'icône adaptative (icônes à thème d'Android 13) :
+     l'écusson de assets/icon.png, triangle de lecture et barres évidés.
+     Tracé dans les coordonnées de l'image (1024 px), ramené au centre du
+     cadre de 108 dp (47 dp de haut, dans la zone sûre de 66 dp). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.09"
+        android:scaleY="0.09"
+        android:translateX="7.875"
+        android:translateY="10.89">
+        <path
+            android:fillColor="#FFFFFFFF"
+            android:fillType="evenOdd"
+            android:pathData="M300,218 L725,218 L725,580 L512,740 L300,580 Z M382,330 L690,490 L382,636 Z M619,251 A16,16 0 0,1 651,251 L651,334 A16,16 0 0,1 619,334 Z M671,252 A17,17 0 0,1 705,252 L705,298 A17,17 0 0,1 671,298 Z" />
+    </group>
+</vector>
