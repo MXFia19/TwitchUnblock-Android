@@ -44,7 +44,10 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -83,6 +86,7 @@ fun Navigator.minimize() {
     stack.removeAt(stack.lastIndex)
     mini = top
     reopenAt = null
+    Logger.info("PLAYER", "Lecteur réduit")
 }
 
 /** Mini-lecteur touché (ou image dans l'image agrandie) : le lecteur revient
@@ -93,6 +97,7 @@ fun Navigator.expand() {
     reopenAt = null
     stack.removeAll { it is Screen.Player }
     stack.add(p)
+    Logger.info("PLAYER", "Lecteur rouvert en grand")
 }
 
 /** ✕ du mini-lecteur : la lecture s'arrête. */
@@ -351,10 +356,12 @@ fun MiniPlayerBar(session: PlaybackSession, nav: Navigator, tabsBelow: Boolean) 
         ended -> AppState.t("p6_live_ended")
         state is PlaybackSession.State.Error -> AppState.t(state.key)
         state is PlaybackSession.State.Loading -> AppState.t("loading")
-        session.isLive -> listOfNotNull(session.channelName, if (session.viewers > 0) "● " + Format.viewers(session.viewers) else null)
+        session.isLive -> listOfNotNull(session.channelName, if (session.viewers > 0) Format.viewers(session.viewers) else null)
             .joinToString(" · ")
         else -> session.channelName ?: ""
     }
+    // Direct qui joue : point rouge devant l'état, comme les cartes.
+    val liveDot = session.isLive && !ended && state is PlaybackSession.State.Ready
     Column(Modifier.fillMaxWidth().background(TU.surface).then(if (tabsBelow) Modifier else Modifier.navigationBarsPadding())) {
         val p = progress
         if (p != null) {
@@ -376,9 +383,12 @@ fun MiniPlayerBar(session: PlaybackSession, nav: Navigator, tabsBelow: Boolean) 
             Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
                 Text(title, color = TU.text, fontSize = 14.sp, fontWeight = FontWeight.SemiBold, maxLines = 1,
                      overflow = TextOverflow.Ellipsis)
-                if (sub.isNotEmpty()) {
-                    Text(sub, color = if (session.isLive && !ended && state is PlaybackSession.State.Ready) TU.live else TU.muted,
-                         fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                if (sub.isNotEmpty() || liveDot) {
+                    val text = buildAnnotatedString {
+                        if (liveDot) withStyle(SpanStyle(color = TU.live)) { append("● ") }
+                        append(sub)
+                    }
+                    Text(text, color = TU.muted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
             }
             when {

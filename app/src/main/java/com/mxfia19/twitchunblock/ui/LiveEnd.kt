@@ -136,7 +136,10 @@ fun BoxScope.LiveEndOverlay(session: PlaybackSession, nav: Navigator, raid: Raid
                 // Le lecteur fini se ferme ; la fiche de la chaîne liste ses VODs.
                 OutlinedButton(onClick = {
                     nav.pop()
-                    nav.push(Screen.Channel(login))
+                    // Lecteur ouvert depuis cette fiche : on y revient, sans la rouvrir par-dessus.
+                    if ((nav.current as? Screen.Channel)?.login?.equals(login, ignoreCase = true) != true) {
+                        nav.push(Screen.Channel(login))
+                    }
                 }, contentPadding = PaddingValues(horizontal = 12.dp), modifier = Modifier.height(36.dp)) {
                     Text(AppState.t("p6_see_vods"), color = Color.White, fontSize = 13.sp, maxLines = 1)
                 }
