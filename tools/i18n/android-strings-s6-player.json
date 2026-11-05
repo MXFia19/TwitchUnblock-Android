@@ -1,0 +1,65 @@
+{
+  "p6_live_ended": {
+    "fr": "Le live est terminé",
+    "en": "The stream has ended",
+    "es": "El directo ha terminado",
+    "ru": "Трансляция завершена",
+    "it": "La diretta è terminata",
+    "ja": "配信は終了しました",
+    "zh-Hant": "直播已結束"
+  },
+  "p6_watch_target": {
+    "fr": "Regarder {u}",
+    "en": "Watch {u}",
+    "es": "Ver a {u}",
+    "ru": "Смотреть {u}",
+    "it": "Guarda {u}",
+    "ja": "{u} を見る",
+    "zh-Hant": "觀看 {u}"
+  },
+  "p6_see_vods": {
+    "fr": "Voir les VODs",
+    "en": "See VODs",
+    "es": "Ver VODs",
+    "ru": "Смотреть VOD",
+    "it": "Vedi i VOD",
+    "ja": "VOD を見る",
+    "zh-Hant": "查看 VOD"
+  },
+  "p6_sleep_other": {
+    "fr": "Autre durée…",
+    "en": "Other duration…",
+    "es": "Otra duración…",
+    "ru": "Другое время…",
+    "it": "Altra durata…",
+    "ja": "その他の時間…",
+    "zh-Hant": "其他時間…"
+  },
+  "p6_bg_audio_only": {
+    "fr": "Son seul en arrière-plan",
+    "en": "Audio only in the background",
+    "es": "Solo audio en segundo plano",
+    "ru": "Только звук в фоне",
+    "it": "Solo audio in background",
+    "ja": "バックグラウンドでは音声のみ",
+    "zh-Hant": "背景時僅播放聲音"
+  },
+  "p6_bg_audio_only_sub": {
+    "fr": "Écran verrouillé ou autre app, sans image dans l'image : seul le son est chargé (beaucoup moins de données). L'image revient, dans la même qualité, au retour dans l'app.",
+    "en": "Screen locked or another app, without picture-in-picture: only the sound is loaded (much less data). The picture comes back, same quality, when you return to the app.",
+    "es": "Pantalla bloqueada u otra app, sin imagen en imagen: solo se carga el sonido (muchos menos datos). La imagen vuelve, con la misma calidad, al regresar a la app.",
+    "ru": "Экран заблокирован или открыто другое приложение без «картинки в картинке»: загружается только звук (намного меньше трафика). Изображение вернётся в том же качестве, когда вы вернётесь в приложение.",
+    "it": "Schermo bloccato o un'altra app, senza picture-in-picture: si carica solo l'audio (molti meno dati). L'immagine torna, nella stessa qualità, quando rientri nell'app.",
+    "ja": "画面ロック中や他のアプリの使用中（ピクチャー・イン・ピクチャーなし）は音声だけを読み込みます（通信量を大幅に節約）。アプリに戻ると同じ画質で映像が戻ります。",
+    "zh-Hant": "螢幕鎖定或使用其他 App 時（未開啟子母畫面）只載入聲音（大幅節省流量）。回到 App 後，畫面會以相同畫質恢復。"
+  },
+  "p6_pip_on_leave_sub": {
+    "fr": "Réduire un direct ou une VOD (glissé vers le bas, Retour) l'ouvre en image dans l'image au lieu du mini-lecteur, si la vidéo joue.",
+    "en": "Minimizing a live stream or VOD (swipe down, Back) opens it in picture-in-picture instead of the mini player, while the video is playing.",
+    "es": "Al minimizar un directo o un VOD (deslizar hacia abajo, Atrás), se abre en imagen en imagen en lugar del minirreproductor, si el vídeo se está reproduciendo.",
+    "ru": "Свёрнутая трансляция или VOD (свайп вниз, «Назад») открывается в режиме «картинка в картинке» вместо мини-плеера, если видео воспроизводится.",
+    "it": "Ridurre una diretta o un VOD (scorrimento verso il basso, Indietro) lo apre in picture-in-picture invece del mini player, se il video è in riproduzione.",
+    "ja": "ライブや VOD を縮小すると（下にスワイプ、戻る）、再生中ならミニプレーヤーではなくピクチャー・イン・ピクチャーで開きます。",
+    "zh-Hant": "縮小直播或 VOD（向下滑動、返回）時，若影片正在播放，會以子母畫面開啟，而不是迷你播放器。"
+  }
+}

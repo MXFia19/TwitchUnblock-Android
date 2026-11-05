@@ -201,6 +201,8 @@ fun PlayerVideoOverlay(session: PlaybackSession) {
                     sleep?.let { "⏾ " + Format.clock(it) },
                 )
                 if (pills.isNotEmpty()) OverlayPill(pills.joinToString(" · "))
+                // Série 6 (PlayerControls.kt) : « Direct · −45 s », latence, chapitre en cours.
+                PlayerStatusPills(session)
             }
         }
         // Glissé sur la barre : l'instant visé, son heure réelle et son chapitre.

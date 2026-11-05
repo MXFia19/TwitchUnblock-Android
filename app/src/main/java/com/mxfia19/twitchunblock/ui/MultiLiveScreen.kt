@@ -542,7 +542,8 @@ fun MultiLiveScreen(model: MultiLiveModel, initial: String?, nav: Navigator) {
         return
     }
     Column(Modifier.fillMaxSize()) {
-        PageHeader(AppState.t("multi_title"), nav)
+        // Série 6 (SleepTimer.kt) : minuterie du multi-live.
+        PageHeader(AppState.t("multi_title"), nav) { MultiSleepButton(model) }
         MultiGrid(model, landscape = false,
                   modifier = Modifier.fillMaxWidth().aspectRatio(if (model.tiles.size >= 2) 16f / 18f else 16f / 9f),
                   onOpen = open)

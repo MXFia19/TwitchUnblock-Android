@@ -124,7 +124,8 @@ class MainActivity : ComponentActivity() {
     /** Une lecture est à l'écran et joue : quitter l'app la passe en image dans l'image. */
     private fun pipWanted(): Boolean {
         val session = PlayerHolder.current ?: return false
-        return AppState.autoPip && session.player.playWhenReady && navigator.current is Screen.Player
+        // Série 6 : le mini-lecteur aussi (MiniPlayer.kt).
+        return AppState.autoPip && session.player.playWhenReady && (navigator.current is Screen.Player || navigator.mini != null)
     }
 
     /** À appeler quand la lecture démarre ou s'arrête (Android 12 et plus :
@@ -174,9 +175,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Série 6 : « PiP en quittant le lecteur » (MiniPlayer.kt) ; faux si le système refuse. */
+    fun enterPipNow(): Boolean {
+        if (Build.VERSION.SDK_INT < 26) return false
+        return try {
+            enterPictureInPictureMode(pipParams())
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: Configuration) {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         PipState.active = isInPictureInPictureMode
+        // Série 6 : fenêtre agrandie, le lecteur réduit revient en grand sur la même lecture (MiniPlayer.kt).
+        if (!isInPictureInPictureMode && lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) navigator.expand()
         // Fenêtre fermée (glissée hors de l'écran) : l'activité reste arrêtée,
         // la lecture s'arrête aussi.
         if (!isInPictureInPictureMode && !lifecycle.currentState.isAtLeast(Lifecycle.State.STARTED)) {
