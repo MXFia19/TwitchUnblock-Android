@@ -276,6 +276,7 @@ fun ChannelScreen(login: String, nav: Navigator) {
     var busy by remember { mutableStateOf(false) }
     var confirmUnfollow by remember { mutableStateOf(false) }
     var bots by remember { mutableStateOf(false) }
+    var offlineChat by remember { mutableStateOf(false) }
     var menu by remember { mutableStateOf(false) }
     // Refus de Twitch (code, vide s'il n'en donne pas) ; null : pas de refus.
     var followError by remember(login) { mutableStateOf<String?>(null) }
@@ -340,6 +341,7 @@ fun ChannelScreen(login: String, nav: Navigator) {
             }
         }
         if (bots) BotCommandsSheet(login, onDismiss = { bots = false })
+        if (offlineChat) OfflineChatWindow(login, info?.userId, nav) { offlineChat = false }
         if (confirmUnfollow) {
             AlertDialog(
                 onDismissRequest = { confirmUnfollow = false },
@@ -370,11 +372,19 @@ fun ChannelScreen(login: String, nav: Navigator) {
                 ChannelStatusLines(localFollow = !usesTwitch && AppState.isFollowedLocally(login), followError = followError,
                                    hidden = Hidden.hidesChannel(login)) { Hidden.unhideChannel(login) }
             }
-            // Commandes des bots (Nightbot, StreamElements…) : aussi hors ligne,
-            // quand il n'y a pas de chat pour ouvrir son menu ⋯ (comme l'iPhone).
+            // Commandes des bots (Nightbot, StreamElements…) : aussi hors ligne.
+            // Hors ligne, le chat de la chaîne s'ouvre à côté : Twitch le garde
+            // ouvert entre deux streams (comme l'iPhone et le site).
             item(span = FullSpan) {
-                TextButton(onClick = { bots = true }, contentPadding = PaddingValues(horizontal = 0.dp)) {
-                    Text("🤖 " + AppState.t("bot_commands"), color = TU.primary, fontSize = 14.sp)
+                Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                    if (info?.error == "offline") {
+                        TextButton(onClick = { offlineChat = true }, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                            Text("💬 " + AppState.t("sec_chat"), color = TU.primary, fontSize = 14.sp)
+                        }
+                    }
+                    TextButton(onClick = { bots = true }, contentPadding = PaddingValues(horizontal = 0.dp)) {
+                        Text("🤖 " + AppState.t("bot_commands"), color = TU.primary, fontSize = 14.sp)
+                    }
                 }
             }
             // Hors ligne : son prochain live prévu, ou ses vacances.

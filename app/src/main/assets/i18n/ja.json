@@ -221,6 +221,7 @@
   "chat_mode_subs": "サブスクライバーのみ",
   "chat_mode_unique": "ユニークメッセージ",
   "chat_mode_verified": "認証済みアカウントが必要",
+  "chat_offline_open": "チャンネルはオフラインですが、チャットは開いています。",
   "chat_rej_automod": "メッセージは、チャンネルの自動モデレーションにより保留されました。",
   "chat_rej_banned": "メッセージを送信できません。このチャットから BAN されています。",
   "chat_rej_duplicate": "メッセージを送信できません。直前のメッセージと同じ内容です。",

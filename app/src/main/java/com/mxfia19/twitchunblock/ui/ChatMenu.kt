@@ -266,14 +266,20 @@ private fun linkified(text: String): AnnotatedString = buildAnnotatedString {
 }
 
 /** « Chat seul » : le chat sur tout l'écran (la vidéo continue dessous) ;
- *  son menu ⋯ ou Retour le referme. */
+ *  son menu ⋯ ou Retour le referme. `notice` : une ligne sous l'en-tête
+ *  (chaîne hors ligne, OfflineChat.kt). */
 @Composable
-fun ChatOnlyWindow(client: ChatClient, onOpenChannel: ((String) -> Unit)?, onLogin: () -> Unit, onClose: () -> Unit) {
+fun ChatOnlyWindow(client: ChatClient, onOpenChannel: ((String) -> Unit)?, onLogin: () -> Unit, onClose: () -> Unit,
+                   notice: String? = null) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(TU.bg).imePadding()) {
             Row(Modifier.fillMaxWidth().background(TU.surface).padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("#${client.channel}", color = TU.text, fontSize = 15.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(1f))
                 IconButton(onClick = onClose) { Icon(Icons.Filled.Close, contentDescription = AppState.t("close"), tint = TU.text) }
+            }
+            notice?.let {
+                Text(it, color = TU.muted, fontSize = 12.sp,
+                     modifier = Modifier.fillMaxWidth().background(TU.surface).padding(start = 14.dp, end = 14.dp, bottom = 8.dp))
             }
             ChatPanel(client, Modifier.weight(1f), onOpenChannel = onOpenChannel?.let { open -> { login: String -> onClose(); open(login) } },
                       onExitChatOnly = onClose, onLogin = { onClose(); onLogin() })

@@ -221,6 +221,7 @@
   "chat_mode_subs": "僅限訂閱者",
   "chat_mode_unique": "訊息不重複",
   "chat_mode_verified": "需要驗證過的帳號",
+  "chat_offline_open": "頻道目前離線：聊天室仍然開放。",
   "chat_rej_automod": "訊息被頻道的自動管理機制攔下。",
   "chat_rej_banned": "訊息未送出：你已被這個聊天室封鎖。",
   "chat_rej_duplicate": "訊息未送出：與你上一則完全相同。",

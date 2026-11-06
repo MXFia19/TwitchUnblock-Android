@@ -222,6 +222,7 @@
   "chat_mode_subs": "Abonnés uniquement",
   "chat_mode_unique": "Messages uniques",
   "chat_mode_verified": "Compte vérifié requis",
+  "chat_offline_open": "La chaîne est hors ligne : son chat reste ouvert.",
   "chat_rej_automod": "Message retenu par la modération automatique de la chaîne.",
   "chat_rej_banned": "Message non envoyé : tu es banni de ce chat.",
   "chat_rej_duplicate": "Message non envoyé : identique au précédent.",

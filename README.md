@@ -112,7 +112,7 @@ installable à côté de l'autre.
     correction automatique du clavier réglable.
   - *Navigation* : recherche en onglets (Chaînes, Catégories, En direct, VODs, avec leurs nombres), 10 dernières
     recherches, masqués signalés ; page d'une chaîne : Temps forts, Playlists avec « Tout lire », filtre des VODs,
-    commandes des bots, suivi refusé expliqué, onglets réglables ; catégories : langue et tri ; accueil : Top « ma
+    commandes des bots, chat d'une chaîne hors ligne, suivi refusé expliqué, onglets réglables ; catégories : langue et tri ; accueil : Top « ma
     langue » ou « Monde », cartes « Se connecter » et « Session web », ordre des parties ; tirer pour actualiser ;
     listes longues par le compte Twitch quand Twitch refuse la suite ; Top complété ; streamers récents retirables ;
     tags sous chaque live.
