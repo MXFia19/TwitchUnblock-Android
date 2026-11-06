@@ -269,8 +269,8 @@ private fun linkified(text: String): AnnotatedString = buildAnnotatedString {
  *  son menu ⋯ ou Retour le referme. `notice` : une ligne sous l'en-tête
  *  (chaîne hors ligne, OfflineChat.kt). */
 @Composable
-fun ChatOnlyWindow(client: ChatClient, onOpenChannel: ((String) -> Unit)?, onLogin: () -> Unit, onClose: () -> Unit,
-                   notice: String? = null) {
+fun ChatOnlyWindow(client: ChatClient, onOpenChannel: ((String) -> Unit)?, onLogin: () -> Unit,
+                   notice: String? = null, onClose: () -> Unit) {
     Dialog(onDismissRequest = onClose, properties = DialogProperties(usePlatformDefaultWidth = false)) {
         Column(Modifier.fillMaxSize().background(TU.bg).imePadding()) {
             Row(Modifier.fillMaxWidth().background(TU.surface).padding(start = 14.dp), verticalAlignment = Alignment.CenterVertically) {
