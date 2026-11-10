@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -204,11 +205,15 @@ fun ChapterDialogHost(session: PlaybackSession) {
     if (!ChapterUi.open || PipState.active) return
     val list = session.chapters
     val current = currentChapter(list, PlayerUi.positionMs)
+    // Ouverte sur le chapitre en cours, deux au-dessus pour situer (comme
+    // l'iPhone, demande de joey du 09/11) : la position n'est prise qu'à
+    // l'ouverture, la liste ne bouge plus ensuite.
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = (current - 2).coerceAtLeast(0))
     AlertDialog(
         onDismissRequest = { ChapterUi.open = false },
         title = { Text(AppState.t("chapters")) },
         text = {
-            LazyColumn(Modifier.heightIn(max = 380.dp)) {
+            LazyColumn(Modifier.heightIn(max = 380.dp), state = listState) {
                 itemsIndexed(list) { i, c ->
                     val color = if (i == current) TU.primary else TU.text
                     Row(Modifier.fillMaxWidth().clickable {
