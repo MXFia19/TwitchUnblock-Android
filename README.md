@@ -119,7 +119,7 @@ installable à côté de l'autre.
     tags sous chaque live.
   - *App* : Worker perso vérifié et « Tout passer par ce Worker » ; comptage effacé côté serveur ; « Reprendre les
     VODs » ; avis dans l'app (drops, réponses aux signalements, relues chaque minute et en arrière-plan) et signaler
-    depuis le lecteur ; journal exportable (en français, la langue où il est écrit ; traduit seulement à l’écran) ; import « Tout » ou « Chaînes seulement » avec un
+    depuis le lecteur ; journal exportable (en anglais, comme celui joint aux signalements ; dans la langue de l’app à l’écran) ; import « Tout » ou « Chaînes seulement » avec un
     résumé ; synchro du format de l'heure, de la zone d'envoi et de la personnalisation ; twitch.tv/activate dans
     l'app pour changer de compte ; visite guidée et journal des modifications (Réglages → À propos).
   - *Android TV* : bandeau des pauses pub ; chat posé sur l'image, place retenue par chaîne ; Suivies relues

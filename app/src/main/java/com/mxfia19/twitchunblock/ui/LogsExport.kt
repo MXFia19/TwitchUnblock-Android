@@ -26,6 +26,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.AnnotatedString
 import com.mxfia19.twitchunblock.BuildConfig
 import com.mxfia19.twitchunblock.core.AppState
+import com.mxfia19.twitchunblock.core.Lang
+import com.mxfia19.twitchunblock.core.LogText
 import com.mxfia19.twitchunblock.core.Logger
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -34,17 +36,17 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Journal en texte, en français, la langue où il est écrit : il part surtout
- *  vers le développeur (signalements), qui le recevait traduit en anglais.
- *  L'écran du journal, lui, reste traduit (LogText). Comme l'iPhone. */
+/** Journal en texte, en anglais quelle que soit la langue de l'app, comme
+ *  celui joint aux signalements : il sert surtout à les décrire. L'écran du
+ *  journal, lui, reste dans la langue de l'app (LogText). Comme l'iPhone. */
 object LogExport {
     /** Partage : les dernières lignes seulement au-delà (un texte trop long
      *  ne passe pas dans l'intention de partage d'Android). */
     private const val SHARE_MAX = 300_000
 
     fun line(e: Logger.Entry, time: SimpleDateFormat): String =
-        "${time.format(Date(e.time))} ${e.level.mark} [${e.tag}] ${e.message}" +
-            (e.detail?.let { d -> " — $d" } ?: "")
+        "${time.format(Date(e.time))} ${e.level.mark} [${e.tag}] ${LogText.tr(e.message, Lang.EN)}" +
+            (e.detail?.let { d -> " — ${LogText.tr(d, Lang.EN)}" } ?: "")
 
     fun text(): String {
         val time = SimpleDateFormat("HH:mm:ss", Locale.US)

@@ -44,10 +44,11 @@ object LogText {
         return entries
     }
 
-    /** Texte du journal dans la langue de l'app (le français tel quel). */
+    /** Texte du journal dans la langue de l'app (le français tel quel) ;
+     *  `lang` : une autre, l'anglais pour ce qui part vers le développeur
+     *  (signalements, journal exporté). Une seule table chargée à la fois. */
     @Synchronized
-    fun tr(text: String): String {
-        val lang = AppState.lang
+    fun tr(text: String, lang: Lang = AppState.lang): String {
         if (lang == Lang.FR || text.isEmpty()) return text
         val table = load(lang)
         cache[text]?.let { return it }

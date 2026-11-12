@@ -12,6 +12,8 @@ import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Config
 import com.mxfia19.twitchunblock.core.CustomWorker
 import com.mxfia19.twitchunblock.core.Http
+import com.mxfia19.twitchunblock.core.Lang
+import com.mxfia19.twitchunblock.core.LogText
 import com.mxfia19.twitchunblock.core.Logger
 import com.mxfia19.twitchunblock.core.arr
 import com.mxfia19.twitchunblock.core.bool
@@ -183,8 +185,9 @@ object Feedback {
 
     /** Envoie un signalement. null si c'est parti, sinon une clé d'erreur. */
     suspend fun send(kind: String, message: String, contact: String, photos: List<String>): String? {
+        // Journal en anglais, quelle que soit la langue de l'app (comme l'iPhone).
         val errors = Logger.snapshot().filter { it.level == Logger.Level.ERROR || it.level == Logger.Level.WARN }
-            .takeLast(20).map { "[${it.tag}] ${it.message}" + (it.detail?.let { d -> " — $d" } ?: "") }
+            .takeLast(20).map { "[${it.tag}] ${LogText.tr(it.message, Lang.EN)}" + (it.detail?.let { d -> " — ${LogText.tr(d, Lang.EN)}" } ?: "") }
         val info = JSONObject().put("app", "Android ${BuildConfig.VERSION_NAME} (${BuildConfig.CHANNEL})")
             .put("device", "${Build.MANUFACTURER} ${Build.MODEL}").put("android", Build.VERSION.RELEASE)
             .put("lang", AppState.lang.code).toString()
