@@ -22,17 +22,19 @@ object Gql {
         return out.toString()
     }
 
-    private fun headers(clientId: String) = mapOf(
-        "Client-ID" to clientId,
-        "User-Agent" to Config.USER_AGENT,
-        "Device-ID" to "MkMq8a9${Random.nextInt(100000, 999999)}",
-    )
+    private fun headers(clientId: String, deviceId: Boolean = true): Map<String, String> = buildMap {
+        put("Client-ID", clientId)
+        put("User-Agent", Config.USER_AGENT)
+        if (deviceId) put("Device-ID", "MkMq8a9${Random.nextInt(100000, 999999)}")
+    }
 
-    /** Réponse entière (data et errors) ; null sans réponse lisible. */
-    suspend fun raw(query: String, variables: JSONObject? = null, timeout: Long = 10): JSONObject? {
+    /** Réponse entière (data et errors) ; null sans réponse lisible.
+     *  `deviceId` faux : sans en-tête Device-ID (jeton du direct, voir
+     *  LiveApi.accessToken). */
+    suspend fun raw(query: String, variables: JSONObject? = null, timeout: Long = 10, deviceId: Boolean = true): JSONObject? {
         val body = JSONObject().put("query", query)
         if (variables != null) body.put("variables", variables)
-        val r = Http.postJson(URL, body.toString(), headers(Config.GQL_CLIENT_ID), timeout) ?: return null
+        val r = Http.postJson(URL, body.toString(), headers(Config.GQL_CLIENT_ID, deviceId), timeout) ?: return null
         if (r.code != 200) return null
         return parseJson(r.body)
     }

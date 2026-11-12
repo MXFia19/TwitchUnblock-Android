@@ -12,11 +12,17 @@ import org.json.JSONObject
  * getLive (iOS).
  */
 object LiveApi {
-    /** Jeton de lecture anonyme (valeur, signature) d'un direct ou d'une VOD. */
+    /** Jeton de lecture anonyme (valeur, signature) d'un direct ou d'une VOD.
+     *  Celui du direct est demandé comme Streamlink (lecteur « embed »,
+     *  platform « site », sans Device-ID ; comme l'iPhone, PR #12
+     *  d'ihavenoface) : avec « site » ou un Device-ID, Twitch coud des
+     *  pré-rolls et des blocs de pubs. Le jeton des VODs ne change pas. */
     suspend fun accessToken(id: String, live: Boolean): Pair<String, String>? {
         val field = if (live) "streamPlaybackAccessToken(channelName" else "videoPlaybackAccessToken(id"
-        val q = "query { $field: \"${Gql.str(id)}\", params: {platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\"}) { value signature } }"
-        val data = Gql.raw(q)?.obj("data")
+        val params = if (live) "platform: \"site\", playerBackend: \"mediaplayer\", playerType: \"embed\""
+            else "platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\""
+        val q = "query { $field: \"${Gql.str(id)}\", params: {$params}) { value signature } }"
+        val data = Gql.raw(q, deviceId = !live)?.obj("data")
         val tok = data?.obj(if (live) "streamPlaybackAccessToken" else "videoPlaybackAccessToken")
         val value = tok?.str("value")
         val sig = tok?.str("signature")
