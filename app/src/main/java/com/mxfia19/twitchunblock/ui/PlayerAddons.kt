@@ -56,6 +56,7 @@ import com.mxfia19.twitchunblock.player.PlaybackSession
 import com.mxfia19.twitchunblock.player.PlayerSpeed
 import com.mxfia19.twitchunblock.player.VodMarkers
 import com.mxfia19.twitchunblock.player.VodMarkersApi
+import com.mxfia19.twitchunblock.player.VodSilence
 import kotlinx.coroutines.delay
 import java.util.Calendar
 import java.util.Date
@@ -83,6 +84,12 @@ object PlayerUi {
     var gotoOpen by mutableStateOf(false)
     /** Repères de la VOD lue : passages coupés, début de la diffusion. */
     var markers by mutableStateOf<VodMarkers?>(null)
+    /** VOD dont la piste audio est vide chez Twitch (VodSilence) : son id tant
+     *  que l'avis est affiché (la croix le remet à null). */
+    var silentVod by mutableStateOf<String?>(null)
+    /** Dernière VOD sondée : pas de nouvelle sonde quand la lecture redevient
+     *  prête, ni après la croix. */
+    var silenceProbed: String? = null
 
     private var seekTotal = 0
     private var seekAt = 0L
@@ -147,6 +154,26 @@ fun PlayerAddons(session: PlaybackSession, nav: Navigator) {
     LaunchedEffect(vod) {
         if (PlayerUi.markers?.id != vod) PlayerUi.markers = null
         if (vod != null && PlayerUi.markers == null) PlayerUi.markers = VodMarkersApi.load(vod)
+    }
+    // VOD dont la piste audio est vide chez Twitch : sondée 4 s après que la
+    // lecture est prête, dite par l'avis du haut (VideoOverlay). Sur une TV,
+    // pas de croix à la télécommande : l'avis reste 12 s.
+    val context = LocalContext.current
+    LaunchedEffect(vod, ready) {
+        if (PlayerUi.silentVod != vod) PlayerUi.silentVod = null
+        if (vod == null || !ready || session.isOffline || PlayerUi.silenceProbed == vod) return@LaunchedEffect
+        val links = session.links
+        if (links.isEmpty()) return@LaunchedEffect
+        delay(4_000)
+        val verdict = VodSilence.probe(links)
+        PlayerUi.silenceProbed = vod
+        if (verdict != VodSilence.Verdict.SILENT || session.vodId != vod) return@LaunchedEffect
+        PlayerUi.silentVod = vod
+        Logger.info("PLAYER", "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)")
+        if (isTelevision(context)) {
+            delay(12_000)
+            if (PlayerUi.silentVod == vod) PlayerUi.silentVod = null
+        }
     }
     if (PipState.active) return
     if (PlayerUi.infoOpen) InfoCard(session, nav)
@@ -214,19 +241,26 @@ fun PlayerVideoOverlay(session: PlaybackSession) {
             )
             if (parts.size > 1) OverlayPill(parts.joinToString(" · "), Modifier.align(Alignment.TopCenter).padding(top = 10.dp))
         }
+        // VOD sans son chez Twitch (piste audio vide, toute la VOD) : on le
+        // dit, sinon on croit à une panne ; la croix le ferme.
+        val silent = ready && !session.isLive && PlayerUi.silentVod != null && PlayerUi.silentVod == session.vodId
         // Passage dont Twitch a coupé le son : on le dit (sinon on croit à une
         // panne) et on propose de le sauter.
         // Position relue seulement s'il y a des passages coupés (pas de
         // recomposition toutes les 0,5 s pendant un direct).
-        val ranges = if (ready && !session.isLive) markers?.muted.orEmpty() else emptyList()
+        val ranges = if (ready && !session.isLive && !silent) markers?.muted.orEmpty() else emptyList()
         val t = if (ranges.isEmpty()) 0.0 else (scrub ?: PlayerUi.positionMs) / 1000.0
         val muted = ranges.firstOrNull { it.contains(t) }
-        if (muted != null) {
-            val top = when {
-                scrub != null -> 44.dp
-                controls -> if (landscape) 72.dp else 40.dp
-                else -> 8.dp
+        val top = when {
+            scrub != null -> 44.dp
+            controls -> if (landscape) 72.dp else 40.dp
+            else -> 8.dp
+        }
+        if (silent) {
+            SilentNotice(Modifier.align(Alignment.TopCenter).padding(top = top, start = 8.dp, end = 8.dp)) {
+                PlayerUi.silentVod = null
             }
+        } else if (muted != null) {
             MutedNotice(Modifier.align(Alignment.TopCenter).padding(top = top, start = 8.dp, end = 8.dp)) {
                 val d = session.player.duration
                 val after = (muted.end * 1000).toLong() + 500
@@ -285,6 +319,22 @@ private fun MutedNotice(modifier: Modifier, onSkip: () -> Unit) {
              maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
         Text(AppState.t("vod_muted_skip") + " ⏭", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
              modifier = Modifier.clip(shape).background(Color(0x2EFFFFFF)).clickable(onClick = onSkip)
+                 .padding(horizontal = 9.dp, vertical = 4.dp))
+    }
+}
+
+/** VOD dont la piste audio est vide chez Twitch : même pastille que les
+ *  passages coupés, avec une croix au lieu de « Passer ». */
+@Composable
+private fun SilentNotice(modifier: Modifier, onClose: () -> Unit) {
+    val shape = RoundedCornerShape(50)
+    Row(modifier.clip(shape).background(Color(0x9E000000)).border(1.dp, MutedOrange.copy(alpha = 0.6f), shape)
+            .height(32.dp).padding(start = 11.dp, end = 4.dp),
+        verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text("🔇 " + AppState.t("vod_no_sound"), color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.SemiBold,
+             maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f, fill = false))
+        Text("✕", color = Color.White, fontSize = 12.sp, fontWeight = FontWeight.Bold,
+             modifier = Modifier.clip(shape).background(Color(0x2EFFFFFF)).clickable(onClick = onClose)
                  .padding(horizontal = 9.dp, vertical = 4.dp))
     }
 }

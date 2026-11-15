@@ -99,7 +99,10 @@ installable à côté de l'autre.
     réseau ; écran de fin de direct (raid à suivre, Voir les VODs) ; minuterie (autre durée, temps restant, +15 min,
     multi-live) ; chapitres sur la barre ; haut-parleur et Recharger.
   - *Média* : sources du direct dans l'ordre choisi (Réglages → Lecteur) et choisies depuis le menu de qualité ;
-    « Source » avec sa résolution ; son d'origine des passages coupés tant que Twitch l'a ; clips : « Voir dans la
+    « Source » avec sa résolution ; son d'origine des passages coupés tant que Twitch l'a ; VOD sans son chez Twitch
+    (piste audio vide, souvent la piste VOD d'OBS sans source) dite par un avis en haut du lecteur (croix ; 12 s sur
+    une TV) : 4 s après le départ, `VodSilence.kt` lit le début de trois segments « audio seul » (10, 50, 90 %) et
+    mesure leurs trames audio (6 octets = silence, 300 à 700 = son), comme le site et l'iPhone ; clips : « Voir dans la
     VOD » et « Télécharger le clip » ; téléchargement d'une partie (d'ici, 10 min, d'un instant à un autre, par
     chapitre), qualité préférée d'abord, export en un fichier, reprise au retour du réseau app fermée (par une
     notification depuis Android 12) ; multi-live avec des VODs, ⇄, ouvrir une tuile dans le lecteur, Réessayer /

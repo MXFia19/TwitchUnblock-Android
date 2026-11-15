@@ -324,5 +324,6 @@
   "éléments": "items",
   "— nouvel essai plus tard": "— retry later",
   "— reconnexion nécessaire": "— sign in again",
-  "— rien n'est envoyé": "— nothing is sent"
+  "— rien n'est envoyé": "— nothing is sent",
+  "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)": "VOD with no sound on Twitch: empty audio track (silent at 10, 50 and 90%)"
 }
