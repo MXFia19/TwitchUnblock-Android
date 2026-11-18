@@ -2,7 +2,7 @@
   "_indirect": {
     "keys": ["multi_add", "multi_remove", "multi_full", "multi_added", "multi_removed",
              "multi_vod_failed", "multi_offline", "multi_failed", "multi_play", "multi_pause", "multi_replay",
-             "src_as", "src_pp", "src_al", "src_al2", "src_eu", "src_eu2", "src_twitch", "src_custom", "src_account", "src_worker"]
+             "src_bg", "src_twitch", "src_custom", "src_account", "src_worker"]
   },
   "m6_restore_muted_sub": {
     "fr": "Twitch coupe le son des passages avec de la musique protégée. Un jour ou deux après le live, l'original est encore disponible : l'app le remet quand elle peut, en lecture comme dans les téléchargements.",

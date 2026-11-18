@@ -18,9 +18,12 @@ installable à côté de l'autre.
 
 ## État du portage
 
-- **Série 1** (en cours) : directs (Luminous Asie et Europe, proxy albanais — chacun avec un serveur de
-  secours : PerfProd Asie, l'autre serveur de nadeko, Luminous Europe 2 —, Twitch, dont le jeton est
-  demandé comme Streamlink (lecteur « embed », sans Device-ID : bien moins de pubs), Worker en secours),
+- **Série 1** (en cours) : directs (source **Bulgarie** en test — le relais TwitchUnblock d'un VPS à
+  Sofia prend le jeton, la liste maîtresse et les playlists de la vidéo depuis la Bulgarie, par son IPv6,
+  les segments restant en direct —, puis Twitch, dont le jeton est demandé comme Streamlink (lecteur
+  « embed », sans Device-ID : bien moins de pubs), Ma source, Worker en secours ; les proxys publics
+  Luminous, PerfProd et nadeko/TTV.LOL ont été retirés le 18/11 : ils laissaient passer des centaines de
+  pubs par jour, et un ordre rangé avec eux reprend l'ordre par défaut),
   qualité Auto (suit le débit) ou fixe, qualité en données mobiles, VODs (passages coupés lisibles, reprise),
   clips, recherche (chaînes, catégories, liens collés), catégories, chaînes suivies (compte Twitch ou appareil),
   page de chaîne (VODs, clips), chat (emotes Twitch, 7TV, BTTV, FFZ, badges, historique récent, écrire avec

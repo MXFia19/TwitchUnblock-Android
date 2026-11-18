@@ -1,6 +1,6 @@
 {
   "_indirect": {
-    "keys": ["src_as", "src_eu", "src_al", "src_twitch", "src_worker", "src_account"]
+    "keys": ["src_bg", "src_twitch", "src_worker", "src_account"]
   },
   "fl_dl_after_live": {
     "fr": "Télécharger : possible à la fin du direct",

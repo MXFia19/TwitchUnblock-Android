@@ -225,7 +225,6 @@
   "Tailles du chat": "Chat sizes",
   "Tentative Twitch officiel…": "Trying official Twitch…",
   "Tentative Worker…": "Trying the Worker…",
-  "Tentative proxy TTV.LOL…": "Trying the TTV.LOL proxy…",
   "Tentative proxy…": "Trying the proxy…",
   "Textes illisibles": "Unreadable texts",
   "Tout passer par le Worker personnel": "Everything through the personal Worker",
@@ -325,5 +324,8 @@
   "— nouvel essai plus tard": "— retry later",
   "— reconnexion nécessaire": "— sign in again",
   "— rien n'est envoyé": "— nothing is sent",
-  "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)": "VOD with no sound on Twitch: empty audio track (silent at 10, 50 and 90%)"
+  "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)": "VOD with no sound on Twitch: empty audio track (silent at 10, 50 and 90%)",
+  "Tentative relais Bulgarie…": "Trying the Bulgaria relay…",
+  "Relais Bulgarie sans direct (": "Bulgaria relay has no stream (",
+  "Relais Bulgarie OK": "Bulgaria relay OK"
 }

@@ -6,8 +6,8 @@ import org.json.JSONObject
 
 /**
  * Lancement d'un direct : infos de la chaîne (GQL), puis les sources dans
- * l'ordre des réglages — Luminous Asie, proxy albanais (TTV.LOL), Luminous
- * Europe, Twitch officiel — et le Worker en dernier recours. Compte sans
+ * l'ordre des réglages — Bulgarie (test), Twitch officiel, Ma source — et
+ * le Worker en dernier recours. Compte sans
  * pub sur la chaîne (abonné, Turbo ; session web) : son flux d'abord. Comme
  * getLive (iOS).
  */
@@ -107,10 +107,9 @@ object LiveApi {
             if (!found.isEmpty) break
             onSource(src)
             when (src) {
-                "al" -> found = ttvlol(login, lowLatency)
+                "bg" -> found = bulgaria(login)
                 "twitch" -> if (token != null) found = usher(login, token, lowLatency, geo = geo)
                 "custom" -> StreamPrefs.customSourceHost()?.let { found = luminous(listOf(it), login, lowLatency) }
-                in Config.LIVE_PROXY_HOSTS -> found = luminous(listOf(Config.LIVE_PROXY_HOSTS.getValue(src)), login, lowLatency)
                 else -> {
                     val w = worker(login, geo)
                     found = w.first
@@ -174,24 +173,24 @@ object LiveApi {
         return Master()
     }
 
-    /** Proxy au format TTV.LOL : la requête usher encodée après /playlist/<chaîne>.m3u8. */
-    private suspend fun ttvlol(login: String, lowLatency: Boolean): Master {
-        val query = Http.encode("allow_source=true&allow_audio_only=true&fast_bread=$lowLatency")
-        for (host in Config.TTVLOL_HOSTS) {
-            Logger.info("LIVE", "Tentative proxy TTV.LOL…", host)
-            val url = "https://$host/playlist/$login.m3u8%3F$query"
-            val r = Http.get(url, mapOf("X-Donate-To" to "https://ttv.lol/donate"), timeout = 10)
-            if (r == null || r.code != 200 || !r.body.contains("#EXT-X-STREAM-INF")) {
-                Logger.warn("LIVE", "Proxy $host indisponible", "source suivante…")
-                continue
-            }
-            val m = parseMaster(r.body, url)
-            if (!m.isEmpty) {
-                Logger.success("LIVE", "Proxy TTV.LOL OK ($host)", "${m.links.size} qualités")
-                return m
-            }
+    /** Source « Bulgarie » (bg, test) : le relais du VPS de Sofia prend le
+     *  jeton, la liste maîtresse et les playlists de la vidéo depuis la
+     *  Bulgarie (ses liens passent par lui), les segments restant en direct.
+     *  Même réponse que /api/get-live du Worker ; 404 quand Twitch ne répond
+     *  pas de là-bas : Twitch officiel, qui suit, prend le relais. */
+    private suspend fun bulgaria(login: String): Master {
+        Logger.info("LIVE", "Tentative relais Bulgarie…", Config.BULGARIA_RELAY)
+        val r = Http.get("${Config.BULGARIA_RELAY}/api/get-live?name=$login", timeout = 8)
+        if (r == null || r.code != 200) {
+            Logger.warn("LIVE", "Relais Bulgarie sans direct (${r?.code ?: "réseau"})", "source suivante…")
+            return Master()
         }
-        return Master()
+        val json = runCatching { JSONObject(r.body) }.getOrNull()
+        val links = linksOf(json?.obj("links"))
+        if (links.isEmpty()) return Master()
+        val variants = workerVariants(json?.obj("variants"))
+        Logger.success("LIVE", "Relais Bulgarie OK", "${links.size} qualités")
+        return Master(links, variants, synthesizeMaster(links, variants))
     }
 
     /** Flux officiel de Twitch (avec ses pubs). `codecs` : `supported_codecs`,
@@ -219,7 +218,9 @@ object LiveApi {
     /** Worker : sa propre chaîne de sources, en dernier recours. */
     private suspend fun worker(login: String, geo: GeoBlockFlag? = null): Pair<Master, JSONObject?> {
         Logger.info("LIVE", "Tentative Worker…")
-        val json = Workers.json("/api/get-live?name=$login&proxy=false") { body ->
+        // Twitch d'abord chez le Worker : ses proxys, retirés de l'app parce
+        // qu'ils laissaient passer les pubs, ne viennent qu'après.
+        val json = Workers.json("/api/get-live?name=$login&source=twitch") { body ->
             if (StreamApi.workerGeoBlocked(body)) geo?.note("worker")
         } ?: return Pair(Master(), null)
         val links = linksOf(json.obj("links"))

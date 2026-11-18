@@ -101,10 +101,13 @@ object LiveSources {
 
     /** Sources inconnues retirées, doublons aussi ; Ma source réglée mais
      *  jamais rangée : en tête ; chaque source oubliée juste après celle
-     *  qu'elle secourt, sinon à la fin. Comme completeLiveSourceOrder (iOS). */
+     *  qu'elle secourt, sinon à la fin. Comme completeLiveSourceOrder (iOS).
+     *  Un ordre qui contient un proxy retiré reprend l'ordre automatique (Ma
+     *  source gardée). */
     private fun complete(saved: List<String>, custom: Boolean): List<String> {
+        val kept = if (saved.any { it in Config.RETIRED_LIVE_SOURCES }) saved.filter { it == "custom" } else saved
         val order = mutableListOf<String>()
-        for (id in saved) if ((id in Config.LIVE_SOURCES || (custom && id == "custom")) && id !in order) order += id
+        for (id in kept) if ((id in Config.LIVE_SOURCES || (custom && id == "custom")) && id !in order) order += id
         if (custom && "custom" !in order) order.add(0, "custom")
         for (id in Config.LIVE_SOURCES) {
             if (id in order) continue

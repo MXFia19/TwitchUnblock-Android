@@ -1,6 +1,6 @@
 {
   "_indirect": {
-    "keys": ["src_pp", "src_al2", "src_eu2", "src_custom"]
+    "keys": ["src_custom"]
   },
   "st_custom_sub": {
     "fr": "Adresse de ton propre serveur luminous-ttv (https://…) : il est essayé avant toutes les autres sources. Vide : pas de source perso.",
