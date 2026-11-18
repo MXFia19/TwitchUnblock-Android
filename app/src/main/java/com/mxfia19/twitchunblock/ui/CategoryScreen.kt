@@ -27,6 +27,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -148,20 +149,26 @@ fun CategoryScreen(category: Category, nav: Navigator) {
     LaunchedEffect(category.id, BrowsePrefs.categoryLang.value) { model.load() }
     var sort by rememberSaveable { mutableStateOf("viewers_desc") }
     val list = BrowsePrefs.homeList.value
+    val scope = rememberCoroutineScope()
+    // Suivi en cours d'envoi à Twitch : le cœur attend sa réponse.
+    var following by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxSize()) {
         PageHeader(category.name, nav) {
             LayoutToggle()
-            // Suivre la catégorie sur l'appareil (rangée de l'accueil). Suivie
-            // sur le compte Twitch : elle s'y retire.
+            // Suivre la catégorie (rangée de l'accueil) : sur le compte Twitch
+            // avec la session web, comme une chaîne (série 7), sinon sur l'appareil.
             val local = FollowedCategories.isFollowedLocally(category.id)
             val onTwitch = FollowedCategories.isFollowedOnTwitch(category.id)
             IconButton(onClick = {
-                if (onTwitch && !local) {
-                    android.widget.Toast.makeText(context, AppState.t("br_cat_twitch"), android.widget.Toast.LENGTH_LONG).show()
-                } else {
-                    FollowedCategories.toggle(category)
+                if (!following) {
+                    following = true
+                    scope.launch {
+                        val note = FollowedCategories.toggleHeart(category)
+                        following = false
+                        note?.let { android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show() }
+                    }
                 }
-            }) {
+            }, enabled = !following) {
                 Icon(if (local || onTwitch) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder,
                      contentDescription = AppState.t(if (local || onTwitch) "unfollow" else "follow"),
                      tint = if (local || onTwitch) TU.primary else TU.text)

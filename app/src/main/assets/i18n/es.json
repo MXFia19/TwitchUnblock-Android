@@ -1027,6 +1027,7 @@
   "role_broadcaster": "Streamer",
   "role_moderator": "Moderadores",
   "s7_all_games": "Todos los juegos",
+  "s7_cat_follow_local": "Twitch rechazó seguir esta categoría: se sigue en este dispositivo.",
   "s7_chat_move": "Mover el chat",
   "s7_chat_overlay_pos_sub": "En horizontal, cuando el chat está sobre la imagen: a la izquierda o a la derecha, a toda la altura o en una esquina. También se mueve arrastrando su asa superior: al soltarlo, se coloca en la esquina o en el centro del borde más cercano.",
   "s7_multi_audio_only": "Solo audio para este vídeo",

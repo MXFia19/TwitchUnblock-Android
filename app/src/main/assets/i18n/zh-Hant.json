@@ -1026,6 +1026,7 @@
   "role_broadcaster": "實況主",
   "role_moderator": "管理員",
   "s7_all_games": "所有遊戲",
+  "s7_cat_follow_local": "Twitch 拒絕追隨此分類：改為在此裝置上追隨。",
   "s7_chat_move": "移動聊天室",
   "s7_chat_overlay_pos_sub": "橫向時，聊天室疊在畫面上的位置：左側或右側、全高或角落。也可以拖曳上方的把手移動：放開後會貼齊最近的角落或左右邊的中間。",
   "s7_multi_audio_only": "這部影片只播放聲音",

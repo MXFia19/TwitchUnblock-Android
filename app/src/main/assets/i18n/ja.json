@@ -1026,6 +1026,7 @@
   "role_broadcaster": "配信者",
   "role_moderator": "モデレーター",
   "s7_all_games": "すべてのゲーム",
+  "s7_cat_follow_local": "Twitch でこのカテゴリーをフォローできませんでした。この端末でフォローしています。",
   "s7_chat_move": "チャットを移動",
   "s7_chat_overlay_pos_sub": "横向きでチャットを映像の上に重ねるときの位置：左か右、全高か隅。上部のハンドルをドラッグして動かすこともでき、離すと最も近い隅か左右の辺の中央に吸着します。",
   "s7_multi_audio_only": "この動画を音声のみにする",

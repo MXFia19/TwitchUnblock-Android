@@ -136,5 +136,14 @@
     "it": "In orizzontale: scorri in verticale sulla metà destra dell’immagine per il volume, sulla metà sinistra per la luminosità (quella del player, ripristinata quando lo lasci). Non in verticale, dove scorrere verso il basso riduce il player.",
     "ja": "横向き時：映像の右半分を上下にスワイプで音量、左半分で明るさ（プレーヤー内のみ。離れると元に戻ります）。縦向きでは下にスワイプするとプレーヤーが縮小されるため使えません。",
     "zh-Hant": "橫向時：在畫面右半部上下滑動調整音量，左半部調整亮度（僅限播放器，離開後恢復）。直向時不適用，因為向下滑動會縮小播放器。"
+  },
+  "s7_cat_follow_local": {
+    "fr": "Twitch a refusé de suivre cette catégorie : elle est suivie sur cet appareil.",
+    "en": "Twitch refused to follow this category: it is followed on this device instead.",
+    "es": "Twitch rechazó seguir esta categoría: se sigue en este dispositivo.",
+    "ru": "Twitch отказался добавить эту категорию: она отслеживается на этом устройстве.",
+    "it": "Twitch ha rifiutato di seguire questa categoria: è seguita su questo dispositivo.",
+    "ja": "Twitch でこのカテゴリーをフォローできませんでした。この端末でフォローしています。",
+    "zh-Hant": "Twitch 拒絕追隨此分類：改為在此裝置上追隨。"
   }
 }

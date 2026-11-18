@@ -44,4 +44,38 @@ object TwitchFollow {
         Logger.warn("FOLLOW", "Suivi refusé", code.ifEmpty { null })
         return code
     }
+
+    /** Requête enregistrée du cœur d'une catégorie sur twitch.tv, pour ne plus
+     *  la suivre (comme unfollowCategoryOnTwitch, iOS). */
+    private const val UNFOLLOW_GAME = "811e02e396ebba0664f21ff002f2eff3c6f57e8af9aedb4f4dfa77cefd0db43d"
+
+    /**
+     * Suit une catégorie sur le compte Twitch (série 7), ou ne la suit plus ;
+     * vrai si Twitch l'a fait. Même mécanisme que les chaînes : session web
+     * et jeton d'intégrité (WebGql.mutation). Ne plus suivre : la requête
+     * enregistrée de twitch.tv (FollowGameButton_UnfollowGame). Suivre : son
+     * empreinte n'est pas connue, la mutation followGame est écrite (même
+     * entrée, `gameID`) ; refusée, l'appelant suit sur l'appareil.
+     */
+    suspend fun setGame(gameId: String, follow: Boolean): Boolean {
+        val token = WebSession.token ?: return false
+        if (gameId.isEmpty() || gameId.length > 20 || !gameId.all { it.isDigit() }) return false
+        val field = if (follow) "followGame" else "unfollowGame"
+        val body = if (follow) {
+            WebGql.written("mutation { followGame(input: { gameID: \"$gameId\" }) { __typename } }")
+        } else {
+            WebGql.persisted("FollowGameButton_UnfollowGame", JSONObject().put("input", JSONObject().put("gameID", gameId)),
+                             UNFOLLOW_GAME)
+        }
+        val res = WebGql.mutation(body, token, if (follow) "FollowGame" else "FollowGameButton_UnfollowGame")
+        val payload = res?.obj("data")?.obj(field)
+        val errors = WebGql.errors(res)
+        if (payload != null && payload.obj("error") == null && errors.isEmpty()) {
+            Logger.success("FOLLOW", if (follow) "Catégorie suivie sur Twitch" else "Catégorie retirée des suivis Twitch", gameId)
+            return true
+        }
+        Logger.warn("FOLLOW", if (follow) "Catégorie pas suivie sur Twitch" else "Catégorie pas retirée des suivis Twitch",
+                    errors.ifEmpty { null })
+        return false
+    }
 }
