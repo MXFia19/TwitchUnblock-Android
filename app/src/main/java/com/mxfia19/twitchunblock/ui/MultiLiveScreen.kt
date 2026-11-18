@@ -215,7 +215,7 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
     fun selectAudio(index: Int) {
         if (index !in tiles.indices) return
         // Son seul : il ne vaut que pour la fenêtre active, l'ancienne retrouve son image.
-        if (index != audio) tiles.getOrNull(audio)?.session?.setAudioOnly(false)
+        if (index != audio) tiles.getOrNull(audio)?.session?.switchAudioOnly(false)
         audio = index
         // Toucher une tuile : elle seule a le son, comme avant.
         sound.only(tiles[index].key)
@@ -227,7 +227,7 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
     fun toggleAudioOnly(index: Int) {
         val t = tiles.getOrNull(index) ?: return
         val on = !t.session.audioOnly
-        t.session.setAudioOnly(on)
+        t.session.switchAudioOnly(on)
         Logger.info("MULTI", if (on) "Son seul" else "Image rendue", t.key)
     }
 

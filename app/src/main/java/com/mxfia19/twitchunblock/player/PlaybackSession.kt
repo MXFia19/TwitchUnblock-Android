@@ -129,7 +129,8 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
     private var maxHeight: Int? = null
     /** Multi-live (série 7) : son seul demandé pour cette tuile, la variante
      *  audio_only sans l'image ; repris quand la lecture repart (Réessayer,
-     *  retour du réseau). setAudioOnly le change. */
+     *  retour du réseau). switchAudioOnly le change (pas « setAudioOnly » : même
+     *  signature JVM que le setter de la propriété). */
     var audioOnly by mutableStateOf(false)
         private set
 
@@ -413,7 +414,7 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
     /** Son seul (multi-live, série 7) : la variante audio_only, ou l'image
      *  rendue comme au lancement ; sans relancer les sources, une lecture en
      *  pause le reste. */
-    fun setAudioOnly(on: Boolean) {
+    fun switchAudioOnly(on: Boolean) {
         if (audioOnly == on) return
         audioOnly = on
         if (state !is State.Ready || master.isEmpty) return
