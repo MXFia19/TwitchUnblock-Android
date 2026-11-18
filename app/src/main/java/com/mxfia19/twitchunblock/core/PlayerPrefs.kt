@@ -16,6 +16,12 @@ object PlayerPrefs {
     /** Compresseur audio (comme celui du site) : pics rabotés, passages calmes remontés. */
     val audioCompressor = boolPref("audio_compressor", false)
 
+    /** Volume (moitié droite) et luminosité (moitié gauche) en glissant
+     *  verticalement dans le lecteur, en paysage seulement (série 7,
+     *  PlayerGestures). Allumé par défaut : aucun geste vertical n'existait en
+     *  paysage. « android_swipeLevels » dans la sauvegarde. */
+    val swipeLevels = boolPref("swipe_levels", true)
+
     fun setCompressor(on: Boolean) {
         audioCompressor.set(on)
         com.mxfia19.twitchunblock.player.AudioCompressor.enabled = on
