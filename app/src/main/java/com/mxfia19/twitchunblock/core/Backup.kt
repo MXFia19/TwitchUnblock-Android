@@ -158,6 +158,8 @@ object Backup {
             .put("vodSpeed", PlayerPrefs.vodSpeed.value / 100.0)
             .put("audioCompressor", PlayerPrefs.audioCompressor.value)
             .put("android_fillScreen", PlayerPrefs.fillScreen.value)
+            // Série 7 : volume et luminosité en glissant (paysage).
+            .put("android_swipeLevels", PlayerPrefs.swipeLevels.value)
             // Série 6 : réglages du chat (noms de l'iPhone en repli à l'import)
             // et langue des lives des catégories (nom et format du site, null = toutes).
             .put("android_chatKeyboardSuggestions", com.mxfia19.twitchunblock.chat.ChatOptions.keyboardSuggestions.value)
@@ -425,6 +427,7 @@ object Backup {
         s.dbl("vodSpeed")?.takeIf { it in 0.25..2.0 }?.let { PlayerPrefs.vodSpeed.set(Math.round(it * 100).toInt()); ok("vodSpeed") }
         bool("audioCompressor") { PlayerPrefs.setCompressor(it) }
         bool("android_fillScreen", "ios_fillScreen") { PlayerPrefs.fillScreen.set(it) }
+        bool("android_swipeLevels") { PlayerPrefs.swipeLevels.set(it) }
         val opts = com.mxfia19.twitchunblock.chat.ChatOptions
         bool("android_chatKeyboardSuggestions", "ios_chatKeyboardSuggestions") { opts.keyboardSuggestions.set(it) }
         bool("android_showDropsNotice", "ios_showDropsNotice") { opts.dropsCard.set(it) }

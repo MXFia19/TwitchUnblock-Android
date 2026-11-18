@@ -1036,6 +1036,8 @@
   "s7_myproxy_ph": "host:porta",
   "s7_myproxy_sub": "Il tuo proxy HTTP(S) (host:porta): quando viene usato, il token, la playlist principale e le playlist del video passano da lui; i segmenti arrivano comunque direttamente. Va in cima all'ordine qui sopra. Vuoto: nessun proxy.",
   "s7_myproxy_user": "Nome utente (facoltativo)",
+  "s7_swipe_levels": "Volume e luminosità con lo scorrimento",
+  "s7_swipe_levels_sub": "In orizzontale: scorri in verticale sulla metà destra dell’immagine per il volume, sulla metà sinistra per la luminosità (quella del player, ripristinata quando lo lasci). Non in verticale, dove scorrere verso il basso riduce il player.",
   "save": "Salva",
   "sched_canceled": "Annullata",
   "sched_local_hint": "Giorni e orari nel fuso orario del tuo dispositivo.",

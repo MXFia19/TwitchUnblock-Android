@@ -118,5 +118,23 @@
     "it": "Tutti i giochi",
     "ja": "すべてのゲーム",
     "zh-Hant": "所有遊戲"
+  },
+  "s7_swipe_levels": {
+    "fr": "Volume et luminosité en glissant",
+    "en": "Swipe for volume and brightness",
+    "es": "Volumen y brillo deslizando",
+    "ru": "Громкость и яркость жестами",
+    "it": "Volume e luminosità con lo scorrimento",
+    "ja": "スワイプで音量と明るさ",
+    "zh-Hant": "滑動調整音量與亮度"
+  },
+  "s7_swipe_levels_sub": {
+    "fr": "En paysage : glisse verticalement sur la moitié droite de l’image pour le volume, sur la moitié gauche pour la luminosité (celle du lecteur, rendue en le quittant). Pas en portrait, où glisser vers le bas réduit le lecteur.",
+    "en": "In landscape: swipe up or down on the right half of the video for volume, on the left half for brightness (the player’s own, reset when you leave it). Not in portrait, where swiping down shrinks the player.",
+    "es": "En horizontal: desliza verticalmente en la mitad derecha de la imagen para el volumen y en la mitad izquierda para el brillo (el del reproductor, que se restablece al salir). No en vertical, donde deslizar hacia abajo reduce el reproductor.",
+    "ru": "В горизонтальной ориентации: проведите вверх или вниз по правой половине видео, чтобы изменить громкость, по левой — яркость (только в плеере, сбрасывается при выходе). Не в вертикальной ориентации, где свайп вниз сворачивает плеер.",
+    "it": "In orizzontale: scorri in verticale sulla metà destra dell’immagine per il volume, sulla metà sinistra per la luminosità (quella del player, ripristinata quando lo lasci). Non in verticale, dove scorrere verso il basso riduce il player.",
+    "ja": "横向き時：映像の右半分を上下にスワイプで音量、左半分で明るさ（プレーヤー内のみ。離れると元に戻ります）。縦向きでは下にスワイプするとプレーヤーが縮小されるため使えません。",
+    "zh-Hant": "橫向時：在畫面右半部上下滑動調整音量，左半部調整亮度（僅限播放器，離開後恢復）。直向時不適用，因為向下滑動會縮小播放器。"
   }
 }

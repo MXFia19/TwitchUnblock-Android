@@ -1036,6 +1036,8 @@
   "s7_myproxy_ph": "host:puerto",
   "s7_myproxy_sub": "Tu propio proxy HTTP(S) (host:puerto): cuando se usa, el token, la lista maestra y las listas del vídeo pasan por él; los segmentos siguen llegando directamente. Se coloca al principio del orden de arriba. Vacío: sin proxy.",
   "s7_myproxy_user": "Usuario (opcional)",
+  "s7_swipe_levels": "Volumen y brillo deslizando",
+  "s7_swipe_levels_sub": "En horizontal: desliza verticalmente en la mitad derecha de la imagen para el volumen y en la mitad izquierda para el brillo (el del reproductor, que se restablece al salir). No en vertical, donde deslizar hacia abajo reduce el reproductor.",
   "save": "Guardar",
   "sched_canceled": "Cancelado",
   "sched_local_hint": "Días y horas de tu dispositivo.",

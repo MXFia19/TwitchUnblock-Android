@@ -13,6 +13,10 @@ fun PlayerControlsSettings() {
     Toggle(AppState.t("fill_screen"), AppState.t("fill_screen_sub"), PlayerPrefs.fillScreen.value) {
         PlayerPrefs.fillScreen.set(it)
     }
+    // Série 7 : volume et luminosité en glissant, en paysage (PlayerGestures.kt).
+    Toggle(AppState.t("s7_swipe_levels"), AppState.t("s7_swipe_levels_sub"), PlayerPrefs.swipeLevels.value) {
+        PlayerPrefs.swipeLevels.set(it)
+    }
     // Comme le site (menu du lecteur) : directs et VODs, multi-live compris.
     Toggle(AppState.t("pl_audio_comp"), AppState.t("pl_audio_comp_sub"), PlayerPrefs.audioCompressor.value) {
         PlayerPrefs.setCompressor(it)

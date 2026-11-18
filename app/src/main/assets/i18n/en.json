@@ -1036,6 +1036,8 @@
   "s7_myproxy_ph": "host:port",
   "s7_myproxy_sub": "Your own HTTP(S) proxy (host:port): when it's used, the token, the master playlist and the video playlists go through it; the segments still come directly. It goes to the top of the order above. Empty: no proxy.",
   "s7_myproxy_user": "Username (optional)",
+  "s7_swipe_levels": "Swipe for volume and brightness",
+  "s7_swipe_levels_sub": "In landscape: swipe up or down on the right half of the video for volume, on the left half for brightness (the player’s own, reset when you leave it). Not in portrait, where swiping down shrinks the player.",
   "save": "Save",
   "sched_canceled": "Canceled",
   "sched_local_hint": "Days and times in your device's time zone.",

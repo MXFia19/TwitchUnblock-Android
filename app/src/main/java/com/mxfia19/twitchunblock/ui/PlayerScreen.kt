@@ -199,6 +199,8 @@ fun PlayerScreen(session: PlaybackSession, nav: Navigator) {
         onDispose {
             activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             (activity as? MainActivity)?.updatePip()
+            // Luminosité réglée en glissant (PlayerGestures.kt) : celle du système hors du lecteur.
+            resetPlayerBrightness(activity)
         }
     }
     // Android 12 et plus : passage automatique en image dans l'image tant que ça joue.

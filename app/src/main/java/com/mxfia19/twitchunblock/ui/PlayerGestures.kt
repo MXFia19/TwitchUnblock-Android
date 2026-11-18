@@ -1,18 +1,22 @@
 package com.mxfia19.twitchunblock.ui
 
 import android.annotation.SuppressLint
+import android.app.Activity
 import android.content.Context
+import android.content.ContextWrapper
 import android.graphics.Canvas
 import android.graphics.ColorFilter
 import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
+import android.media.AudioManager
 import android.view.MotionEvent
 import android.view.ScaleGestureDetector
 import android.view.View
 import android.view.ViewConfiguration
 import android.view.ViewGroup
+import android.view.WindowManager
 import androidx.annotation.OptIn
 import androidx.media3.common.C
 import androidx.media3.common.ForwardingPlayer
@@ -23,6 +27,7 @@ import androidx.media3.ui.DefaultTimeBar
 import androidx.media3.ui.PlayerView
 import androidx.media3.ui.TimeBar
 import com.mxfia19.twitchunblock.core.Logger
+import com.mxfia19.twitchunblock.core.PlayerPrefs
 import com.mxfia19.twitchunblock.player.MutedRange
 import com.mxfia19.twitchunblock.player.PlaybackSession
 import com.mxfia19.twitchunblock.player.PlayerSpeed
@@ -35,8 +40,10 @@ import kotlin.math.max
  * double-tap à gauche / à droite pour −10 s / +10 s (les touchers suivants
  * enchaînent : +20 s, +30 s…), zoom à deux doigts (jusqu'à 4×, depuis le
  * point pincé ; agrandie, un doigt la déplace), remplir l'écran en paysage,
- * passages coupés d'une VOD en orange sur la barre. Les touchers sur les
- * boutons et la barre restent aux commandes de Media3.
+ * passages coupés d'une VOD en orange sur la barre. Série 7 : en paysage,
+ * glisser verticalement règle le volume (moitié droite) ou la luminosité de
+ * la fenêtre (moitié gauche), avec un indicateur (PlayerAddons.kt). Les
+ * touchers sur les boutons et la barre restent aux commandes de Media3.
  */
 @OptIn(UnstableApi::class)
 @SuppressLint("ViewConstructor")
@@ -84,6 +91,14 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
      *  (MiniPlayer.kt) ; null : pas de geste. */
     var onPullDown: (() -> Unit)? = null
     private var pulling = false
+
+    // ── Volume et luminosité (série 7) ──
+    /** Glissé vertical en cours : vrai pour le volume (moitié droite), faux
+     *  pour la luminosité (moitié gauche) ; null sans. */
+    private var swipeVolume: Boolean? = null
+    private var swipeStart = 0f
+    private var swipeStartY = 0f
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
 
     fun usePlayer(p: Player?) {
         if (p === source) return
@@ -175,6 +190,7 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
                 seekGesture = false
                 panning = false
                 pulling = false
+                swipeVolume = null
                 downX = ev.x
                 downY = ev.y
                 lastX = ev.x
@@ -204,12 +220,22 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
                 // Deux doigts : un zoom ; les commandes ne voient plus ce geste.
                 if (!swallow) cancelChildren(ev)
                 swallow = true
+                swipeVolume = null
                 tapAt = 0L
                 streak = false
             }
             MotionEvent.ACTION_MOVE -> {
                 // Série 6 : glissé franc vers le bas (portrait, image entière) : réduire.
                 val dy = ev.y - downY
+                // Série 7 : glissé vertical franc en paysage (image entière, loin
+                // des bords haut et bas) : le volume à droite, la luminosité à gauche.
+                if (!swallow && swipeLevelsOn() && zoom <= 1f && !downOnControl && ev.pointerCount == 1 &&
+                    abs(dy) > touchSlop * 1.5f && abs(dy) > abs(ev.x - downX) * 1.5f && awayFromEdges(downY)) {
+                    cancelChildren(ev)
+                    swallow = true
+                    startSwipe(volume = downX >= width / 2f, y = ev.y)
+                }
+                if (swipeVolume != null && ev.pointerCount == 1) moveSwipe(ev.y)
                 if (!swallow && onPullDown != null && zoom <= 1f && !downOnControl && ev.pointerCount == 1 &&
                     resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_PORTRAIT &&
                     dy > touchSlop * 2 && dy > abs(ev.x - downX) * 1.5f) {
@@ -233,6 +259,12 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
                 lastY = ev.y
             }
             MotionEvent.ACTION_UP -> {
+                if (swipeVolume != null) {
+                    swipeVolume = null
+                    swallow = false
+                    tapAt = 0L
+                    return true
+                }
                 if (pulling) {
                     pulling = false
                     swallow = false
@@ -264,6 +296,7 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
             }
             MotionEvent.ACTION_CANCEL -> {
                 pulling = false
+                swipeVolume = null
                 val was = swallow
                 swallow = false
                 seekGesture = false
@@ -274,6 +307,84 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
         }
         if (swallow) return true
         return super.dispatchTouchEvent(ev)
+    }
+
+    /** Volume et luminosité en glissant : réglage allumé, en paysage seulement
+     *  (en portrait, glisser vers le bas réduit le lecteur). */
+    private fun swipeLevelsOn(): Boolean = gestures && PlayerPrefs.swipeLevels.value &&
+        resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+    /** Loin des bords haut et bas : un glissé parti de là rappelle les barres du système. */
+    private fun awayFromEdges(y: Float): Boolean {
+        val edge = 36f * resources.displayMetrics.density
+        return y > edge && y < height - edge
+    }
+
+    private fun startSwipe(volume: Boolean, y: Float) {
+        swipeVolume = volume
+        swipeStartY = y
+        swipeStart = if (volume) currentVolume() else currentBrightness()
+        PlayerUi.showLevel(volume, swipeStart)
+    }
+
+    /** Les trois quarts de la hauteur de l'image vont de 0 à 100 %. */
+    private fun moveSwipe(y: Float) {
+        val volume = swipeVolume ?: return
+        val span = max(height * 0.75f, 1f)
+        val v = (swipeStart + (swipeStartY - y) / span).coerceIn(0f, 1f)
+        if (volume) setVolume(v) else setBrightness(v)
+    }
+
+    private fun currentVolume(): Float {
+        val am = audioManager ?: return 0f
+        val top = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        return if (top > 0) am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / top else 0f
+    }
+
+    /** Volume du média (celui des touches de l'appareil), sans le panneau
+     *  d'Android : l'indicateur le montre. */
+    private fun setVolume(v: Float) {
+        val am = audioManager ?: return
+        val top = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+        if (top <= 0) return
+        val index = Math.round(v * top)
+        try {
+            if (am.getStreamVolume(AudioManager.STREAM_MUSIC) != index) am.setStreamVolume(AudioManager.STREAM_MUSIC, index, 0)
+        } catch (e: SecurityException) {
+            // Mode Ne pas déranger : Android refuse de changer le son.
+        }
+        PlayerUi.showLevel(true, am.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat() / top)
+    }
+
+    /** Luminosité de la fenêtre (réglée par l'app), sinon celle du système (0 à 255). */
+    private fun currentBrightness(): Float {
+        val own = activity()?.window?.attributes?.screenBrightness ?: -1f
+        if (own >= 0f) return own
+        val system = try {
+            android.provider.Settings.System.getInt(context.contentResolver, android.provider.Settings.System.SCREEN_BRIGHTNESS) / 255f
+        } catch (e: Exception) {
+            0.5f
+        }
+        return system.coerceIn(0f, 1f)
+    }
+
+    /** Luminosité de la fenêtre seulement (celle du système ne change pas),
+     *  rendue en quittant le lecteur (resetPlayerBrightness). */
+    private fun setBrightness(v: Float) {
+        val window = activity()?.window ?: return
+        val attrs = window.attributes
+        attrs.screenBrightness = v.coerceIn(0.01f, 1f)
+        window.attributes = attrs
+        PlayerUi.showLevel(false, v)
+    }
+
+    private fun activity(): Activity? {
+        var c: Context? = context
+        while (c is ContextWrapper) {
+            if (c is Activity) return c
+            c = c.baseContext
+        }
+        return null
     }
 
     /** Geste déjà commencé chez les commandes : annulé pour elles. */
@@ -364,6 +475,15 @@ class GesturePlayerView(context: Context) : PlayerView(context) {
         // Autre format d'image (cadre changé) : décalage borné de nouveau.
         if (zoom > 1f) applyZoom()
     }
+}
+
+/** Luminosité réglée en glissant (série 7) : celle du système en quittant le lecteur. */
+fun resetPlayerBrightness(activity: Activity?) {
+    val window = activity?.window ?: return
+    val attrs = window.attributes
+    if (attrs.screenBrightness < 0f) return
+    attrs.screenBrightness = WindowManager.LayoutParams.BRIGHTNESS_OVERRIDE_NONE
+    window.attributes = attrs
 }
 
 /**

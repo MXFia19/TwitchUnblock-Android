@@ -1036,6 +1036,8 @@
   "s7_myproxy_ph": "hôte:port",
   "s7_myproxy_sub": "Un proxy HTTP(S) à toi (hôte:port) : quand il sert, le jeton, la liste maîtresse et les playlists de la vidéo passent par lui ; les segments restent en direct. Il prend place en tête de l'ordre ci-dessus. Vide : pas de proxy.",
   "s7_myproxy_user": "Identifiant (facultatif)",
+  "s7_swipe_levels": "Volume et luminosité en glissant",
+  "s7_swipe_levels_sub": "En paysage : glisse verticalement sur la moitié droite de l’image pour le volume, sur la moitié gauche pour la luminosité (celle du lecteur, rendue en le quittant). Pas en portrait, où glisser vers le bas réduit le lecteur.",
   "save": "Enregistrer",
   "sched_canceled": "Annulé",
   "sched_local_hint": "Jours et heures de ton appareil.",

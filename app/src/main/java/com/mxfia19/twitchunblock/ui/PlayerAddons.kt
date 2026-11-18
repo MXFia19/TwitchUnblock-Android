@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
@@ -90,6 +91,14 @@ object PlayerUi {
     /** Dernière VOD sondée : pas de nouvelle sonde quand la lecture redevient
      *  prête, ni après la croix. */
     var silenceProbed: String? = null
+    /** Volume ou luminosité réglés en glissant (série 7, PlayerGestures.kt) :
+     *  lequel (vrai : le volume), sa valeur de 0 à 1, et la fin de l'indicateur. */
+    var levelVolume by mutableStateOf(true)
+        private set
+    var levelValue by mutableStateOf(0f)
+        private set
+    var levelUntil by mutableStateOf(0L)
+        private set
 
     private var seekTotal = 0
     private var seekAt = 0L
@@ -97,6 +106,13 @@ object PlayerUi {
     fun flash(text: String, ms: Long = 700) {
         flashText = text
         flashUntil = SystemClock.uptimeMillis() + ms
+    }
+
+    /** Indicateur du volume (`volume` vrai) ou de la luminosité, 0,9 s après le dernier mouvement. */
+    fun showLevel(volume: Boolean, value: Float) {
+        levelVolume = volume
+        levelValue = value.coerceIn(0f, 1f)
+        levelUntil = SystemClock.uptimeMillis() + 900
     }
 
     /** Sauts enchaînés additionnés (« +30 s » au troisième) ; un saut dans
@@ -283,6 +299,43 @@ fun PlayerVideoOverlay(session: PlaybackSession) {
             Text(PlayerUi.flashText, color = Color.White, fontSize = 20.sp, fontWeight = FontWeight.Bold,
                  modifier = Modifier.clip(RoundedCornerShape(50)).background(Color(0x99000000))
                      .padding(horizontal = 18.dp, vertical = 10.dp))
+        }
+        // Volume ou luminosité réglés en glissant (série 7).
+        LevelIndicator(Modifier.align(Alignment.Center))
+    }
+}
+
+/** Indicateur du volume ou de la luminosité (glissé vertical en paysage,
+ *  PlayerGestures.kt) : icône, barre et pourcentage, le temps du geste. */
+@Composable
+private fun LevelIndicator(modifier: Modifier) {
+    val until = PlayerUi.levelUntil
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(until) {
+        val left = until - SystemClock.uptimeMillis()
+        if (left > 0) {
+            visible = true
+            delay(left)
+        }
+        visible = false
+    }
+    AnimatedVisibility(visible, modifier, enter = fadeIn(), exit = fadeOut()) {
+        val value = PlayerUi.levelValue
+        val icon = when {
+            !PlayerUi.levelVolume -> "☀"
+            value <= 0f -> "🔇"
+            value < 0.5f -> "🔉"
+            else -> "🔊"
+        }
+        val percent = java.text.NumberFormat.getPercentInstance(Locale.forLanguageTag(AppState.lang.code)).format(value.toDouble())
+        Row(Modifier.clip(RoundedCornerShape(50)).background(Color(0x99000000)).padding(horizontal = 16.dp, vertical = 10.dp),
+            verticalAlignment = Alignment.CenterVertically) {
+            Text(icon, fontSize = 18.sp)
+            Box(Modifier.padding(horizontal = 10.dp).width(120.dp).height(4.dp).clip(RoundedCornerShape(2.dp))
+                    .background(Color(0x55FFFFFF))) {
+                Box(Modifier.fillMaxWidth(value).height(4.dp).background(TU.primary))
+            }
+            Text(percent, color = Color.White, fontSize = 14.sp, fontWeight = FontWeight.Bold)
         }
     }
 }
