@@ -178,7 +178,7 @@ private fun MyProxyField() {
                                                   focusedTextColor = TU.text, unfocusedTextColor = TU.text,
                                                   focusedLabelColor = TU.primary, unfocusedLabelColor = TU.muted)
     Column(Modifier.padding(12.dp)) {
-        Text(AppState.t("src_myproxy"), color = TU.text, fontSize = 15.sp)
+        Text(AppState.t("src_proxy"), color = TU.text, fontSize = 15.sp)
         Text(AppState.t("s7_myproxy_sub"), color = TU.muted, fontSize = 12.sp)
         OutlinedTextField(
             value = address,

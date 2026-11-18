@@ -1,6 +1,6 @@
 {
   "_indirect": {
-    "keys": ["src_myproxy"]
+    "keys": ["src_proxy"]
   },
   "hide_gift_subs": {
     "fr": "Masquer les subs offerts",
@@ -20,7 +20,7 @@
     "ja": "「X が Y にサブをギフトしました」の行。まとめてギフトされると一度に数十行になります。まとめてのお知らせは残ります。",
     "zh-Hant": "「X 送了一份訂閱給 Y」的訊息，有人大量贈送時會一次出現數十則。大量贈送的總覽訊息會保留。"
   },
-  "src_myproxy": {
+  "src_proxy": {
     "fr": "Mon proxy",
     "en": "My proxy",
     "es": "Mi proxy",

@@ -48,26 +48,27 @@ object TwitchFollow {
     /** Requête enregistrée du cœur d'une catégorie sur twitch.tv, pour ne plus
      *  la suivre (comme unfollowCategoryOnTwitch, iOS). */
     private const val UNFOLLOW_GAME = "811e02e396ebba0664f21ff002f2eff3c6f57e8af9aedb4f4dfa77cefd0db43d"
+    /** FollowGameButton_FollowGame de twitch.tv (comme l'iPhone, vérifiée le
+     *  18/11 : sans compte, Twitch répond « unauthenticated », pas
+     *  PersistedQueryNotFound). */
+    private const val FOLLOW_GAME = "b846b65ba4bc9a3561dbe2d069d95deed9b9e031bcfda2482d1bedd84a1c2eb3"
 
     /**
      * Suit une catégorie sur le compte Twitch (série 7), ou ne la suit plus ;
      * vrai si Twitch l'a fait. Même mécanisme que les chaînes : session web
-     * et jeton d'intégrité (WebGql.mutation). Ne plus suivre : la requête
-     * enregistrée de twitch.tv (FollowGameButton_UnfollowGame). Suivre : son
-     * empreinte n'est pas connue, la mutation followGame est écrite (même
-     * entrée, `gameID`) ; refusée, l'appelant suit sur l'appareil.
+     * et jeton d'intégrité (WebGql.mutation), avec les requêtes enregistrées
+     * de twitch.tv (FollowGameButton_FollowGame, FollowGameButton_UnfollowGame,
+     * entrée `gameID`), comme l'iPhone ; refusée, l'appelant suit sur
+     * l'appareil.
      */
     suspend fun setGame(gameId: String, follow: Boolean): Boolean {
         val token = WebSession.token ?: return false
         if (gameId.isEmpty() || gameId.length > 20 || !gameId.all { it.isDigit() }) return false
         val field = if (follow) "followGame" else "unfollowGame"
-        val body = if (follow) {
-            WebGql.written("mutation { followGame(input: { gameID: \"$gameId\" }) { __typename } }")
-        } else {
-            WebGql.persisted("FollowGameButton_UnfollowGame", JSONObject().put("input", JSONObject().put("gameID", gameId)),
-                             UNFOLLOW_GAME)
-        }
-        val res = WebGql.mutation(body, token, if (follow) "FollowGame" else "FollowGameButton_UnfollowGame")
+        val operation = if (follow) "FollowGameButton_FollowGame" else "FollowGameButton_UnfollowGame"
+        val body = WebGql.persisted(operation, JSONObject().put("input", JSONObject().put("gameID", gameId)),
+                                    if (follow) FOLLOW_GAME else UNFOLLOW_GAME)
+        val res = WebGql.mutation(body, token, operation)
         val payload = res?.obj("data")?.obj(field)
         val errors = WebGql.errors(res)
         if (payload != null && payload.obj("error") == null && errors.isEmpty()) {
