@@ -127,6 +127,11 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
     /** Multi-live : toujours la qualité Auto, plafonnée à cette hauteur. */
     var forceAuto = false
     private var maxHeight: Int? = null
+    /** Multi-live (série 7) : son seul demandé pour cette tuile, la variante
+     *  audio_only sans l'image ; repris quand la lecture repart (Réessayer,
+     *  retour du réseau). setAudioOnly le change. */
+    var audioOnly by mutableStateOf(false)
+        private set
 
     private var master = Master()
     private var isClip = false
@@ -388,11 +393,34 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
         val keys = m.links.keys.toMutableList()
         if (m.text != null) keys += Quality.AUTO
         qualities = Quality.sort(keys, m.variants)
-        val key = if (forceAuto && m.text != null) Quality.AUTO
-                  else Quality.launchKey(keys, AppState.qualityPref, AppState.cellularQuality, NetworkStatus.isCellular, m.variants)
+        // Son seul demandé (multi-live) : la variante audio, s'il y en a une.
+        val audio = m.links.keys.firstOrNull { Quality.isAudio(it) }
+        val key = if (audioOnly && audio != null) audio else videoKey(m)
         Logger.info("PLAYER", "Qualité au lancement", key + if (NetworkStatus.isCellular) " (données mobiles)" else "")
         play(key, startMs)
         state = State.Ready
+    }
+
+    /** Qualité de l'image au lancement : Auto pour le multi-live, sinon
+     *  d'après les préférences (données mobiles comprises). */
+    private fun videoKey(m: Master): String {
+        val keys = m.links.keys.toMutableList()
+        if (m.text != null) keys += Quality.AUTO
+        return if (forceAuto && m.text != null) Quality.AUTO
+               else Quality.launchKey(keys, AppState.qualityPref, AppState.cellularQuality, NetworkStatus.isCellular, m.variants)
+    }
+
+    /** Son seul (multi-live, série 7) : la variante audio_only, ou l'image
+     *  rendue comme au lancement ; sans relancer les sources, une lecture en
+     *  pause le reste. */
+    fun setAudioOnly(on: Boolean) {
+        if (audioOnly == on) return
+        audioOnly = on
+        if (state !is State.Ready || master.isEmpty) return
+        val key = if (on) (master.links.keys.firstOrNull { Quality.isAudio(it) } ?: return) else videoKey(master)
+        val wanted = player.playWhenReady
+        selectQuality(key, remember = false)
+        player.playWhenReady = wanted
     }
 
     private fun play(key: String, startMs: Long) {

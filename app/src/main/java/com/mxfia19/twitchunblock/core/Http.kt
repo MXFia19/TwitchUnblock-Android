@@ -28,9 +28,11 @@ object Http {
     private val JSON = "application/json".toMediaType()
 
     /** Requête annulable ; null si pas de réponse (réseau, délai dépassé).
-     *  `timeout` : secondes pour tout l'échange (0 = délais du client). */
-    suspend fun send(request: Request, timeout: Long = 15): HttpResult? {
-        val c = if (timeout > 0) client.newBuilder().callTimeout(timeout, TimeUnit.SECONDS).build() else client
+     *  `timeout` : secondes pour tout l'échange (0 = délais du client).
+     *  `via` : autre client (Mon proxy, MyProxy.kt), sinon celui de l'app. */
+    suspend fun send(request: Request, timeout: Long = 15, via: OkHttpClient? = null): HttpResult? {
+        val base = via ?: client
+        val c = if (timeout > 0) base.newBuilder().callTimeout(timeout, TimeUnit.SECONDS).build() else base
         return suspendCancellableCoroutine { cont ->
             val call = c.newCall(request)
             cont.invokeOnCancellation { call.cancel() }
@@ -57,9 +59,10 @@ object Http {
         null   // adresse invalide
     }
 
-    suspend fun get(url: String, headers: Map<String, String> = emptyMap(), timeout: Long = 15): HttpResult? {
+    suspend fun get(url: String, headers: Map<String, String> = emptyMap(), timeout: Long = 15,
+                    via: OkHttpClient? = null): HttpResult? {
         val b = builder(url, headers) ?: return null
-        return send(b.build(), timeout)
+        return send(b.build(), timeout, via)
     }
 
     suspend fun head(url: String, headers: Map<String, String> = emptyMap(), timeout: Long = 8): Int? {
@@ -68,9 +71,9 @@ object Http {
     }
 
     suspend fun postJson(url: String, json: String, headers: Map<String, String> = emptyMap(),
-                         timeout: Long = 15): HttpResult? {
+                         timeout: Long = 15, via: OkHttpClient? = null): HttpResult? {
         val b = builder(url, headers) ?: return null
-        return send(b.post(json.toRequestBody(JSON)).build(), timeout)
+        return send(b.post(json.toRequestBody(JSON)).build(), timeout, via)
     }
 
     suspend fun postForm(url: String, form: Map<String, String>, timeout: Long = 15): HttpResult? {

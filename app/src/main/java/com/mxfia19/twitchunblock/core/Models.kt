@@ -30,6 +30,10 @@ data class Vod(
     val publishedAt: String,
     val lengthSeconds: Int,
     val viewCount: Int = 0,
+    /** Jeu (catégorie) de la VOD : filtre par jeu de la page d'une chaîne
+     *  (série 7) ; vide quand la liste ne le demande pas. */
+    val gameId: String = "",
+    val gameName: String = "",
 )
 
 data class Clip(

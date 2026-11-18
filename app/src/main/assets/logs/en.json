@@ -327,5 +327,19 @@
   "VOD sans son chez Twitch : piste audio vide (silence à 10, 50 et 90 %)": "VOD with no sound on Twitch: empty audio track (silent at 10, 50 and 90%)",
   "Tentative relais Bulgarie…": "Trying the Bulgaria relay…",
   "Relais Bulgarie sans direct (": "Bulgaria relay has no stream (",
-  "Relais Bulgarie OK": "Bulgaria relay OK"
+  "Relais Bulgarie OK": "Bulgaria relay OK",
+  "Tentative Mon proxy…": "Trying My proxy…",
+  "Mon proxy : pas de jeton (proxy injoignable ou refusé)": "My proxy: no token (proxy unreachable or refused)",
+  "Mon proxy : liste maîtresse refusée": "My proxy: master playlist refused",
+  "Mon proxy OK": "My proxy OK",
+  "Mon proxy": "My proxy",
+  "réglé": "set",
+  "aucun": "none",
+  "Son seul": "Audio only",
+  "Image rendue": "Picture back",
+  "Chat posé sur l'image déplacé": "Overlay chat moved",
+  "Catégorie suivie sur Twitch": "Category followed on Twitch",
+  "Catégorie retirée des suivis Twitch": "Category removed from Twitch follows",
+  "Catégorie pas suivie sur Twitch": "Category not followed on Twitch",
+  "Catégorie pas retirée des suivis Twitch": "Category not removed from Twitch follows"
 }

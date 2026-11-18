@@ -67,11 +67,21 @@ object MediaIcons {
         icon("chat", "M20,2H4C2.9,2 2.01,2.9 2.01,4L2,22l4,-4h14c1.1,0 2,-0.9 2,-2V4C22,2.9 21.1,2 20,2z" +
             "M6,9h12v2H6V9zM14,14H6v-2h8V14zM18,8H6V6h12V8z")
     }
+    /** Son seul (casque) et image rendue (caméra), série 7. */
+    val headset by lazy {
+        icon("headset", "M12,1c-4.97,0 -9,4.03 -9,9v7c0,1.66 1.34,3 3,3h3v-8H5v-2c0,-3.87 3.13,-7 7,-7s7,3.13 7,7v2h-4v8h3" +
+            "c1.66,0 3,-1.34 3,-3v-7c0,-4.97 -4.03,-9 -9,-9z")
+    }
+    val videocam by lazy {
+        icon("videocam", "M17,10.5V7c0,-0.55 -0.45,-1 -1,-1H4c-0.55,0 -1,0.45 -1,1v10c0,0.55 0.45,1 1,1h12c0.55,0 1,-0.45 1,-1v-3.5l4,4v-11l-4,4z")
+    }
 }
 
 /** Commandes d'une tuile du téléphone : les autres tuiles (place, nom) pour
- *  ⇄, échanger, et ouvrir dans le lecteur. */
-class TileControls(val others: List<Pair<Int, String>>, val onSwap: (Int) -> Unit, val onOpen: () -> Unit)
+ *  ⇄, échanger, et ouvrir dans le lecteur ; son seul pour la fenêtre active
+ *  (`onAudioOnly`, null ailleurs ou sans variante audio). */
+class TileControls(val others: List<Pair<Int, String>>, val onSwap: (Int) -> Unit, val onOpen: () -> Unit,
+                   val audioOnly: Boolean = false, val onAudioOnly: (() -> Unit)? = null)
 
 /**
  * Par-dessus une tuile du téléphone (série 6), comme l'iPhone : en haut le
@@ -133,6 +143,11 @@ fun PhoneTileOverlay(tile: MultiLiveModel.Tile, hasAudio: Boolean, sound: TileSo
                         }
                     }
                 }
+            }
+            // Son seul (fenêtre active) : casque pour le prendre, caméra pour rendre l'image.
+            controls.onAudioOnly?.let { toggle ->
+                TileIcon(if (controls.audioOnly) MediaIcons.videocam else MediaIcons.headset,
+                         AppState.t(if (controls.audioOnly) "s7_multi_show_video" else "s7_multi_audio_only"), toggle)
             }
             TileIcon(MediaIcons.openFull, AppState.t("multi_watch"), controls.onOpen)
             if (onRemove != null) TileIcon(Icons.Filled.Close, AppState.t("multi_remove"), onRemove)

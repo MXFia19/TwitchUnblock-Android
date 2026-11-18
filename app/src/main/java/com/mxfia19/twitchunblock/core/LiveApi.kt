@@ -2,12 +2,13 @@ package com.mxfia19.twitchunblock.core
 
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
+import okhttp3.OkHttpClient
 import org.json.JSONObject
 
 /**
  * Lancement d'un direct : infos de la chaîne (GQL), puis les sources dans
- * l'ordre des réglages — Bulgarie (test), Twitch officiel, Ma source — et
- * le Worker en dernier recours. Compte sans
+ * l'ordre des réglages — Bulgarie (test), Twitch officiel, Ma source, Mon
+ * proxy — et le Worker en dernier recours. Compte sans
  * pub sur la chaîne (abonné, Turbo ; session web) : son flux d'abord. Comme
  * getLive (iOS).
  */
@@ -16,13 +17,14 @@ object LiveApi {
      *  Celui du direct est demandé comme Streamlink (lecteur « embed »,
      *  platform « site », sans Device-ID ; comme l'iPhone, PR #12
      *  d'ihavenoface) : avec « site » ou un Device-ID, Twitch coud des
-     *  pré-rolls et des blocs de pubs. Le jeton des VODs ne change pas. */
-    suspend fun accessToken(id: String, live: Boolean): Pair<String, String>? {
+     *  pré-rolls et des blocs de pubs. Le jeton des VODs ne change pas.
+     *  `via` : demandé par Mon proxy (MyProxy.kt). */
+    suspend fun accessToken(id: String, live: Boolean, via: OkHttpClient? = null): Pair<String, String>? {
         val field = if (live) "streamPlaybackAccessToken(channelName" else "videoPlaybackAccessToken(id"
         val params = if (live) "platform: \"site\", playerBackend: \"mediaplayer\", playerType: \"embed\""
             else "platform: \"web\", playerBackend: \"mediaplayer\", playerType: \"site\""
         val q = "query { $field: \"${Gql.str(id)}\", params: {$params}) { value signature } }"
-        val data = Gql.raw(q, deviceId = !live)?.obj("data")
+        val data = Gql.raw(q, deviceId = !live, via = via)?.obj("data")
         val tok = data?.obj(if (live) "streamPlaybackAccessToken" else "videoPlaybackAccessToken")
         val value = tok?.str("value")
         val sig = tok?.str("signature")
@@ -110,6 +112,7 @@ object LiveApi {
                 "bg" -> found = bulgaria(login)
                 "twitch" -> if (token != null) found = usher(login, token, lowLatency, geo = geo)
                 "custom" -> StreamPrefs.customSourceHost()?.let { found = luminous(listOf(it), login, lowLatency) }
+                Config.MY_PROXY_SOURCE -> MyProxy.client()?.let { found = viaMyProxy(login, lowLatency, it) }
                 else -> {
                     val w = worker(login, geo)
                     found = w.first
@@ -193,13 +196,34 @@ object LiveApi {
         return Master(links, variants, synthesizeMaster(links, variants))
     }
 
+    /** Source « Mon proxy » (série 7) : jeton et liste maîtresse demandés
+     *  par le proxy de l'utilisateur, puis ses playlists aussi (MyProxy.route,
+     *  lues par le lecteur) ; les segments restent en direct. Le pays d'un
+     *  refus est celui du proxy, pas le nôtre : il n'est pas noté. */
+    private suspend fun viaMyProxy(login: String, lowLatency: Boolean, client: OkHttpClient): Master {
+        Logger.info("LIVE", "Tentative Mon proxy…")
+        val token = accessToken(login, live = true, via = client)
+        if (token == null) {
+            Logger.warn("LIVE", "Mon proxy : pas de jeton (proxy injoignable ou refusé)", "source suivante…")
+            return Master()
+        }
+        val m = usher(login, token, lowLatency, via = client)
+        if (m.isEmpty) {
+            Logger.warn("LIVE", "Mon proxy : liste maîtresse refusée", "source suivante…")
+            return m
+        }
+        MyProxy.route(m.links.values)
+        Logger.success("LIVE", "Mon proxy OK", "${m.links.size} qualités")
+        return m
+    }
+
     /** Flux officiel de Twitch (avec ses pubs). `codecs` : `supported_codecs`,
      *  jeton du compte seulement (qualités supérieures). `geo` : noté si usher
-     *  refuse le direct pour cause de pays. */
+     *  refuse le direct pour cause de pays. `via` : par Mon proxy. */
     private suspend fun usher(login: String, token: Pair<String, String>, lowLatency: Boolean,
-                              codecs: String? = null, geo: GeoBlockFlag? = null): Master {
+                              codecs: String? = null, geo: GeoBlockFlag? = null, via: OkHttpClient? = null): Master {
         if (login.isEmpty() || !login.all { it.isLetterOrDigit() || it == '_' }) return Master()
-        Logger.info("LIVE", "Tentative Twitch officiel…")
+        if (via == null) Logger.info("LIVE", "Tentative Twitch officiel…")
         val url = "https://usher.ttvnw.net/api/channel/hls/$login.m3u8" +
             "?allow_source=true&allow_audio_only=true&allow_spectre=true" +
             "&fast_bread=$lowLatency&low_latency=$lowLatency&player_backend=mediaplayer" +
@@ -207,11 +231,11 @@ object LiveApi {
             "&sig=${Http.encode(token.second)}&token=${Http.encode(token.first)}" +
             (codecs?.let { "&supported_codecs=${Http.encode(it)}" } ?: "")
         if (codecs != null) Logger.info("LIVE", "Qualités supérieures demandées à Twitch", codecs)
-        val r = Http.get(url, timeout = 8)
+        val r = Http.get(url, timeout = 8, via = via)
         if (r != null && r.code != 200 && geo != null && StreamApi.usherGeoBlocked(r.body)) geo.note("usher ${r.code}")
         if (r == null || r.code != 200) return Master()
         val m = parseMaster(r.body, url)
-        if (!m.isEmpty) Logger.success("LIVE", "Twitch officiel : ${m.links.size} qualités")
+        if (!m.isEmpty && via == null) Logger.success("LIVE", "Twitch officiel : ${m.links.size} qualités")
         return m
     }
 

@@ -114,10 +114,17 @@ object BrowseApi {
 
     class VideosPage(val videos: List<Vod>, val avatar: String?, val error: String?, val next: String?, val refused: Boolean)
 
-    suspend fun channelVideos(login: String, after: String?): VideosPage {
+    /** VODs (archives) d'une chaîne, 100 par page, avec leur jeu. `gameId` :
+     *  celles de ce jeu seulement (filtre de Twitch, options.gameIDs ; série 7). */
+    suspend fun channelVideos(login: String, after: String?, gameId: String? = null): VideosPage {
+        // Identifiant d'un jeu : des chiffres seulement (écrit tel quel dans la requête).
+        val game = gameId?.takeIf { it.isNotEmpty() && it.length <= 20 && it.all { c -> c.isDigit() } }
+        if (gameId != null && game == null) return VideosPage(emptyList(), null, null, null, false)
+        val filter = if (game != null) ", options: { gameIDs: [\"$game\"] }" else ""
         val q = "query(\$l: String!, \$after: Cursor) { user(login: \$l) { profileImageURL(width: 150) " +
-            "videos(first: 100, type: ARCHIVE, sort: TIME, after: \$after) { edges { cursor node { id title " +
-            "previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds viewCount } } pageInfo { hasNextPage } } } }"
+            "videos(first: 100, type: ARCHIVE, sort: TIME, after: \$after$filter) { edges { cursor node { id title " +
+            "previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds viewCount game { id displayName } } } " +
+            "pageInfo { hasNextPage } } } }"
         val page = Gql.listPage(q, Gql.vars("l" to login.lowercase()), after)
             ?: return VideosPage(emptyList(), null, "network", after, false)
         if (page.second) return VideosPage(emptyList(), null, null, null, true)
@@ -126,8 +133,10 @@ object BrowseApi {
         val list = videos?.arr("edges")?.objects()?.mapNotNull { e ->
             val n = e.obj("node") ?: return@mapNotNull null
             val id = n.str("id") ?: return@mapNotNull null
+            val g = n.obj("game")
             Vod(id, n.str("title") ?: "", n.str("previewThumbnailURL") ?: "", n.str("publishedAt") ?: "",
-                n.int("lengthSeconds") ?: 0, n.int("viewCount") ?: 0)
+                n.int("lengthSeconds") ?: 0, n.int("viewCount") ?: 0,
+                gameId = g?.str("id") ?: "", gameName = g?.str("displayName") ?: "")
         } ?: emptyList()
         return VideosPage(list, user.str("profileImageURL"), null, Gql.nextCursor(videos), false)
     }

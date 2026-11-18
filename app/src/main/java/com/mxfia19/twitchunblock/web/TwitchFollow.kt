@@ -44,4 +44,39 @@ object TwitchFollow {
         Logger.warn("FOLLOW", "Suivi refusé", code.ifEmpty { null })
         return code
     }
+
+    /** Requête enregistrée du cœur d'une catégorie sur twitch.tv, pour ne plus
+     *  la suivre (comme unfollowCategoryOnTwitch, iOS). */
+    private const val UNFOLLOW_GAME = "811e02e396ebba0664f21ff002f2eff3c6f57e8af9aedb4f4dfa77cefd0db43d"
+    /** FollowGameButton_FollowGame de twitch.tv (comme l'iPhone, vérifiée le
+     *  18/11 : sans compte, Twitch répond « unauthenticated », pas
+     *  PersistedQueryNotFound). */
+    private const val FOLLOW_GAME = "b846b65ba4bc9a3561dbe2d069d95deed9b9e031bcfda2482d1bedd84a1c2eb3"
+
+    /**
+     * Suit une catégorie sur le compte Twitch (série 7), ou ne la suit plus ;
+     * vrai si Twitch l'a fait. Même mécanisme que les chaînes : session web
+     * et jeton d'intégrité (WebGql.mutation), avec les requêtes enregistrées
+     * de twitch.tv (FollowGameButton_FollowGame, FollowGameButton_UnfollowGame,
+     * entrée `gameID`), comme l'iPhone ; refusée, l'appelant suit sur
+     * l'appareil.
+     */
+    suspend fun setGame(gameId: String, follow: Boolean): Boolean {
+        val token = WebSession.token ?: return false
+        if (gameId.isEmpty() || gameId.length > 20 || !gameId.all { it.isDigit() }) return false
+        val field = if (follow) "followGame" else "unfollowGame"
+        val operation = if (follow) "FollowGameButton_FollowGame" else "FollowGameButton_UnfollowGame"
+        val body = WebGql.persisted(operation, JSONObject().put("input", JSONObject().put("gameID", gameId)),
+                                    if (follow) FOLLOW_GAME else UNFOLLOW_GAME)
+        val res = WebGql.mutation(body, token, operation)
+        val payload = res?.obj("data")?.obj(field)
+        val errors = WebGql.errors(res)
+        if (payload != null && payload.obj("error") == null && errors.isEmpty()) {
+            Logger.success("FOLLOW", if (follow) "Catégorie suivie sur Twitch" else "Catégorie retirée des suivis Twitch", gameId)
+            return true
+        }
+        Logger.warn("FOLLOW", if (follow) "Catégorie pas suivie sur Twitch" else "Catégorie pas retirée des suivis Twitch",
+                    errors.ifEmpty { null })
+        return false
+    }
 }

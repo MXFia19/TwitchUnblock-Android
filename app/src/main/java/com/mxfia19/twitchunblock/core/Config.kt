@@ -30,6 +30,9 @@ object Config {
     /** Sources du direct, dans l'ordre automatique ; le Worker toujours en dernier. */
     val LIVE_SOURCES = listOf("bg", "twitch")
     val LIVE_SOURCE_CHOICES = listOf("auto", "bg", "twitch")
+    /** Source « Mon proxy » (série 7, MyProxy.kt) : proposée seulement quand
+     *  un proxy est réglé, comme Ma source (« custom »). */
+    const val MY_PROXY_SOURCE = "proxy"
 
     const val USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Safari/537.36"
     val TWITCH_HEADERS = mapOf(

@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.mxfia19.twitchunblock.web.TwitchFollow
 import com.mxfia19.twitchunblock.web.WebGql
 import com.mxfia19.twitchunblock.web.WebSession
 import kotlinx.coroutines.async
@@ -16,9 +17,10 @@ import org.json.JSONObject
 /**
  * Catégories suivies : celles de l'appareil (« followed_categories », même
  * format que la sauvegarde de l'iPhone : id, name, box) et celles du compte
- * Twitch quand la session web est là (lecture seule). Leur audience est
- * demandée par paquets de 15 : Twitch refuse une requête GQL de plus de 15
- * alias. Fil principal.
+ * Twitch quand la session web est là ; depuis la série 7, le cœur les suit
+ * ou les retire aussi sur le compte (toggleHeart), comme les chaînes. Leur
+ * audience est demandée par paquets de 15 : Twitch refuse une requête GQL
+ * de plus de 15 alias. Fil principal.
  */
 object FollowedCategories {
     /** Suivies sur l'appareil, la plus récente d'abord (200 au plus). */
@@ -81,6 +83,44 @@ object FollowedCategories {
             c.viewers?.let { viewers[c.id] = it }
         }
         save()
+    }
+
+    /**
+     * Cœur d'une catégorie (série 7). Avec la session web, comme le cœur
+     * d'une chaîne : suivie sur le compte Twitch, ou retirée du compte (et de
+     * l'appareil si elle y était aussi) ; Twitch refuse de la suivre : suivie
+     * sur l'appareil, et on le dit. Une catégorie suivie sur l'appareil
+     * seulement s'y retire. Sans session : sur l'appareil, comme avant. Rend
+     * le texte à afficher, null quand le cœur suffit.
+     */
+    suspend fun toggleHeart(c: Category): String? {
+        if (!validId(c.id)) return null
+        val local = isFollowedLocally(c.id)
+        val onTwitch = isFollowedOnTwitch(c.id)
+        if (!WebSession.active) {
+            if (onTwitch && !local) return AppState.t("br_cat_twitch")
+            toggle(c)
+            return null
+        }
+        if (onTwitch) {
+            if (!TwitchFollow.setGame(c.id, follow = false)) return AppState.t("follow_failed")
+            twitch = twitch.filter { it.id != c.id }
+            if (local) toggle(c)
+            return null
+        }
+        if (local) {
+            toggle(c)
+            return null
+        }
+        if (TwitchFollow.setGame(c.id, follow = true)) {
+            // Ajoutée tout de suite (la liste du compte n'est relue que toutes les 10 min).
+            twitch = listOf(Category(c.id, c.name.take(100), c.boxArt.takeIf { it.startsWith("https://") } ?: "", c.viewers)) +
+                twitch.filter { it.id != c.id }
+            c.viewers?.let { viewers[c.id] = it }
+            return null
+        }
+        toggle(c)
+        return AppState.t("s7_cat_follow_local")
     }
 
     /** Twitch puis appareil, sans doublon, dans l'ordre choisi (les plus

@@ -15,6 +15,7 @@ import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.source.DefaultMediaSourceFactory
 import com.mxfia19.twitchunblock.core.Config
+import com.mxfia19.twitchunblock.core.MyProxy
 import com.mxfia19.twitchunblock.download.Downloads
 import java.io.ByteArrayOutputStream
 
@@ -73,6 +74,7 @@ class RewritingFactory(private val upstream: DataSource.Factory) : DataSource.Fa
  * premier. Chaque playlist .m3u8 est lue en entier puis réécrite par
  * VodUnmute : son d'origine « N.ts » tant que le CDN le sert, sinon
  * « N-muted.ts » (son coupé) ; en fMP4, « -unmuted.mp4 » est servi avec le son.
+ * Les playlists d'un direct servi par Mon proxy sont lues par lui (MyProxy.kt).
  */
 @OptIn(UnstableApi::class)
 private class PlaylistRewritingDataSource(private val upstream: DataSource) : DataSource {
@@ -91,11 +93,25 @@ private class PlaylistRewritingDataSource(private val upstream: DataSource) : Da
             buffer = null
             return upstream.open(dataSpec)
         }
+        // Fragment d'un téléchargement (« #tu=… », DownloadPart) : pour nous seuls.
+        val address = dataSpec.uri.toString().substringBefore('#')
+        // Source « Mon proxy » : ses playlists passent par lui, les segments restent en direct.
+        val original = MyProxy.fetchPlaylist(address) ?: readUpstream(dataSpec, address)
+        val text = String(original, Charsets.UTF_8)
+        // Passages coupés (son d'origine tant que le CDN l'a) et partie d'une VOD : VodUnmute.kt.
+        val rewritten = VodUnmute.rewrite(text, dataSpec.uri)
+        val bytes = if (rewritten !== text) rewritten.toByteArray(Charsets.UTF_8) else original
+        buffer = bytes
+        position = 0
+        return bytes.size.toLong()
+    }
+
+    /** Playlist lue en entier par le réseau du lecteur. */
+    private fun readUpstream(dataSpec: DataSpec, address: String): ByteArray {
         val out = ByteArrayOutputStream()
         try {
-            // Fragment d'un téléchargement (« #tu=… », DownloadPart) : pour nous seuls.
             upstream.open(if (dataSpec.uri.fragment == null) dataSpec
-                          else dataSpec.buildUpon().setUri(Uri.parse(dataSpec.uri.toString().substringBefore('#'))).build())
+                          else dataSpec.buildUpon().setUri(Uri.parse(address)).build())
             val chunk = ByteArray(16 * 1024)
             while (true) {
                 val n = upstream.read(chunk, 0, chunk.size)
@@ -105,13 +121,7 @@ private class PlaylistRewritingDataSource(private val upstream: DataSource) : Da
         } finally {
             upstream.close()
         }
-        val text = out.toString("UTF-8")
-        // Passages coupés (son d'origine tant que le CDN l'a) et partie d'une VOD : VodUnmute.kt.
-        val rewritten = VodUnmute.rewrite(text, dataSpec.uri)
-        val bytes = if (rewritten !== text) rewritten.toByteArray(Charsets.UTF_8) else out.toByteArray()
-        buffer = bytes
-        position = 0
-        return bytes.size.toLong()
+        return out.toByteArray()
     }
 
     override fun read(target: ByteArray, offset: Int, length: Int): Int {

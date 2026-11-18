@@ -58,6 +58,10 @@ object Features {
     val chatKeepDeleted = BoolPref("chat_keep_deleted", false)
     val chatLoadHistory = BoolPref("chat_load_history", true)
     val chatHideBots = BoolPref("chat_hide_bots", false)
+    /** Subs offerts un par un (« X gifted a sub to Y ») masqués ; le message
+     *  du lot (submysterygift) reste. Coupé par défaut, comme le site
+     *  (« hideGiftSubs », synchronisé). */
+    val chatHideGiftSubs = BoolPref("chat_hide_gift_subs", false)
     val chatHideCommands = BoolPref("chat_hide_commands", false)
     val mutedWords = WordsPref("chat_muted_words", 50)
     val blockedUsers = WordsPref("chat_blocked_users", 500)
@@ -90,7 +94,7 @@ object Features {
     var topLang by mutableStateOf<String?>(null)
         private set
 
-    private val all get() = listOf(chatTimestamps, chatKeepDeleted, chatLoadHistory, chatHideBots, chatHideCommands,
+    private val all get() = listOf(chatTimestamps, chatKeepDeleted, chatLoadHistory, chatHideBots, chatHideGiftSubs, chatHideCommands,
                                    autoClaimChest, showPinned, showLiveEvents, enableRaids, showWatchStreak,
                                    subAdFree, dropsProgress, dropsAutoClaim, dropsNotify, cloudSync, showRecent,
                                    dlWifiOnly)

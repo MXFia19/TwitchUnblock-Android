@@ -27,9 +27,11 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -53,6 +55,7 @@ import com.mxfia19.twitchunblock.core.Hidden
 import com.mxfia19.twitchunblock.core.Pins
 import com.mxfia19.twitchunblock.core.TwitchStream
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Icônes absentes de material-icons-core (tracés Material, 24 × 24). */
 object BrowseIcons {
@@ -291,25 +294,34 @@ fun ContinueItem(entry: ContinueWatching.Entry, modifier: Modifier = Modifier, o
 }
 
 /** Rangée des catégories suivies (accueil) : appui long pour ne plus
- *  suivre une catégorie de l'appareil. */
+ *  suivre une catégorie de l'appareil, ou du compte Twitch avec la session
+ *  web (série 7, FollowedCategories.toggleHeart). */
 @Composable
 fun FollowedCategoriesRow(onOpen: (Category) -> Unit) {
     val list = FollowedCategories.sorted()
     if (list.isEmpty()) return
     val compact = BrowsePrefs.compactCategories.value
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
     Column {
         Text(AppState.t("cust_followed_cats"), color = TU.text, fontSize = 18.sp, fontWeight = FontWeight.Bold,
              modifier = Modifier.padding(top = 8.dp, bottom = 8.dp))
         LazyRow(horizontalArrangement = Arrangement.spacedBy(if (compact) 8.dp else 10.dp)) {
             items(list, key = { "fc-" + it.id }) { c ->
                 var menu by remember { mutableStateOf(false) }
+                val removable = FollowedCategories.isFollowedLocally(c.id) ||
+                    (com.mxfia19.twitchunblock.web.WebSession.active && FollowedCategories.isFollowedOnTwitch(c.id))
                 Box {
                     CategoryCard(c, Modifier.width(if (compact) 84.dp else 112.dp),
-                                 onLongClick = if (FollowedCategories.isFollowedLocally(c.id)) ({ menu = true }) else null) { onOpen(c) }
+                                 onLongClick = if (removable) ({ menu = true }) else null) { onOpen(c) }
                     DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                         DropdownMenuItem(text = { Text(AppState.t("unfollow")) }, onClick = {
                             menu = false
-                            FollowedCategories.toggle(c)
+                            scope.launch {
+                                FollowedCategories.toggleHeart(c)?.let {
+                                    android.widget.Toast.makeText(context, it, android.widget.Toast.LENGTH_LONG).show()
+                                }
+                            }
                         })
                     }
                 }

@@ -1,0 +1,149 @@
+{
+  "_indirect": {
+    "keys": ["src_proxy"]
+  },
+  "hide_gift_subs": {
+    "fr": "Masquer les subs offerts",
+    "en": "Hide gifted subs",
+    "es": "Ocultar suscripciones regaladas",
+    "ru": "Скрывать подаренные подписки",
+    "it": "Nascondi gli abbonamenti regalati",
+    "ja": "ギフトサブを非表示",
+    "zh-Hant": "隱藏贈送的訂閱"
+  },
+  "hide_gift_subs_sub": {
+    "fr": "Les lignes « X a offert un sub à Y », par dizaines quand quelqu'un en offre en lot. Le message du lot reste.",
+    "en": "The “X gifted a sub to Y” lines, dozens at once when someone gifts a batch. The batch message stays.",
+    "es": "Las líneas «X regaló una suscripción a Y», decenas a la vez cuando alguien regala un lote. El mensaje del lote se mantiene.",
+    "ru": "Строки «X подарил(а) подписку Y» — десятками сразу, когда кто-то дарит пачку. Сообщение о пачке остаётся.",
+    "it": "Le righe «X ha regalato un abbonamento a Y», a decine quando qualcuno ne regala un lotto. Il messaggio del lotto resta.",
+    "ja": "「X が Y にサブをギフトしました」の行。まとめてギフトされると一度に数十行になります。まとめてのお知らせは残ります。",
+    "zh-Hant": "「X 送了一份訂閱給 Y」的訊息，有人大量贈送時會一次出現數十則。大量贈送的總覽訊息會保留。"
+  },
+  "src_proxy": {
+    "fr": "Mon proxy",
+    "en": "My proxy",
+    "es": "Mi proxy",
+    "ru": "Мой прокси",
+    "it": "Il mio proxy",
+    "ja": "マイプロキシ",
+    "zh-Hant": "我的代理伺服器"
+  },
+  "s7_myproxy_sub": {
+    "fr": "Un proxy HTTP(S) à toi (hôte:port) : quand il sert, le jeton, la liste maîtresse et les playlists de la vidéo passent par lui ; les segments restent en direct. Il prend place en tête de l'ordre ci-dessus. Vide : pas de proxy.",
+    "en": "Your own HTTP(S) proxy (host:port): when it's used, the token, the master playlist and the video playlists go through it; the segments still come directly. It goes to the top of the order above. Empty: no proxy.",
+    "es": "Tu propio proxy HTTP(S) (host:puerto): cuando se usa, el token, la lista maestra y las listas del vídeo pasan por él; los segmentos siguen llegando directamente. Se coloca al principio del orden de arriba. Vacío: sin proxy.",
+    "ru": "Ваш собственный HTTP(S)-прокси (хост:порт): когда он используется, токен, мастер-плейлист и плейлисты видео идут через него, а сегменты по-прежнему загружаются напрямую. Он встаёт в начало порядка выше. Пусто — без прокси.",
+    "it": "Il tuo proxy HTTP(S) (host:porta): quando viene usato, il token, la playlist principale e le playlist del video passano da lui; i segmenti arrivano comunque direttamente. Va in cima all'ordine qui sopra. Vuoto: nessun proxy.",
+    "ja": "自分の HTTP(S) プロキシ（ホスト:ポート）。使用時はトークン、マスタープレイリスト、動画のプレイリストがプロキシを経由し、セグメントは引き続き直接読み込まれます。上の順番の先頭に入ります。空欄ならプロキシはありません。",
+    "zh-Hant": "你自己的 HTTP(S) 代理伺服器（主機:連接埠）：使用時，權杖、主播放清單與影片的播放清單都會經過它，影片片段仍直接下載。會排在上方順序的最前面。留空：不使用代理。"
+  },
+  "s7_myproxy_ph": {
+    "fr": "hôte:port",
+    "en": "host:port",
+    "es": "host:puerto",
+    "ru": "хост:порт",
+    "it": "host:porta",
+    "ja": "ホスト:ポート",
+    "zh-Hant": "主機:連接埠"
+  },
+  "s7_myproxy_user": {
+    "fr": "Identifiant (facultatif)",
+    "en": "Username (optional)",
+    "es": "Usuario (opcional)",
+    "ru": "Логин (необязательно)",
+    "it": "Nome utente (facoltativo)",
+    "ja": "ユーザー名（任意）",
+    "zh-Hant": "使用者名稱（選填）"
+  },
+  "s7_myproxy_pass": {
+    "fr": "Mot de passe (facultatif)",
+    "en": "Password (optional)",
+    "es": "Contraseña (opcional)",
+    "ru": "Пароль (необязательно)",
+    "it": "Password (facoltativa)",
+    "ja": "パスワード（任意）",
+    "zh-Hant": "密碼（選填）"
+  },
+  "s7_myproxy_bad": {
+    "fr": "Adresse refusée : hôte:port, par exemple 203.0.113.5:8080 ou proxy.exemple.fr:3128.",
+    "en": "Address refused: host:port, for example 203.0.113.5:8080 or proxy.example.com:3128.",
+    "es": "Dirección rechazada: host:puerto, por ejemplo 203.0.113.5:8080 o proxy.ejemplo.com:3128.",
+    "ru": "Адрес отклонён: хост:порт, например 203.0.113.5:8080 или proxy.example.com:3128.",
+    "it": "Indirizzo rifiutato: host:porta, ad esempio 203.0.113.5:8080 o proxy.esempio.it:3128.",
+    "ja": "アドレスが無効です。ホスト:ポートの形式で入力してください（例：203.0.113.5:8080、proxy.example.com:3128）。",
+    "zh-Hant": "位址無效：請使用「主機:連接埠」，例如 203.0.113.5:8080 或 proxy.example.com:3128。"
+  },
+  "s7_multi_audio_only": {
+    "fr": "Son seul pour cette vidéo",
+    "en": "Audio only for this video",
+    "es": "Solo audio para este vídeo",
+    "ru": "Только звук для этого видео",
+    "it": "Solo audio per questo video",
+    "ja": "この動画を音声のみにする",
+    "zh-Hant": "這部影片只播放聲音"
+  },
+  "s7_multi_show_video": {
+    "fr": "Remettre l'image",
+    "en": "Bring the picture back",
+    "es": "Volver a mostrar la imagen",
+    "ru": "Вернуть изображение",
+    "it": "Rimetti l'immagine",
+    "ja": "映像を戻す",
+    "zh-Hant": "恢復畫面"
+  },
+  "s7_chat_move": {
+    "fr": "Déplacer le chat",
+    "en": "Move the chat",
+    "es": "Mover el chat",
+    "ru": "Переместить чат",
+    "it": "Sposta la chat",
+    "ja": "チャットを移動",
+    "zh-Hant": "移動聊天室"
+  },
+  "s7_chat_overlay_pos_sub": {
+    "fr": "En paysage, quand le chat est posé sur l'image : à gauche ou à droite, sur toute la hauteur ou dans un coin. Il se déplace aussi en glissant sa poignée du haut : lâché, il se cale dans le coin ou au milieu du bord le plus proche.",
+    "en": "In landscape, when the chat sits on the video: left or right, full height or in a corner. You can also drag it by its top handle: let go and it snaps to the nearest corner or the middle of the nearest side.",
+    "es": "En horizontal, cuando el chat está sobre la imagen: a la izquierda o a la derecha, a toda la altura o en una esquina. También se mueve arrastrando su asa superior: al soltarlo, se coloca en la esquina o en el centro del borde más cercano.",
+    "ru": "В горизонтальной ориентации, когда чат поверх видео: слева или справа, на всю высоту или в углу. Его также можно перетащить за верхнюю ручку: отпущенный, он встаёт в ближайший угол или в середину ближайшего края.",
+    "it": "In orizzontale, quando la chat è sopra l'immagine: a sinistra o a destra, a tutta altezza o in un angolo. Si sposta anche trascinando la sua maniglia in alto: rilasciata, si aggancia all'angolo o al centro del bordo più vicino.",
+    "ja": "横向きでチャットを映像の上に重ねるときの位置：左か右、全高か隅。上部のハンドルをドラッグして動かすこともでき、離すと最も近い隅か左右の辺の中央に吸着します。",
+    "zh-Hant": "橫向時，聊天室疊在畫面上的位置：左側或右側、全高或角落。也可以拖曳上方的把手移動：放開後會貼齊最近的角落或左右邊的中間。"
+  },
+  "s7_all_games": {
+    "fr": "Tous les jeux",
+    "en": "All games",
+    "es": "Todos los juegos",
+    "ru": "Все игры",
+    "it": "Tutti i giochi",
+    "ja": "すべてのゲーム",
+    "zh-Hant": "所有遊戲"
+  },
+  "s7_swipe_levels": {
+    "fr": "Volume et luminosité en glissant",
+    "en": "Swipe for volume and brightness",
+    "es": "Volumen y brillo deslizando",
+    "ru": "Громкость и яркость жестами",
+    "it": "Volume e luminosità con lo scorrimento",
+    "ja": "スワイプで音量と明るさ",
+    "zh-Hant": "滑動調整音量與亮度"
+  },
+  "s7_swipe_levels_sub": {
+    "fr": "En paysage : glisse verticalement sur la moitié droite de l’image pour le volume, sur la moitié gauche pour la luminosité (celle du lecteur, rendue en le quittant). Pas en portrait, où glisser vers le bas réduit le lecteur.",
+    "en": "In landscape: swipe up or down on the right half of the video for volume, on the left half for brightness (the player’s own, reset when you leave it). Not in portrait, where swiping down shrinks the player.",
+    "es": "En horizontal: desliza verticalmente en la mitad derecha de la imagen para el volumen y en la mitad izquierda para el brillo (el del reproductor, que se restablece al salir). No en vertical, donde deslizar hacia abajo reduce el reproductor.",
+    "ru": "В горизонтальной ориентации: проведите вверх или вниз по правой половине видео, чтобы изменить громкость, по левой — яркость (только в плеере, сбрасывается при выходе). Не в вертикальной ориентации, где свайп вниз сворачивает плеер.",
+    "it": "In orizzontale: scorri in verticale sulla metà destra dell’immagine per il volume, sulla metà sinistra per la luminosità (quella del player, ripristinata quando lo lasci). Non in verticale, dove scorrere verso il basso riduce il player.",
+    "ja": "横向き時：映像の右半分を上下にスワイプで音量、左半分で明るさ（プレーヤー内のみ。離れると元に戻ります）。縦向きでは下にスワイプするとプレーヤーが縮小されるため使えません。",
+    "zh-Hant": "橫向時：在畫面右半部上下滑動調整音量，左半部調整亮度（僅限播放器，離開後恢復）。直向時不適用，因為向下滑動會縮小播放器。"
+  },
+  "s7_cat_follow_local": {
+    "fr": "Twitch a refusé de suivre cette catégorie : elle est suivie sur cet appareil.",
+    "en": "Twitch refused to follow this category: it is followed on this device instead.",
+    "es": "Twitch rechazó seguir esta categoría: se sigue en este dispositivo.",
+    "ru": "Twitch отказался добавить эту категорию: она отслеживается на этом устройстве.",
+    "it": "Twitch ha rifiutato di seguire questa categoria: è seguita su questo dispositivo.",
+    "ja": "Twitch でこのカテゴリーをフォローできませんでした。この端末でフォローしています。",
+    "zh-Hant": "Twitch 拒絕追隨此分類：改為在此裝置上追隨。"
+  }
+}

@@ -2,6 +2,8 @@ package com.mxfia19.twitchunblock.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -164,6 +166,16 @@ fun VodFilterField(text: String, onChange: (String) -> Unit) {
         ),
         modifier = Modifier.fillMaxWidth(),
     )
+}
+
+/** Filtre des VODs par jeu (série 7) : « Tous les jeux », puis les jeux des
+ *  VODs chargées, le plus fréquent d'abord. */
+@Composable
+fun VodGameChips(games: List<Pair<String, String>>, selected: String?, onSelect: (String?) -> Unit) {
+    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+        TabChip(AppState.t("s7_all_games"), selected == null) { onSelect(null) }
+        for ((id, name) in games) TabChip(name.ifEmpty { "—" }, selected == id) { onSelect(id) }
+    }
 }
 
 /** Titre qui contient le mot-clé (sans tenir compte de la casse). */
