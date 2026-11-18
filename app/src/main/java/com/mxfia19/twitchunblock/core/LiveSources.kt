@@ -4,8 +4,8 @@ import java.util.Collections
 
 /**
  * Ordre des sources du direct (série 6), comme liveSourceOrder (iOS) et le
- * site : chaque source à la place choisie, Ma source comprise quand elle est
- * réglée, le Worker toujours en dernier. Avant lui, seule la première source
+ * site : chaque source à la place choisie, Ma source et Mon proxy (série 7)
+ * compris quand ils sont réglés, le Worker toujours en dernier. Avant lui, seule la première source
  * se choisissait (AppState.liveSource, gardée pour la TV et la sauvegarde) :
  * un ordre jamais rangé part d'elle.
  */
@@ -30,7 +30,6 @@ object LiveSources {
      *  dernier rangement (TV, sauvegarde importée) passe en tête ;
      *  « Automatique » remet l'ordre par défaut. */
     fun order(): List<String> {
-        val custom = StreamPrefs.customSourceHost() != null
         val chosen = AppState.liveSource
         var list = parse(saved.value)
         if (list.isNotEmpty()) {
@@ -38,17 +37,18 @@ object LiveSources {
             if (chosen == "auto") {
                 list = emptyList()
             } else if (chosen in Config.LIVE_SOURCES && chosen != first) {
-                val head = if (list.first() == "custom") listOf("custom") else emptyList()
+                // Sources à soi (Ma source, Mon proxy) gardées devant.
+                val head = list.takeWhile { it == "custom" || it == Config.MY_PROXY_SOURCE }
                 list = head + chosen + list.filter { it != chosen && it !in head }
             }
         } else if (chosen in Config.LIVE_SOURCES) {
             list = listOf(chosen)
         }
-        return complete(list, custom)
+        return complete(list)
     }
 
-    /** Ordre par défaut : l'automatique, Ma source en tête quand elle est réglée. */
-    fun defaultOrder(): List<String> = complete(emptyList(), StreamPrefs.customSourceHost() != null)
+    /** Ordre par défaut : l'automatique, Ma source puis Mon proxy en tête quand ils sont réglés. */
+    fun defaultOrder(): List<String> = complete(emptyList())
 
     /** Monte (−1) ou descend (+1) une source d'un cran. */
     fun move(id: String, delta: Int) {
@@ -77,8 +77,8 @@ object LiveSources {
 
     /** Ordre reçu (sauvegarde, synchro) : complété, comme le reste. */
     fun setOrder(list: List<String>) {
-        if (list.none { it in Config.LIVE_SOURCES || it == "custom" }) return
-        save(complete(list, StreamPrefs.customSourceHost() != null))
+        if (list.none { it in Config.LIVE_SOURCES || it == "custom" || it == Config.MY_PROXY_SOURCE }) return
+        save(complete(list))
     }
 
     /** Ma source ajoutée ou changée : en tête (comme l'iPhone et le site) ;
@@ -88,6 +88,14 @@ object LiveSources {
         if (list.isEmpty()) return
         if (StreamPrefs.customSourceHost() != null) prefer("custom")
         else saved.set(list.filter { it != "custom" }.joinToString(","))
+    }
+
+    /** Mon proxy réglé ou changé : en tête de l'ordre rangé ; retiré : enlevé. */
+    fun onMyProxyChanged() {
+        val list = parse(saved.value)
+        if (list.isEmpty()) return
+        if (MyProxy.configured) prefer(Config.MY_PROXY_SOURCE)
+        else saved.set(list.filter { it != Config.MY_PROXY_SOURCE }.joinToString(","))
     }
 
     private fun save(list: List<String>) {
@@ -100,15 +108,23 @@ object LiveSources {
     private fun parse(raw: String): List<String> = raw.split(',').map { it.trim() }.filter { it.isNotEmpty() }
 
     /** Sources inconnues retirées, doublons aussi ; Ma source réglée mais
-     *  jamais rangée : en tête ; chaque source oubliée juste après celle
+     *  jamais rangée : en tête, Mon proxy réglé mais jamais rangé : juste
+     *  après elle (sinon en tête) ; chaque source oubliée juste après celle
      *  qu'elle secourt, sinon à la fin. Comme completeLiveSourceOrder (iOS).
      *  Un ordre qui contient un proxy retiré reprend l'ordre automatique (Ma
-     *  source gardée). */
-    private fun complete(saved: List<String>, custom: Boolean): List<String> {
-        val kept = if (saved.any { it in Config.RETIRED_LIVE_SOURCES }) saved.filter { it == "custom" } else saved
+     *  source et Mon proxy gardés). */
+    private fun complete(saved: List<String>): List<String> {
+        val custom = StreamPrefs.customSourceHost() != null
+        val proxy = MyProxy.configured
+        val mine = setOf("custom", Config.MY_PROXY_SOURCE)
+        val kept = if (saved.any { it in Config.RETIRED_LIVE_SOURCES }) saved.filter { it in mine } else saved
         val order = mutableListOf<String>()
-        for (id in kept) if ((id in Config.LIVE_SOURCES || (custom && id == "custom")) && id !in order) order += id
+        for (id in kept) {
+            val known = id in Config.LIVE_SOURCES || (custom && id == "custom") || (proxy && id == Config.MY_PROXY_SOURCE)
+            if (known && id !in order) order += id
+        }
         if (custom && "custom" !in order) order.add(0, "custom")
+        if (proxy && Config.MY_PROXY_SOURCE !in order) order.add(if (order.firstOrNull() == "custom") 1 else 0, Config.MY_PROXY_SOURCE)
         for (id in Config.LIVE_SOURCES) {
             if (id in order) continue
             val parent = Config.LIVE_SOURCE_BACKUP_OF[id]

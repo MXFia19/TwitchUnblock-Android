@@ -1,6 +1,6 @@
 {
   "_indirect": {
-    "keys": []
+    "keys": ["src_myproxy"]
   },
   "hide_gift_subs": {
     "fr": "Masquer les subs offerts",
@@ -19,5 +19,59 @@
     "it": "Le righe «X ha regalato un abbonamento a Y», a decine quando qualcuno ne regala un lotto. Il messaggio del lotto resta.",
     "ja": "「X が Y にサブをギフトしました」の行。まとめてギフトされると一度に数十行になります。まとめてのお知らせは残ります。",
     "zh-Hant": "「X 送了一份訂閱給 Y」的訊息，有人大量贈送時會一次出現數十則。大量贈送的總覽訊息會保留。"
+  },
+  "src_myproxy": {
+    "fr": "Mon proxy",
+    "en": "My proxy",
+    "es": "Mi proxy",
+    "ru": "Мой прокси",
+    "it": "Il mio proxy",
+    "ja": "マイプロキシ",
+    "zh-Hant": "我的代理伺服器"
+  },
+  "s7_myproxy_sub": {
+    "fr": "Un proxy HTTP(S) à toi (hôte:port) : quand il sert, le jeton, la liste maîtresse et les playlists de la vidéo passent par lui ; les segments restent en direct. Il prend place en tête de l'ordre ci-dessus. Vide : pas de proxy.",
+    "en": "Your own HTTP(S) proxy (host:port): when it's used, the token, the master playlist and the video playlists go through it; the segments still come directly. It goes to the top of the order above. Empty: no proxy.",
+    "es": "Tu propio proxy HTTP(S) (host:puerto): cuando se usa, el token, la lista maestra y las listas del vídeo pasan por él; los segmentos siguen llegando directamente. Se coloca al principio del orden de arriba. Vacío: sin proxy.",
+    "ru": "Ваш собственный HTTP(S)-прокси (хост:порт): когда он используется, токен, мастер-плейлист и плейлисты видео идут через него, а сегменты по-прежнему загружаются напрямую. Он встаёт в начало порядка выше. Пусто — без прокси.",
+    "it": "Il tuo proxy HTTP(S) (host:porta): quando viene usato, il token, la playlist principale e le playlist del video passano da lui; i segmenti arrivano comunque direttamente. Va in cima all'ordine qui sopra. Vuoto: nessun proxy.",
+    "ja": "自分の HTTP(S) プロキシ（ホスト:ポート）。使用時はトークン、マスタープレイリスト、動画のプレイリストがプロキシを経由し、セグメントは引き続き直接読み込まれます。上の順番の先頭に入ります。空欄ならプロキシはありません。",
+    "zh-Hant": "你自己的 HTTP(S) 代理伺服器（主機:連接埠）：使用時，權杖、主播放清單與影片的播放清單都會經過它，影片片段仍直接下載。會排在上方順序的最前面。留空：不使用代理。"
+  },
+  "s7_myproxy_ph": {
+    "fr": "hôte:port",
+    "en": "host:port",
+    "es": "host:puerto",
+    "ru": "хост:порт",
+    "it": "host:porta",
+    "ja": "ホスト:ポート",
+    "zh-Hant": "主機:連接埠"
+  },
+  "s7_myproxy_user": {
+    "fr": "Identifiant (facultatif)",
+    "en": "Username (optional)",
+    "es": "Usuario (opcional)",
+    "ru": "Логин (необязательно)",
+    "it": "Nome utente (facoltativo)",
+    "ja": "ユーザー名（任意）",
+    "zh-Hant": "使用者名稱（選填）"
+  },
+  "s7_myproxy_pass": {
+    "fr": "Mot de passe (facultatif)",
+    "en": "Password (optional)",
+    "es": "Contraseña (opcional)",
+    "ru": "Пароль (необязательно)",
+    "it": "Password (facoltativa)",
+    "ja": "パスワード（任意）",
+    "zh-Hant": "密碼（選填）"
+  },
+  "s7_myproxy_bad": {
+    "fr": "Adresse refusée : hôte:port, par exemple 203.0.113.5:8080 ou proxy.exemple.fr:3128.",
+    "en": "Address refused: host:port, for example 203.0.113.5:8080 or proxy.example.com:3128.",
+    "es": "Dirección rechazada: host:puerto, por ejemplo 203.0.113.5:8080 o proxy.ejemplo.com:3128.",
+    "ru": "Адрес отклонён: хост:порт, например 203.0.113.5:8080 или proxy.example.com:3128.",
+    "it": "Indirizzo rifiutato: host:porta, ad esempio 203.0.113.5:8080 o proxy.esempio.it:3128.",
+    "ja": "アドレスが無効です。ホスト:ポートの形式で入力してください（例：203.0.113.5:8080、proxy.example.com:3128）。",
+    "zh-Hant": "位址無效：請使用「主機:連接埠」，例如 203.0.113.5:8080 或 proxy.example.com:3128。"
   }
 }

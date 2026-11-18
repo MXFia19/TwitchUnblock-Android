@@ -32,12 +32,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.HigherQualities
 import com.mxfia19.twitchunblock.core.LiveSources
 import com.mxfia19.twitchunblock.core.Logger
+import com.mxfia19.twitchunblock.core.MyProxy
 import com.mxfia19.twitchunblock.core.StreamPrefs
 import com.mxfia19.twitchunblock.player.VodUnmute
 
@@ -47,6 +49,8 @@ fun StreamSettings() {
     // Série 6 (partie Média) : ordre complet des sources, comme l'iPhone.
     LiveSourceOrder()
     CustomSourceField()
+    // Série 7 : un proxy HTTP(S) à soi, à côté de Ma source.
+    MyProxyField()
     Toggle(AppState.t("higher_qualities"), AppState.t("st_hq_sub").replace("{c}", HigherQualities.label),
            StreamPrefs.higherQualities.value) {
         StreamPrefs.higherQualities.set(it)
@@ -142,6 +146,91 @@ private fun CustomSourceField() {
                     text = ""
                     refused = false
                     Logger.info("SETTINGS", "Ma source", "aucune")
+                }) { Text(AppState.t("remove"), color = TU.danger) }
+            }
+        }
+    }
+}
+
+/** Mon proxy (série 7) : un proxy HTTP(S) à soi, hôte:port, identifiant et
+ *  mot de passe facultatifs. Quand cette source sert, le jeton, la liste
+ *  maîtresse et les playlists de la vidéo passent par lui (MyProxy.kt).
+ *  Adresse refusée : on le dit, l'ancienne reste. */
+@Composable
+private fun MyProxyField() {
+    var address by remember { mutableStateOf(MyProxy.address.value) }
+    var user by remember { mutableStateOf(MyProxy.user.value) }
+    var password by remember { mutableStateOf(MyProxy.password()) }
+    var refused by remember { mutableStateOf(false) }
+    val saved = MyProxy.address.value
+    val changed = address.trim() != saved || user.trim() != MyProxy.user.value || password != MyProxy.password()
+    val apply = {
+        refused = !MyProxy.set(address, user, password)
+        if (!refused) {
+            address = MyProxy.address.value
+            user = MyProxy.user.value
+            password = MyProxy.password()
+            // L'adresse du proxy n'est jamais écrite au journal (il part avec les signalements).
+            Logger.info("SETTINGS", "Mon proxy", if (MyProxy.configured) "réglé" else "aucun")
+        }
+    }
+    val colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = TU.primary, unfocusedBorderColor = TU.line,
+                                                  focusedTextColor = TU.text, unfocusedTextColor = TU.text,
+                                                  focusedLabelColor = TU.primary, unfocusedLabelColor = TU.muted)
+    Column(Modifier.padding(12.dp)) {
+        Text(AppState.t("src_myproxy"), color = TU.text, fontSize = 15.sp)
+        Text(AppState.t("s7_myproxy_sub"), color = TU.muted, fontSize = 12.sp)
+        OutlinedTextField(
+            value = address,
+            onValueChange = {
+                address = it
+                refused = false
+            },
+            singleLine = true,
+            placeholder = { Text(AppState.t("s7_myproxy_ph"), color = TU.muted) },
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next),
+            colors = colors,
+            modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+        )
+        // Identifiants : seulement avec une adresse (saisie ou enregistrée).
+        if (address.isNotBlank() || saved.isNotEmpty()) {
+            OutlinedTextField(
+                value = user,
+                onValueChange = { user = it },
+                singleLine = true,
+                label = { Text(AppState.t("s7_myproxy_user")) },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, imeAction = ImeAction.Next),
+                colors = colors,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            )
+            OutlinedTextField(
+                value = password,
+                onValueChange = { password = it },
+                singleLine = true,
+                enabled = user.isNotBlank(),
+                label = { Text(AppState.t("s7_myproxy_pass")) },
+                visualTransformation = PasswordVisualTransformation(),
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done),
+                keyboardActions = KeyboardActions(onDone = { apply() }),
+                colors = colors,
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            )
+        }
+        if (refused) {
+            Text(AppState.t("s7_myproxy_bad"), color = TU.danger, fontSize = 12.sp, modifier = Modifier.padding(top = 4.dp))
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(top = 6.dp)) {
+            if (changed) {
+                TextButton(onClick = apply) { Text(AppState.t("save"), color = TU.primary) }
+            }
+            if (saved.isNotEmpty()) {
+                TextButton(onClick = {
+                    MyProxy.set("", "", "")
+                    address = ""
+                    user = ""
+                    password = ""
+                    refused = false
+                    Logger.info("SETTINGS", "Mon proxy", "aucun")
                 }) { Text(AppState.t("remove"), color = TU.danger) }
             }
         }

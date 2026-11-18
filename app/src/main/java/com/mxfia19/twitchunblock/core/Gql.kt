@@ -1,5 +1,6 @@
 package com.mxfia19.twitchunblock.core
 
+import okhttp3.OkHttpClient
 import org.json.JSONArray
 import org.json.JSONObject
 import kotlin.random.Random
@@ -30,11 +31,12 @@ object Gql {
 
     /** Réponse entière (data et errors) ; null sans réponse lisible.
      *  `deviceId` faux : sans en-tête Device-ID (jeton du direct, voir
-     *  LiveApi.accessToken). */
-    suspend fun raw(query: String, variables: JSONObject? = null, timeout: Long = 10, deviceId: Boolean = true): JSONObject? {
+     *  LiveApi.accessToken). `via` : par Mon proxy (MyProxy.kt). */
+    suspend fun raw(query: String, variables: JSONObject? = null, timeout: Long = 10, deviceId: Boolean = true,
+                    via: OkHttpClient? = null): JSONObject? {
         val body = JSONObject().put("query", query)
         if (variables != null) body.put("variables", variables)
-        val r = Http.postJson(URL, body.toString(), headers(Config.GQL_CLIENT_ID, deviceId), timeout) ?: return null
+        val r = Http.postJson(URL, body.toString(), headers(Config.GQL_CLIENT_ID, deviceId), timeout, via) ?: return null
         if (r.code != 200) return null
         return parseJson(r.body)
     }
