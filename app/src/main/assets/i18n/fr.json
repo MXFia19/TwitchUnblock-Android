@@ -1026,6 +1026,8 @@
   "rewind_sub": "Revenir en arrière dans le direct",
   "role_broadcaster": "Streamer",
   "role_moderator": "Modérateurs",
+  "s7_multi_audio_only": "Son seul pour cette vidéo",
+  "s7_multi_show_video": "Remettre l'image",
   "s7_myproxy_bad": "Adresse refusée : hôte:port, par exemple 203.0.113.5:8080 ou proxy.exemple.fr:3128.",
   "s7_myproxy_pass": "Mot de passe (facultatif)",
   "s7_myproxy_ph": "hôte:port",

@@ -73,5 +73,23 @@
     "it": "Indirizzo rifiutato: host:porta, ad esempio 203.0.113.5:8080 o proxy.esempio.it:3128.",
     "ja": "アドレスが無効です。ホスト:ポートの形式で入力してください（例：203.0.113.5:8080、proxy.example.com:3128）。",
     "zh-Hant": "位址無效：請使用「主機:連接埠」，例如 203.0.113.5:8080 或 proxy.example.com:3128。"
+  },
+  "s7_multi_audio_only": {
+    "fr": "Son seul pour cette vidéo",
+    "en": "Audio only for this video",
+    "es": "Solo audio para este vídeo",
+    "ru": "Только звук для этого видео",
+    "it": "Solo audio per questo video",
+    "ja": "この動画を音声のみにする",
+    "zh-Hant": "這部影片只播放聲音"
+  },
+  "s7_multi_show_video": {
+    "fr": "Remettre l'image",
+    "en": "Bring the picture back",
+    "es": "Volver a mostrar la imagen",
+    "ru": "Вернуть изображение",
+    "it": "Rimetti l'immagine",
+    "ja": "映像を戻す",
+    "zh-Hant": "恢復畫面"
   }
 }

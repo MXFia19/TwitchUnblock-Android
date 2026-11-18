@@ -1025,6 +1025,8 @@
   "rewind_sub": "ライブ配信の中で巻き戻します",
   "role_broadcaster": "配信者",
   "role_moderator": "モデレーター",
+  "s7_multi_audio_only": "この動画を音声のみにする",
+  "s7_multi_show_video": "映像を戻す",
   "s7_myproxy_bad": "アドレスが無効です。ホスト:ポートの形式で入力してください（例：203.0.113.5:8080、proxy.example.com:3128）。",
   "s7_myproxy_pass": "パスワード（任意）",
   "s7_myproxy_ph": "ホスト:ポート",

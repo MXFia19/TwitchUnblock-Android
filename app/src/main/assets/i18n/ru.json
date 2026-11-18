@@ -1035,6 +1035,8 @@
   "rewind_sub": "Перемотать назад в прямом эфире",
   "role_broadcaster": "Стример",
   "role_moderator": "Модераторы",
+  "s7_multi_audio_only": "Только звук для этого видео",
+  "s7_multi_show_video": "Вернуть изображение",
   "s7_myproxy_bad": "Адрес отклонён: хост:порт, например 203.0.113.5:8080 или proxy.example.com:3128.",
   "s7_myproxy_pass": "Пароль (необязательно)",
   "s7_myproxy_ph": "хост:порт",

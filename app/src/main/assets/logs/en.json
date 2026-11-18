@@ -334,5 +334,7 @@
   "Mon proxy OK": "My proxy OK",
   "Mon proxy": "My proxy",
   "réglé": "set",
-  "aucun": "none"
+  "aucun": "none",
+  "Son seul": "Audio only",
+  "Image rendue": "Picture back"
 }

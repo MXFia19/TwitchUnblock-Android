@@ -1026,6 +1026,8 @@
   "rewind_sub": "Retroceder dentro del directo",
   "role_broadcaster": "Streamer",
   "role_moderator": "Moderadores",
+  "s7_multi_audio_only": "Solo audio para este vídeo",
+  "s7_multi_show_video": "Volver a mostrar la imagen",
   "s7_myproxy_bad": "Dirección rechazada: host:puerto, por ejemplo 203.0.113.5:8080 o proxy.ejemplo.com:3128.",
   "s7_myproxy_pass": "Contraseña (opcional)",
   "s7_myproxy_ph": "host:puerto",

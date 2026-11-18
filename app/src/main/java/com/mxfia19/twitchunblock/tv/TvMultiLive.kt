@@ -75,6 +75,13 @@ fun TvMultiLive(first: String?, onClose: () -> Unit) {
                     TvButton("+ " + AppState.t("multi_add_ok"),
                              modifier = if (model.tiles.isEmpty()) Modifier.focusRequester(focus) else Modifier) { adding = true }
                 }
+                // Son seul pour la vidéo qui a le son (série 7) : un fond à la place de l'image.
+                if (model.canAudioOnly(model.audio)) {
+                    val on = model.tiles.getOrNull(model.audio)?.session?.audioOnly == true
+                    TvButton((if (on) "🎧 " else "") + AppState.t("bg_playback_audio"), selected = on) {
+                        model.toggleAudioOnly(model.audio)
+                    }
+                }
                 if (model.tiles.isNotEmpty()) {
                     TvButton(AppState.t("multi_remove")) { model.remove(model.audio) }
                 }

@@ -50,6 +50,7 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
@@ -72,6 +73,7 @@ import com.mxfia19.twitchunblock.core.AuthExpiredException
 import com.mxfia19.twitchunblock.core.BrowseApi
 import com.mxfia19.twitchunblock.core.Links
 import com.mxfia19.twitchunblock.core.Logger
+import com.mxfia19.twitchunblock.core.Quality
 import com.mxfia19.twitchunblock.core.TwitchStream
 import com.mxfia19.twitchunblock.player.PlayRequest
 import com.mxfia19.twitchunblock.player.PlaybackSession
@@ -212,11 +214,26 @@ class MultiLiveModel(private val context: Context, private val scope: CoroutineS
 
     fun selectAudio(index: Int) {
         if (index !in tiles.indices) return
+        // Son seul : il ne vaut que pour la fenêtre active, l'ancienne retrouve son image.
+        if (index != audio) tiles.getOrNull(audio)?.session?.setAudioOnly(false)
         audio = index
         // Toucher une tuile : elle seule a le son, comme avant.
         sound.only(tiles[index].key)
         layout()
     }
+
+    /** Son seul (série 7) pour la vidéo qui a le son, la fenêtre active : son
+     *  flux audio seul (moins de données), un fond à la place de l'image. */
+    fun toggleAudioOnly(index: Int) {
+        val t = tiles.getOrNull(index) ?: return
+        val on = !t.session.audioOnly
+        t.session.setAudioOnly(on)
+        Logger.info("MULTI", if (on) "Son seul" else "Image rendue", t.key)
+    }
+
+    /** La tuile a une variante audio seule (son seul possible). */
+    fun canAudioOnly(index: Int): Boolean =
+        tiles.getOrNull(index)?.session?.qualities?.any { Quality.isAudio(it) } == true
 
     /** ⇄ : deux tuiles échangent leur place (avec la première, une vidéo
      *  passe en grand à trois) ; le son suit sa vidéo. */
@@ -369,6 +386,8 @@ fun MultiTile(tile: MultiLiveModel.Tile, hasAudio: Boolean, modifier: Modifier, 
             onRelease = { v -> v.player = null },
             modifier = Modifier.fillMaxSize(),
         )
+        // Son seul (série 7) : un fond à la place de l'image, sous les commandes.
+        if (tile.session.quality?.let { Quality.isAudio(it) } == true) AudioOnlyBackdrop(tile)
         if (controls != null) {
             PhoneTileOverlay(tile, hasAudio, sound, controls, onRemove)
         } else {
@@ -400,6 +419,19 @@ fun MultiTile(tile: MultiLiveModel.Tile, hasAudio: Boolean, modifier: Modifier, 
     }
 }
 
+/** Fond d'une tuile en son seul : l'avatar de la chaîne sur un dégradé. */
+@Composable
+private fun AudioOnlyBackdrop(tile: MultiLiveModel.Tile) {
+    Box(Modifier.fillMaxSize().background(Brush.verticalGradient(listOf(TU.surfaceHi, Color.Black))),
+        contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Avatar(tile.session.avatar, 48.dp)
+            Text("🎧 " + AppState.t("bg_playback_audio"), color = Color.White, fontSize = 13.sp, fontWeight = FontWeight.SemiBold,
+                 modifier = Modifier.padding(top = 6.dp))
+        }
+    }
+}
+
 /** La mosaïque : 1 en plein, 2 l'une sous l'autre (côte à côte en paysage),
  *  3 avec la première en grand, 4 en 2 × 2. `onOpen` (téléphone) : commandes
  *  des tuiles, et ouvrir une vidéo dans le lecteur. */
@@ -413,7 +445,11 @@ fun MultiGrid(model: MultiLiveModel, landscape: Boolean, modifier: Modifier, rem
         if (removable) ({ model.remove(i) }) else null,
         if (removable) model.soundOf(i) else null,
         if (onOpen != null) TileControls(tiles.indices.filter { it != i }.map { it to tiles[it].label },
-                                         { j -> model.swap(i, j) }, { onOpen(tiles[i]) }) else null,
+                                         { j -> model.swap(i, j) }, { onOpen(tiles[i]) },
+                                         // Son seul : pour la fenêtre active seulement (série 7).
+                                         audioOnly = tiles[i].session.audioOnly,
+                                         onAudioOnly = if (i == model.audio && model.canAudioOnly(i)) ({ model.toggleAudioOnly(i) }) else null)
+        else null,
     )
     when (tiles.size) {
         0 -> Box(modifier.background(Color.Black), contentAlignment = Alignment.Center) {
