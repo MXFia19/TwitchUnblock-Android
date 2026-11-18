@@ -109,5 +109,14 @@
     "it": "In orizzontale, quando la chat è sopra l'immagine: a sinistra o a destra, a tutta altezza o in un angolo. Si sposta anche trascinando la sua maniglia in alto: rilasciata, si aggancia all'angolo o al centro del bordo più vicino.",
     "ja": "横向きでチャットを映像の上に重ねるときの位置：左か右、全高か隅。上部のハンドルをドラッグして動かすこともでき、離すと最も近い隅か左右の辺の中央に吸着します。",
     "zh-Hant": "橫向時，聊天室疊在畫面上的位置：左側或右側、全高或角落。也可以拖曳上方的把手移動：放開後會貼齊最近的角落或左右邊的中間。"
+  },
+  "s7_all_games": {
+    "fr": "Tous les jeux",
+    "en": "All games",
+    "es": "Todos los juegos",
+    "ru": "Все игры",
+    "it": "Tutti i giochi",
+    "ja": "すべてのゲーム",
+    "zh-Hant": "所有遊戲"
   }
 }

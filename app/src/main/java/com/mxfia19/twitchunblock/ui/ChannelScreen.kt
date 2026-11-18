@@ -66,6 +66,7 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.TextButton
 import androidx.compose.foundation.layout.Box
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /** Page d'une chaîne : direct en cours, VODs, clips. Partagé avec la TV. */
@@ -148,6 +149,11 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
             }
             videosLoading = false
             refreshing = false
+            // Filtre par jeu : sa liste relue aussi.
+            gameFilter?.let { id ->
+                gameFilter = null
+                selectGame(id)
+            }
         }
     }
 
@@ -176,6 +182,25 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
      *  (5 au plus par toucher, soit 500 VODs), jusqu'à une nouvelle
      *  correspondance, la fin, une panne ou un refus. Comme searchOlderVods (iOS). */
     fun searchOlder(matches: (Vod) -> Boolean) {
+        val game = gameFilter
+        if (game != null) {
+            // Filtre par jeu : la suite des VODs de ce jeu, de la même façon.
+            if (gameLoading || gameNext == null) return
+            gameLoading = true
+            gameJob = scope.launch {
+                try {
+                    val before = gameVideos.count(matches)
+                    for (i in 0 until 5) {
+                        val next = gameNext ?: break
+                        if (!nextGameVideos(game, next)) break
+                        if (gameVideos.count(matches) > before) break
+                    }
+                } finally {
+                    if (gameFilter == game) gameLoading = false
+                }
+            }
+            return
+        }
         if (videosLoading || searchingOlder || videosNext == null) return
         searchingOlder = true
         videosLoading = true
@@ -188,6 +213,96 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
             videosLoading = false
             searchingOlder = false
         }
+    }
+
+    // ── Filtre par jeu (série 7) ──
+
+    /** Jeu choisi (son id) ; null : tous les jeux. */
+    var gameFilter by mutableStateOf<String?>(null)
+        private set
+    /** VODs du jeu choisi : filtrées sur place quand toutes les VODs de la
+     *  chaîne sont là, sinon demandées à Twitch (options.gameIDs), 100 par page. */
+    val gameVideos = mutableStateListOf<Vod>()
+    var gameNext by mutableStateOf<String?>(null)
+        private set
+    var gameLoading by mutableStateOf(false)
+        private set
+    var gameError by mutableStateOf<String?>(null)
+        private set
+    var gameRefused by mutableStateOf(false)
+        private set
+    private var gameJob: Job? = null
+
+    /** Jeux des VODs chargées, le plus fréquent d'abord : (id, nom). Le jeu
+     *  choisi y reste, même absent des VODs chargées (après Actualiser). */
+    fun games(): List<Pair<String, String>> {
+        val counts = LinkedHashMap<String, Int>()
+        val names = HashMap<String, String>()
+        for (v in videos) {
+            if (v.gameId.isEmpty()) continue
+            counts[v.gameId] = (counts[v.gameId] ?: 0) + 1
+            if (v.gameName.isNotEmpty()) names[v.gameId] = v.gameName
+        }
+        val chosen = gameFilter
+        if (chosen != null) {
+            if (chosen !in counts) counts[chosen] = 0
+            if (chosen !in names) gameVideos.firstOrNull { it.gameName.isNotEmpty() }?.let { names[chosen] = it.gameName }
+        }
+        return counts.entries
+            .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { (names[it.key] ?: "").lowercase() })
+            .map { it.key to (names[it.key] ?: "") }
+    }
+
+    /** Choisit un jeu (null : tous les jeux). */
+    fun selectGame(id: String?) {
+        if (id == gameFilter) return
+        gameJob?.cancel()
+        gameFilter = id
+        gameVideos.clear()
+        gameNext = null
+        gameError = null
+        gameRefused = false
+        gameLoading = false
+        if (id == null) return
+        // Toutes les VODs déjà là : rien à redemander.
+        if (videos.isNotEmpty() && videosNext == null && !videosRefused) {
+            gameVideos.addAll(videos.filter { it.gameId == id })
+            return
+        }
+        loadGamePage(id)
+    }
+
+    /** Page suivante des VODs du jeu, ou la première après une panne. */
+    fun moreGameVideos() {
+        val id = gameFilter ?: return
+        if (gameLoading) return
+        loadGamePage(id)
+    }
+
+    private fun loadGamePage(id: String) {
+        gameLoading = true
+        gameError = null
+        val after = gameNext
+        gameJob = scope.launch {
+            try {
+                nextGameVideos(id, after)
+            } finally {
+                if (gameFilter == id) gameLoading = false
+            }
+        }
+    }
+
+    /** Une page des VODs du jeu ; faux si elle n'a pas été lue (panne, refus,
+     *  autre jeu choisi entre-temps). */
+    private suspend fun nextGameVideos(id: String, after: String?): Boolean {
+        val page = BrowseApi.channelVideos(login, after, id)
+        if (gameFilter != id) return false
+        val seen = gameVideos.map { it.id }.toHashSet()
+        gameVideos.addAll(page.videos.filter { it.id !in seen }.distinctBy { it.id })
+        gameNext = page.next
+        gameError = page.error
+        gameRefused = page.refused
+        return page.error == null && !page.refused
     }
 
     fun loadClips(p: String = period) {
@@ -445,27 +560,41 @@ fun ChannelScreen(login: String, nav: Navigator) {
                 else -> {
                     // Filtre par mot-clé : seulement s'il y a de quoi filtrer.
                     if (model.videos.isNotEmpty()) item(key = "vod-filter", span = FullSpan) { VodFilterField(keyword) { keyword = it } }
-                    val shown = model.videos.filter { vodMatches(it, keyword) }
+                    // Filtre par jeu (série 7) : « Tous les jeux » d'office, puis les
+                    // jeux des VODs chargées, quand elles en ont plusieurs.
+                    val games = model.games()
+                    if (games.size > 1 || model.gameFilter != null) {
+                        item(key = "vod-games", span = FullSpan) { VodGameChips(games, model.gameFilter) { model.selectGame(it) } }
+                    }
+                    val byGame = model.gameFilter != null
+                    val source = if (byGame) model.gameVideos else model.videos
+                    val shown = source.filter { vodMatches(it, keyword) }
                     items(shown, key = { "v-" + it.id }) { v ->
                         VodCard(v, onLongClick = multiVodToggle(v.id, v.title, v.thumbnail, login)) { nav.play(PlayRequest.Vod(v.id, v.title, login)) }
                     }
                     val filtering = keyword.isNotBlank()
+                    // État de la liste affichée : toutes les VODs, ou celles du jeu choisi.
+                    val loading = if (byGame) model.gameLoading else model.videosLoading
+                    val next = if (byGame) model.gameNext else model.videosNext
+                    val error = if (byGame) model.gameError else model.videosError
+                    val refused = if (byGame) model.gameRefused else model.videosRefused
+                    val more: () -> Unit = { if (byGame) model.moreGameVideos() else model.moreVideos() }
                     when {
-                        model.videosLoading -> item(span = FullSpan) { LoadingBox() }
-                        model.videos.isEmpty() && model.videosError == "network" -> item(span = FullSpan) {
-                            MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { model.moreVideos() }
+                        loading -> item(span = FullSpan) { LoadingBox() }
+                        source.isEmpty() && error == "network" -> item(span = FullSpan) {
+                            MessageBox(AppState.t("err_network"), action = AppState.t("retry")) { more() }
                         }
-                        model.videos.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("tv_no_videos")) }
+                        source.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("tv_no_videos")) }
                         // Le filtre ne voit que les VODs chargées : de quoi chercher plus loin.
-                        filtering && model.videosNext != null -> {
+                        filtering && next != null -> {
                             if (shown.isEmpty()) item(span = FullSpan) { MessageBox(AppState.t("no_result")) }
                             item(span = FullSpan) {
                                 MoreButtonText(AppState.t("vods_search_older")) { model.searchOlder { vodMatches(it, keyword) } }
                             }
                         }
                         filtering && shown.isEmpty() -> item(span = FullSpan) { MessageBox(AppState.t("no_result")) }
-                        model.videosNext != null -> item(span = FullSpan) { MoreButton(false) { model.moreVideos() } }
-                        model.videosRefused -> item(span = FullSpan) { ListEndNote("more_unavailable") }
+                        next != null -> item(span = FullSpan) { MoreButton(false) { more() } }
+                        refused -> item(span = FullSpan) { ListEndNote("more_unavailable") }
                     }
                 }
             }

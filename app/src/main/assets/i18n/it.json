@@ -1026,6 +1026,7 @@
   "rewind_sub": "Torna indietro nella diretta",
   "role_broadcaster": "Streamer",
   "role_moderator": "Moderatori",
+  "s7_all_games": "Tutti i giochi",
   "s7_chat_move": "Sposta la chat",
   "s7_chat_overlay_pos_sub": "In orizzontale, quando la chat è sopra l'immagine: a sinistra o a destra, a tutta altezza o in un angolo. Si sposta anche trascinando la sua maniglia in alto: rilasciata, si aggancia all'angolo o al centro del bordo più vicino.",
   "s7_multi_audio_only": "Solo audio per questo video",

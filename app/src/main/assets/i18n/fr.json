@@ -1026,6 +1026,7 @@
   "rewind_sub": "Revenir en arrière dans le direct",
   "role_broadcaster": "Streamer",
   "role_moderator": "Modérateurs",
+  "s7_all_games": "Tous les jeux",
   "s7_chat_move": "Déplacer le chat",
   "s7_chat_overlay_pos_sub": "En paysage, quand le chat est posé sur l'image : à gauche ou à droite, sur toute la hauteur ou dans un coin. Il se déplace aussi en glissant sa poignée du haut : lâché, il se cale dans le coin ou au milieu du bord le plus proche.",
   "s7_multi_audio_only": "Son seul pour cette vidéo",
