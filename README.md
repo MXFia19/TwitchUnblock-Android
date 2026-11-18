@@ -21,7 +21,7 @@ installable à côté de l'autre.
 - **Série 1** (en cours) : directs (source **Bulgarie** en test — le relais TwitchUnblock d'un VPS à
   Sofia prend le jeton, la liste maîtresse et les playlists de la vidéo depuis la Bulgarie, par son IPv6,
   les segments restant en direct —, puis Twitch, dont le jeton est demandé comme Streamlink (lecteur
-  « embed », sans Device-ID : bien moins de pubs), Ma source, Worker en secours ; les proxys publics
+  « embed », sans Device-ID : bien moins de pubs), Ma source, Mon proxy (série 7), Worker en secours ; les proxys publics
   Luminous, PerfProd et nadeko/TTV.LOL ont été retirés le 18/11 : ils laissaient passer des centaines de
   pubs par jour, et un ordre rangé avec eux reprend l'ordre par défaut),
   qualité Auto (suit le débit) ou fixe, qualité en données mobiles, VODs (passages coupés lisibles, reprise),
@@ -134,6 +134,30 @@ installable à côté de l'autre.
     avec sa version monochrome pour les icônes à thème d'Android 13.
   - Sauvegarde : les nouveaux réglages y sont (ordre des sources, son d'origine, réglages du chat, langue des
     catégories, chat et rangée « Reprendre » de la TV, lecteur).
+
+- **Série 7** (suggestions, faites en même temps que l'iPhone et le site) :
+  - *Chat* : « Masquer les subs offerts » (Réglages → Chat, coupé par défaut) retire les lignes « X a offert un sub
+    à Y » (USERNOTICE subgift et anonsubgift), le message du lot reste ; synchronisé avec le site et l'iPhone
+    (hideGiftSubs). En paysage, le chat posé sur l'image se glisse par sa poignée du haut et s'aimante à la plus
+    proche de 6 places (les 4 coins, le milieu des bords gauche et droit sur toute la hauteur), gardée comme le
+    réglage « Chat posé sur l'image ».
+  - *Multi-live* : « son seul » pour la vidéo qui a le son (casque en haut de sa tuile ; bouton sur la TV) : la
+    variante audio_only, un fond avec l'avatar à la place de l'image ; une autre vidéo choisie, l'ancienne retrouve
+    son image.
+  - *Lecteur* : en paysage, glisser verticalement sur la moitié droite de l'image règle le volume, sur la moitié
+    gauche la luminosité (celle du lecteur, rendue en le quittant), avec un indicateur. Réglage allumé d'office :
+    aucun geste vertical n'existait en paysage (le glissé vers le bas qui réduit le lecteur est en portrait, où ce
+    réglage ne joue pas ; l'image agrandie se déplace au doigt). Pas sur la TV.
+  - *Navigation* : VODs d'une chaîne filtrées par jeu (« Tous les jeux » d'office ; sur place quand toutes les VODs
+    sont chargées, sinon par le filtre de Twitch, sans requête à alias) ; avec la session web, le cœur d'une
+    catégorie la suit ou la retire aussi sur le compte Twitch, comme les chaînes (si Twitch refuse de la suivre,
+    elle est suivie sur l'appareil).
+  - *Sources* : « Mon proxy », un proxy HTTP(S) à soi (hôte:port, identifiant et mot de passe facultatifs, le mot de
+    passe chiffré), réglé à côté de Ma source et proposé dans l'ordre des sources seulement s'il est réglé : le
+    jeton, la liste maîtresse et les playlists de la vidéo passent par lui, les segments restent en direct. Propre à
+    l'appareil (ni sauvegarde ni synchro) ; son adresse n'est jamais écrite au journal.
+  - Sauvegarde : « Masquer les subs offerts » (hideGiftSubs) et le volume et la luminosité en glissant.
+  - Textes : `tools/i18n/android-strings-s7-suggestions.json` (7 langues).
 
 ## Construire
 
