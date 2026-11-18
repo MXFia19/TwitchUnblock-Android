@@ -77,7 +77,8 @@ fun ChatExtraSettings() {
 
     // Paysage : largeur (aussi à la poignée du chat) et place sur l'image.
     PrefSlider(AppState.t("cfg_chat_width"), ChatPrefs.widthPercent, AppState.t("cfg_chat_width_sub")) { "$it %" }
-    Choice(AppState.t("cfg_chat_overlay_pos"), overlayChoices(), ChatPrefs.overlay.value, AppState.t("cfg_chat_overlay_pos_sub")) {
+    // Série 7 : aussi en glissant le chat par sa poignée du haut (ChatLayout.kt).
+    Choice(AppState.t("cfg_chat_overlay_pos"), overlayChoices(), ChatPrefs.overlay.value, AppState.t("s7_chat_overlay_pos_sub")) {
         ChatPrefs.overlay.set(it)
     }
     LinkRow(AppState.t("reset_defaults")) {

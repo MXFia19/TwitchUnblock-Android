@@ -1026,6 +1026,8 @@
   "rewind_sub": "Go back within the live stream",
   "role_broadcaster": "Broadcaster",
   "role_moderator": "Moderators",
+  "s7_chat_move": "Move the chat",
+  "s7_chat_overlay_pos_sub": "In landscape, when the chat sits on the video: left or right, full height or in a corner. You can also drag it by its top handle: let go and it snaps to the nearest corner or the middle of the nearest side.",
   "s7_multi_audio_only": "Audio only for this video",
   "s7_multi_show_video": "Bring the picture back",
   "s7_myproxy_bad": "Address refused: host:port, for example 203.0.113.5:8080 or proxy.example.com:3128.",

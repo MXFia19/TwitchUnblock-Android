@@ -1,8 +1,13 @@
 package com.mxfia19.twitchunblock.ui
 
 import android.view.View
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VectorConverter
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
@@ -15,8 +20,10 @@ import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -34,13 +41,20 @@ import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.media3.common.util.UnstableApi
@@ -49,6 +63,7 @@ import com.mxfia19.twitchunblock.chat.ChatPrefs
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Logger
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
 /** Place du chat en paysage : trois états, parcourus par le même bouton du
@@ -96,7 +111,10 @@ fun PlayerView.insetControls(inset: ChatOverlayInset) {
  * Lecteur en paysage et son chat : colonne à droite, posé sur l'image (à
  * gauche ou à droite, sur toute la hauteur ou dans un coin), ou replié. Le
  * bouton du chat passe de l'un à l'autre (choix gardé) ; la largeur se règle
- * en glissant la poignée, de 20 à 60 % de l'écran et 180 dp au moins.
+ * en glissant la poignée, de 20 à 60 % de l'écran et 180 dp au moins. Posé
+ * sur l'image, le chat se déplace par la poignée de son bord haut (série 7) :
+ * lâché, il s'aimante à la plus proche de 6 places — les 4 coins et le milieu
+ * des bords gauche et droit (toute la hauteur) —, gardée dans les réglages.
  * `video` : l'image et ce qui se pose dessus ; `chat` : le chat, avec sa
  * taille et s'il est posé sur l'image (fond transparent).
  */
@@ -114,6 +132,10 @@ fun LandscapePlayer(hasChat: Boolean, video: @Composable BoxScope.() -> Unit,
     // Pendant un glissement, la largeur vient d'ici : écrite dans les
     // préférences seulement à la fin.
     var dragRatio by remember { mutableStateOf<Float?>(null) }
+    // Chat posé sur l'image déplacé à la poignée : décalage pendant le geste,
+    // puis ramené en douceur à sa nouvelle place.
+    val scope = rememberCoroutineScope()
+    val moved = remember { Animatable(Offset.Zero, Offset.VectorConverter) }
     // Libellé bref de la disposition choisie (« Chat : superposé »).
     var flash by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(flash) {
@@ -145,7 +167,8 @@ fun LandscapePlayer(hasChat: Boolean, video: @Composable BoxScope.() -> Unit,
                 half == "bottom" -> if (onLeft) Alignment.BottomStart else Alignment.BottomEnd
                 else -> if (onLeft) Alignment.CenterStart else Alignment.CenterEnd
             }
-            val totalPx = with(LocalDensity.current) { total.toPx() }
+            val density = LocalDensity.current
+            val totalPx = with(density) { total.toPx() }
             val shown = chatWidth / total
             val save: () -> Unit = {
                 dragRatio?.let {
@@ -154,14 +177,59 @@ fun LandscapePlayer(hasChat: Boolean, video: @Composable BoxScope.() -> Unit,
                 }
                 dragRatio = null
             }
+            // Poignée du haut lâchée : la place la plus proche du milieu du chat
+            // (côté gauche ou droit ; tiers haut, milieu ou bas de l'écran).
+            val boxW = with(density) { (chatWidth + handle).toPx() }
+            val screenW = constraints.maxWidth.toFloat()
+            val screenH = constraints.maxHeight.toFloat()
+            val snap: () -> Unit = {
+                // Après les derniers déplacements encore en file (même fil).
+                scope.launch {
+                    val d = moved.value
+                    val boxH = if (half == "full") screenH else screenH / 2f
+                    val x0 = if (onLeft) 0f else screenW - boxW
+                    val y0 = if (half == "bottom") screenH - boxH else 0f
+                    val cx = x0 + boxW / 2f + d.x
+                    val cy = y0 + boxH / 2f + d.y
+                    val left = cx < screenW / 2f
+                    val spot = when {
+                        cy < screenH / 3f -> "top"
+                        cy > screenH * 2f / 3f -> "bottom"
+                        else -> "full"
+                    }
+                    val raw = (if (left) "left-" else "right-") + spot
+                    val newH = if (spot == "full") screenH else screenH / 2f
+                    val x1 = if (left) 0f else screenW - boxW
+                    val y1 = if (spot == "bottom") screenH - newH else 0f
+                    // Repart d'où le doigt l'a laissé, la place changée dans la même image.
+                    moved.snapTo(Offset(x0 + d.x - x1, y0 + d.y - y1))
+                    if (raw != place) {
+                        ChatPrefs.overlay.set(raw)
+                        Logger.info("CHAT", "Chat posé sur l'image déplacé", raw)
+                    }
+                    val sideLabel = if (left) AppState.t("chat_side_left") else AppState.t("chat_side_right")
+                    val spotLabel = when (spot) {
+                        "top" -> AppState.t("chat_height_top")
+                        "bottom" -> AppState.t("chat_height_bottom")
+                        else -> AppState.t("chat_height_full")
+                    }
+                    flash = "$sideLabel · $spotLabel"
+                    moved.animateTo(Offset.Zero, spring(stiffness = Spring.StiffnessMediumLow))
+                }
+            }
             // Le chat garde sa place dans l'arbre d'une disposition à l'autre
             // (saisie et défilement conservés) ; la poignée côté image.
-            Row(Modifier.align(align).width(chatWidth + handle).fillMaxHeight(if (half == "full") 1f else 0.5f)) {
+            Row(Modifier.align(align)
+                    .offset { if (overlay) IntOffset(moved.value.x.roundToInt(), moved.value.y.roundToInt()) else IntOffset.Zero }
+                    .width(chatWidth + handle).fillMaxHeight(if (half == "full") 1f else 0.5f)) {
                 if (!onLeft) ResizeHandle(totalPx, chatOnLeft = false, current = { dragRatio ?: shown }, onDrag = { dragRatio = it }, onDone = save)
                 // Écarté de l'encoche ou de la caméra de son côté (contenu sous
                 // l'encoche en paysage) ; l'image peut rester dessous.
                 val cutout = WindowInsets.displayCutout.only(if (onLeft) WindowInsetsSides.Start else WindowInsetsSides.End)
-                Box(Modifier.weight(1f).fillMaxHeight().windowInsetsPadding(cutout).imePadding()) { chat(Modifier.fillMaxSize(), overlay) }
+                Column(Modifier.weight(1f).fillMaxHeight().windowInsetsPadding(cutout).imePadding()) {
+                    if (overlay) ChatMoveGrip(onMove = { delta -> scope.launch { moved.snapTo(moved.value + delta) } }, onDone = snap)
+                    Box(Modifier.weight(1f).fillMaxWidth()) { chat(Modifier.fillMaxSize(), overlay) }
+                }
                 if (onLeft) ResizeHandle(totalPx, chatOnLeft = true, current = { dragRatio ?: shown }, onDrag = { dragRatio = it }, onDone = save)
             }
         }
@@ -188,6 +256,28 @@ fun LandscapePlayer(hasChat: Boolean, video: @Composable BoxScope.() -> Unit,
                 }
             }
         }
+    }
+}
+
+/** Poignée du bord haut du chat posé sur l'image (série 7) : la glisser
+ *  déplace le chat ; lâchée, il s'aimante à sa place la plus proche. */
+@Composable
+private fun ChatMoveGrip(onMove: (Offset) -> Unit, onDone: () -> Unit) {
+    val move by rememberUpdatedState(onMove)
+    val done by rememberUpdatedState(onDone)
+    val label = AppState.t("s7_chat_move")
+    Box(
+        Modifier.fillMaxWidth().height(20.dp).background(Color.Black.copy(alpha = 0.35f))
+            .semantics { contentDescription = label }
+            .pointerInput(Unit) {
+                detectDragGestures(onDragEnd = { done() }, onDragCancel = { done() }) { change, amount ->
+                    change.consume()
+                    move(amount)
+                }
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.width(36.dp).height(4.dp).clip(RoundedCornerShape(2.dp)).background(Color.White.copy(alpha = 0.6f)))
     }
 }
 

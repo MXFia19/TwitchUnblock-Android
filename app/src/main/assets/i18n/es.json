@@ -1026,6 +1026,8 @@
   "rewind_sub": "Retroceder dentro del directo",
   "role_broadcaster": "Streamer",
   "role_moderator": "Moderadores",
+  "s7_chat_move": "Mover el chat",
+  "s7_chat_overlay_pos_sub": "En horizontal, cuando el chat está sobre la imagen: a la izquierda o a la derecha, a toda la altura o en una esquina. También se mueve arrastrando su asa superior: al soltarlo, se coloca en la esquina o en el centro del borde más cercano.",
   "s7_multi_audio_only": "Solo audio para este vídeo",
   "s7_multi_show_video": "Volver a mostrar la imagen",
   "s7_myproxy_bad": "Dirección rechazada: host:puerto, por ejemplo 203.0.113.5:8080 o proxy.ejemplo.com:3128.",

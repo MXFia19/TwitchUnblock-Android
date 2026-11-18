@@ -1025,6 +1025,8 @@
   "rewind_sub": "在直播中往回看",
   "role_broadcaster": "實況主",
   "role_moderator": "管理員",
+  "s7_chat_move": "移動聊天室",
+  "s7_chat_overlay_pos_sub": "橫向時，聊天室疊在畫面上的位置：左側或右側、全高或角落。也可以拖曳上方的把手移動：放開後會貼齊最近的角落或左右邊的中間。",
   "s7_multi_audio_only": "這部影片只播放聲音",
   "s7_multi_show_video": "恢復畫面",
   "s7_myproxy_bad": "位址無效：請使用「主機:連接埠」，例如 203.0.113.5:8080 或 proxy.example.com:3128。",

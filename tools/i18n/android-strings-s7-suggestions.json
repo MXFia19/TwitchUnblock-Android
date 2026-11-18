@@ -91,5 +91,23 @@
     "it": "Rimetti l'immagine",
     "ja": "映像を戻す",
     "zh-Hant": "恢復畫面"
+  },
+  "s7_chat_move": {
+    "fr": "Déplacer le chat",
+    "en": "Move the chat",
+    "es": "Mover el chat",
+    "ru": "Переместить чат",
+    "it": "Sposta la chat",
+    "ja": "チャットを移動",
+    "zh-Hant": "移動聊天室"
+  },
+  "s7_chat_overlay_pos_sub": {
+    "fr": "En paysage, quand le chat est posé sur l'image : à gauche ou à droite, sur toute la hauteur ou dans un coin. Il se déplace aussi en glissant sa poignée du haut : lâché, il se cale dans le coin ou au milieu du bord le plus proche.",
+    "en": "In landscape, when the chat sits on the video: left or right, full height or in a corner. You can also drag it by its top handle: let go and it snaps to the nearest corner or the middle of the nearest side.",
+    "es": "En horizontal, cuando el chat está sobre la imagen: a la izquierda o a la derecha, a toda la altura o en una esquina. También se mueve arrastrando su asa superior: al soltarlo, se coloca en la esquina o en el centro del borde más cercano.",
+    "ru": "В горизонтальной ориентации, когда чат поверх видео: слева или справа, на всю высоту или в углу. Его также можно перетащить за верхнюю ручку: отпущенный, он встаёт в ближайший угол или в середину ближайшего края.",
+    "it": "In orizzontale, quando la chat è sopra l'immagine: a sinistra o a destra, a tutta altezza o in un angolo. Si sposta anche trascinando la sua maniglia in alto: rilasciata, si aggancia all'angolo o al centro del bordo più vicino.",
+    "ja": "横向きでチャットを映像の上に重ねるときの位置：左か右、全高か隅。上部のハンドルをドラッグして動かすこともでき、離すと最も近い隅か左右の辺の中央に吸着します。",
+    "zh-Hant": "橫向時，聊天室疊在畫面上的位置：左側或右側、全高或角落。也可以拖曳上方的把手移動：放開後會貼齊最近的角落或左右邊的中間。"
   }
 }
