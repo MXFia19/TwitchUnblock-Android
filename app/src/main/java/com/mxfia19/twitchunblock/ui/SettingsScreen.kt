@@ -161,6 +161,10 @@ fun SettingsScreen(nav: Navigator) {
                 Toggle(AppState.t("cfg_deleted"), AppState.t("cfg_deleted_sub"), Features.chatKeepDeleted.value) { Features.chatKeepDeleted.set(it) }
                 Toggle(AppState.t("cfg_recent"), AppState.t("cfg_recent_sub"), Features.chatLoadHistory.value) { Features.chatLoadHistory.set(it) }
                 Toggle(AppState.t("hide_bots"), AppState.t("hide_bots_sub"), Features.chatHideBots.value) { Features.chatHideBots.set(it) }
+                // « X a offert un sub à Y » : coupé par défaut, le message du lot reste (comme le site).
+                Toggle(AppState.t("hide_gift_subs"), AppState.t("hide_gift_subs_sub"), Features.chatHideGiftSubs.value) {
+                    Features.chatHideGiftSubs.set(it)
+                }
                 Toggle(AppState.t("hide_commands"), AppState.t("hide_commands_sub"), Features.chatHideCommands.value) { Features.chatHideCommands.set(it) }
                 WordsField(AppState.t("muted_words"), AppState.t("muted_words_sub"), Features.mutedWords)
                 WordsField(AppState.t("highlight_words"), AppState.t("highlight_words_sub"), Features.highlightWords)

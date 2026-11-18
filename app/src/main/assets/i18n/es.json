@@ -614,6 +614,8 @@
   "hide_chat": "Ocultar el chat",
   "hide_commands": "Ocultar comandos",
   "hide_commands_sub": "Los mensajes que empiezan por «!».",
+  "hide_gift_subs": "Ocultar suscripciones regaladas",
+  "hide_gift_subs_sub": "Las líneas «X regaló una suscripción a Y», decenas a la vez cuando alguien regala un lote. El mensaje del lote se mantiene.",
   "hide_this_category": "Ocultar esta categoría",
   "hide_user": "Ocultar en el chat",
   "higher_qualities": "Calidades superiores (si el canal las ofrece)",

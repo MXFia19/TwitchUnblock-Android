@@ -613,6 +613,8 @@
   "hide_chat": "隱藏聊天室",
   "hide_commands": "隱藏指令",
   "hide_commands_sub": "以「!」開頭的訊息。",
+  "hide_gift_subs": "隱藏贈送的訂閱",
+  "hide_gift_subs_sub": "「X 送了一份訂閱給 Y」的訊息，有人大量贈送時會一次出現數十則。大量贈送的總覽訊息會保留。",
   "hide_this_category": "隱藏此分類",
   "hide_user": "在聊天室隱藏",
   "higher_qualities": "更高畫質（若頻道提供）",

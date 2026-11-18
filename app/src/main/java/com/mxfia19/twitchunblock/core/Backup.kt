@@ -103,6 +103,7 @@ object Backup {
             .put("keepDeleted", Features.chatKeepDeleted.value)
             .put("loadHistory", Features.chatLoadHistory.value)
             .put("hideBots", Features.chatHideBots.value)
+            .put("hideGiftSubs", Features.chatHideGiftSubs.value)
             .put("hideCommands", Features.chatHideCommands.value)
             .put("mutedWords", JSONArray(Features.mutedWords.value))
             .put("blockedUsers", JSONArray(Features.blockedUsers.value))
@@ -341,6 +342,7 @@ object Backup {
         bool("keepDeleted") { Features.chatKeepDeleted.set(it) }
         bool("loadHistory") { Features.chatLoadHistory.set(it) }
         bool("hideBots") { Features.chatHideBots.set(it) }
+        bool("hideGiftSubs") { Features.chatHideGiftSubs.set(it) }
         bool("hideCommands") { Features.chatHideCommands.set(it) }
         words("mutedWords", Features.mutedWords)
         words("blockedUsers", Features.blockedUsers)

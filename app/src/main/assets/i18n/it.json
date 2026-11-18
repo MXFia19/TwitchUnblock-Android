@@ -614,6 +614,8 @@
   "hide_chat": "Nascondi la chat",
   "hide_commands": "Nascondi i comandi",
   "hide_commands_sub": "Messaggi che iniziano con “!”.",
+  "hide_gift_subs": "Nascondi gli abbonamenti regalati",
+  "hide_gift_subs_sub": "Le righe «X ha regalato un abbonamento a Y», a decine quando qualcuno ne regala un lotto. Il messaggio del lotto resta.",
   "hide_this_category": "Nascondi questa categoria",
   "hide_user": "Nascondi nella chat",
   "higher_qualities": "Qualità superiori (se il canale le offre)",

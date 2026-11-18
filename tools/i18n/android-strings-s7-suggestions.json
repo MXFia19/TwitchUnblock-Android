@@ -1,0 +1,23 @@
+{
+  "_indirect": {
+    "keys": []
+  },
+  "hide_gift_subs": {
+    "fr": "Masquer les subs offerts",
+    "en": "Hide gifted subs",
+    "es": "Ocultar suscripciones regaladas",
+    "ru": "Скрывать подаренные подписки",
+    "it": "Nascondi gli abbonamenti regalati",
+    "ja": "ギフトサブを非表示",
+    "zh-Hant": "隱藏贈送的訂閱"
+  },
+  "hide_gift_subs_sub": {
+    "fr": "Les lignes « X a offert un sub à Y », par dizaines quand quelqu'un en offre en lot. Le message du lot reste.",
+    "en": "The “X gifted a sub to Y” lines, dozens at once when someone gifts a batch. The batch message stays.",
+    "es": "Las líneas «X regaló una suscripción a Y», decenas a la vez cuando alguien regala un lote. El mensaje del lote se mantiene.",
+    "ru": "Строки «X подарил(а) подписку Y» — десятками сразу, когда кто-то дарит пачку. Сообщение о пачке остаётся.",
+    "it": "Le righe «X ha regalato un abbonamento a Y», a decine quando qualcuno ne regala un lotto. Il messaggio del lotto resta.",
+    "ja": "「X が Y にサブをギフトしました」の行。まとめてギフトされると一度に数十行になります。まとめてのお知らせは残ります。",
+    "zh-Hant": "「X 送了一份訂閱給 Y」的訊息，有人大量贈送時會一次出現數十則。大量贈送的總覽訊息會保留。"
+  }
+}

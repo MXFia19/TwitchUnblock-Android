@@ -614,6 +614,8 @@
   "hide_chat": "Hide chat",
   "hide_commands": "Hide commands",
   "hide_commands_sub": "Messages starting with “!”.",
+  "hide_gift_subs": "Hide gifted subs",
+  "hide_gift_subs_sub": "The “X gifted a sub to Y” lines, dozens at once when someone gifts a batch. The batch message stays.",
   "hide_this_category": "Hide this category",
   "hide_user": "Hide in chat",
   "higher_qualities": "Higher qualities (if the channel offers them)",

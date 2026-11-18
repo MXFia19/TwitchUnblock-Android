@@ -95,8 +95,15 @@ fun ChatMessage.plainText(): String = tokens.joinToString("") { t ->
     }
 }
 
-/** Message à cacher d'après les réglages du chat (bots, commandes, mots, personnes). */
+/** Subs offerts un par un (« X gifted a sub to Y ») : des dizaines d'un coup
+ *  quand quelqu'un en offre en lot. Le message du lot (submysterygift) reste. */
+private val giftSubKinds = setOf("subgift", "anonsubgift")
+
+/** Message à cacher d'après les réglages du chat (bots, subs offerts,
+ *  commandes, mots, personnes). Relu à chaque changement de réglage : ceux
+ *  déjà affichés disparaissent ou reviennent aussi. */
 fun hiddenByFilters(m: ChatMessage): Boolean {
+    if (Features.chatHideGiftSubs.value && m.noticeKind?.let { it in giftSubKinds } == true) return true
     if (m.login.isEmpty()) return false
     val login = m.login.lowercase()
     if (login in Features.blockedUsers.value) return true

@@ -613,6 +613,8 @@
   "hide_chat": "チャットを非表示",
   "hide_commands": "コマンドを非表示",
   "hide_commands_sub": "「!」で始まるメッセージ。",
+  "hide_gift_subs": "ギフトサブを非表示",
+  "hide_gift_subs_sub": "「X が Y にサブをギフトしました」の行。まとめてギフトされると一度に数十行になります。まとめてのお知らせは残ります。",
   "hide_this_category": "このカテゴリを非表示",
   "hide_user": "チャットで非表示",
   "higher_qualities": "より高い画質（チャンネルが提供している場合）",

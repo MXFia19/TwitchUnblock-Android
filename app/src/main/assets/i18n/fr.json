@@ -614,6 +614,8 @@
   "hide_chat": "Masquer le chat",
   "hide_commands": "Masquer les commandes",
   "hide_commands_sub": "Les messages qui commencent par « ! ».",
+  "hide_gift_subs": "Masquer les subs offerts",
+  "hide_gift_subs_sub": "Les lignes « X a offert un sub à Y », par dizaines quand quelqu'un en offre en lot. Le message du lot reste.",
   "hide_this_category": "Masquer cette catégorie",
   "hide_user": "Masquer dans le chat",
   "higher_qualities": "Qualités supérieures (si la chaîne les propose)",

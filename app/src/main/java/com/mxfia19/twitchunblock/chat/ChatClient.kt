@@ -651,10 +651,10 @@ class ChatClient(val channel: String, private val scope: CoroutineScope) {
             // Sans texte de la personne (abonnement offert, raid) : la notice
             // seule ; chatLine n'écrit pas de « Pseudo : » vide dessous.
             val notice = systemText ?: return null
-            return (base ?: system(notice)).copy(notice = notice, historical = historical, raider = raider)
+            return (base ?: system(notice)).copy(notice = notice, historical = historical, raider = raider, noticeKind = kind)
         }
-        if (announce) return base.copy(accent = announceColor(line.tags["msg-param-color"]))
-        return base.copy(notice = systemText)
+        if (announce) return base.copy(accent = announceColor(line.tags["msg-param-color"]), noticeKind = kind)
+        return base.copy(notice = systemText, noticeKind = kind)
     }
 
     /** Couleur d'une annonce (msg-param-color), comme l'iPhone et le site. */

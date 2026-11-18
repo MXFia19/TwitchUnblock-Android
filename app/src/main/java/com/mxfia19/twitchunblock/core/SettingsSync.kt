@@ -120,6 +120,8 @@ object SettingsSync {
         bool("common", "keepDeleted", Features.chatKeepDeleted, false)
         bool("common", "loadHistory", Features.chatLoadHistory, true)
         bool("common", "hideBots", Features.chatHideBots, false)
+        // Ajouté après coup (série 7, comme le site) : hors de l'empreinte tant qu'il reste coupé.
+        bool("common", "hideGiftSubs", Features.chatHideGiftSubs, false, late = true)
         bool("common", "hideCommands", Features.chatHideCommands, false)
         words("mutedWords", Features.mutedWords, 50)
         words("blockedUsers", Features.blockedUsers, 500)

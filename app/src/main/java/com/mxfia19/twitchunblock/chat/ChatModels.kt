@@ -64,6 +64,9 @@ data class ChatMessage(
     val historical: Boolean = false,
     /** Raid entrant : la chaîne qui arrive (lien vers elle). */
     val raider: String? = null,
+    /** Notice de Twitch (msg-id d'un USERNOTICE : « sub », « subgift »,
+     *  « raid »…), null pour un message ordinaire : filtres du chat. */
+    val noticeKind: String? = null,
 )
 
 /** Ligne IRC lue : tags, préfixe, commande, paramètres, texte final. */
