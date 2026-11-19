@@ -158,6 +158,8 @@ installable à côté de l'autre.
     l'appareil (ni sauvegarde ni synchro) ; son adresse n'est jamais écrite au journal.
   - Sauvegarde : « Masquer les subs offerts » (hideGiftSubs) et le volume et la luminosité en glissant.
   - Textes : `tools/i18n/android-strings-s7-suggestions.json` (7 langues).
+- **Retours du 19 novembre 2026** : nombre de spectateurs au-delà d'un million écrit « 1.2M » (« 1234.6k »
+  avant), comme sur l'iPhone et l'Apple TV.
 
 ## Construire
 

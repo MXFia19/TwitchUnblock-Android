@@ -6,9 +6,16 @@ import java.util.Locale
 import java.util.TimeZone
 
 object Format {
-    /** « 1.2k » au-delà de 1 000, comme l'app iPhone. */
-    fun viewers(n: Int): String =
-        if (n >= 1000) String.format(Locale.US, "%.1fk", n / 1000.0) else n.toString()
+    /**
+     * 950, 27.4k, 1.2M, comme l'app iPhone. Avant, tout passait en milliers :
+     * « 1234.6k » au-delà d'un million (fb_mwm13xxd). Millions dès 999 950,
+     * qui s'écrirait sinon « 1000.0k ».
+     */
+    fun viewers(n: Int): String = when {
+        n >= 999_950 -> String.format(Locale.US, "%.1fM", n / 1_000_000.0)
+        n >= 1000 -> String.format(Locale.US, "%.1fk", n / 1000.0)
+        else -> n.toString()
+    }
 
     /** « 2h 05min » ou « 45min ». */
     fun duration(seconds: Int): String {
