@@ -13,8 +13,9 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 import kotlin.coroutines.resume
 
-/** Réponse lue : code HTTP et corps (texte). */
-class HttpResult(val code: Int, val body: String) {
+/** Réponse lue : code HTTP et corps (texte) ; `quota` et `retryAfter` :
+ *  l'avis de la réserve du quota du Worker (QuotaPause). */
+class HttpResult(val code: Int, val body: String, val quota: String? = null, val retryAfter: String? = null) {
     val ok: Boolean get() = code in 200..299
 }
 
@@ -43,7 +44,7 @@ object Http {
 
                 override fun onResponse(call: Call, response: Response) {
                     val result = try {
-                        response.use { HttpResult(it.code, it.body?.string() ?: "") }
+                        response.use { HttpResult(it.code, it.body?.string() ?: "", it.header("X-TU-Quota"), it.header("Retry-After")) }
                     } catch (e: IOException) {
                         null
                     }

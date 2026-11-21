@@ -3,6 +3,7 @@ package com.mxfia19.twitchunblock.points
 import com.mxfia19.twitchunblock.core.AppState
 import com.mxfia19.twitchunblock.core.Http
 import com.mxfia19.twitchunblock.core.Logger
+import com.mxfia19.twitchunblock.core.QuotaPause
 import com.mxfia19.twitchunblock.core.bool
 import com.mxfia19.twitchunblock.core.int
 import com.mxfia19.twitchunblock.core.parseJson
@@ -92,8 +93,13 @@ object Spade {
                 400 -> return null
                 // Route absente : Worker d'avant (personnel pas à jour).
                 404 -> synchronized(this) { workerSkip[base] = Long.MAX_VALUE }
-                // Trop d'envois, ou quota du jour : le suivant, celui-ci plus tard.
-                429 -> synchronized(this) { workerSkip[base] = System.currentTimeMillis() + 10 * 60_000L }
+                // Trop d'envois, ou quota du jour : le suivant, celui-ci plus
+                // tard — jusqu'à minuit UTC pendant la réserve du quota du
+                // Worker (QuotaPause, code « quota_reserve »).
+                429 -> {
+                    val wait = if (json?.str("code") == "quota_reserve") QuotaPause.waitMs(json?.int("retryAfter")?.toString()) else 10 * 60_000L
+                    synchronized(this) { workerSkip[base] = System.currentTimeMillis() + wait }
+                }
             }
         }
         return null

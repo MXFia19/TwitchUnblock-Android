@@ -173,6 +173,14 @@ installable à côté de l'autre.
     fois par lancement, avec l'adresse à autoriser.
   - Comptes multiples et session web d'un autre compte refusée : déjà là (Accounts.kt, WebSession.checkAccount).
   - Textes repris de l'iPhone (`tools/i18n/gen-i18n.mjs`), journal traduit (3 morceaux).
+- **Réserve du quota du jour du Worker** (README du site, *Daily quota reserve* ; comme l'iPhone) : Cloudflare
+  compte même les requêtes que le Worker refuse. Passé 80 %, le Worker le dit sur le comptage, l'annonce et le
+  sondage (`X-TU-Quota: reserve`, `Retry-After` jusqu'à minuit UTC, lus par `Http` dans `HttpResult`) :
+  `QuotaPause` met ces envois automatiques en pause jusqu'à minuit UTC (Usage, News), les compteurs restent sur
+  l'appareil. Le relais des minutes des points (`/api/spade`) répond 429 `quota_reserve` : Spade laisse ce Worker
+  jusqu'à l'heure dite au lieu de 10 min. Passé 95 %, le principal répond à la lecture comme au quota atteint
+  (« 1027 ») : Workers.kt passe déjà au secours jusqu'à minuit UTC. Au passage, le comptage ne demande plus à
+  chaque signal si le Worker compte Android (GET /api/ping) : une fois par adresse, comme l'Apple TV.
 
 ## Construire
 

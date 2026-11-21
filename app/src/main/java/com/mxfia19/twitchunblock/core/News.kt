@@ -37,7 +37,11 @@ object News {
     private const val REACTED = "news_reaction_"
 
     suspend fun refresh() {
-        val a = parseJson(Http.get("${CustomWorker.base}/api/announcement", timeout = 10)?.body)?.obj("announcement")
+        // Réserve du quota du Worker (QuotaPause) : annonce et sondage déjà là restent, sans relecture.
+        if (QuotaPause.active) return
+        val r = Http.get("${CustomWorker.base}/api/announcement", timeout = 10)
+        QuotaPause.note(r)
+        val a = parseJson(r?.body)?.obj("announcement")
         announcement = a?.let {
             val id = it.str("id") ?: return@let null
             if (AppState.prefs.getString(DISMISSED, null) == id) return@let null
@@ -48,7 +52,9 @@ object News {
     }
 
     private suspend fun loadPoll() {
+        if (QuotaPause.active) return
         val r = Http.postJson("${CustomWorker.base}/api/poll", JSONObject().put("device", AppState.installId).toString(), timeout = 10)
+        QuotaPause.note(r)
         poll = parsePoll(parseJson(r?.body))
     }
 

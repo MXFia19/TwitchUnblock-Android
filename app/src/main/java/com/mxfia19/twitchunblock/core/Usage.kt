@@ -30,6 +30,8 @@ object Usage {
     private const val PING_BASE = "usage_ping_base"
     /** Workers où l'effacement n'est pas encore confirmé (hors ligne, 429…). */
     private const val FORGET_PENDING = "usage_forget_pending"
+    /** Worker qui compte Android (liste « platforms » de GET /api/ping) : vérifié une fois. */
+    private const val PLATFORM_OK = "usage_android_ok_base"
     private const val INTERVAL = 3_600_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main)
@@ -78,9 +80,17 @@ object Usage {
     private suspend fun send(context: Context, force: Boolean) {
         val last = AppState.prefs.getLong(LAST, 0L)
         if (!force && System.currentTimeMillis() - last < INTERVAL) return
+        // Réserve du quota du Worker (QuotaPause) : les compteurs attendent, gardés ici.
+        if (QuotaPause.active) return
         val base = CustomWorker.base
-        val platforms = parseJson(Http.get("$base/api/ping", timeout = 10)?.body)?.arr("platforms")?.strings()
-        if (platforms == null || "android" !in platforms) return
+        // Vérifié une fois par adresse, comme l'Apple TV : la vérification
+        // doublait chaque signal, et chaque requête compte dans le quota du
+        // jour du Worker.
+        if (AppState.prefs.getString(PLATFORM_OK, null) != base) {
+            val platforms = parseJson(Http.get("$base/api/ping", timeout = 10)?.body)?.arr("platforms")?.strings()
+            if (platforms == null || "android" !in platforms) return
+            AppState.prefs.edit().putString(PLATFORM_OK, base).apply()
+        }
         // Coupé pendant la relecture : rien ne part.
         if (!enabled) return
         val events = parseJson(AppState.prefs.getString(EVENTS, null))
@@ -96,6 +106,7 @@ object Usage {
         // Sans le jeton du compte : le signal reste anonyme (identifiant tiré
         // au hasard), comme l'annonce le réglage.
         val r = Http.postJson("$base/api/ping", body.toString(), headers, timeout = 15) ?: return
+        QuotaPause.note(r)
         if (r.code == 200) {
             AppState.prefs.edit().putLong(LAST, System.currentTimeMillis()).putString(PING_BASE, base).remove(EVENTS).apply()
             Logger.debug("USAGE", "Signal envoyé")
