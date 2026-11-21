@@ -191,7 +191,7 @@ fun CategoryScreen(category: Category, nav: Navigator) {
             // Chaînes masquées écartées (sauf celles qu'on suit) ; la catégorie,
             // ouverte exprès, ne l'est pas. Son nom ne se répète pas sous chaque direct.
             val all = model.streams.toList()
-            val shown = sorted(all.filter { BrowseRules.follows(it.login) || !Hidden.hidesChannel(it.login) }, sort)
+            val shown = sorted(all.filter { BrowseRules.follows(it.login) || (!Hidden.hidesChannel(it.login) && !Hidden.hasHiddenTag(it)) }, sort)
             items(shown, key = { it.login }) { s ->
                 BrowseStreamItem(s, list, hideable = true, hideCategory = false, showGame = false) {
                     nav.play(PlayRequest.Live(s.login))

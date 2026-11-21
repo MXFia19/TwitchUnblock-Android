@@ -341,5 +341,8 @@
   "Catégorie suivie sur Twitch": "Category followed on Twitch",
   "Catégorie retirée des suivis Twitch": "Category removed from Twitch follows",
   "Catégorie pas suivie sur Twitch": "Category not followed on Twitch",
-  "Catégorie pas retirée des suivis Twitch": "Category not removed from Twitch follows"
+  "Catégorie pas retirée des suivis Twitch": "Category not removed from Twitch follows",
+  "Tag masqué": "Tag hidden",
+  "Délai ajouté par la chaîne": "Delay added by the channel",
+  "Relais Bulgarie refusé par le réseau (filtre DNS ?)": "Bulgaria relay refused by the network (DNS filter?)"
 }

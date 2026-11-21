@@ -40,7 +40,7 @@ data class InAppNotice(
     /** Identifiant d'affichage (un bandeau remplacé par le suivant s'anime). */
     val uid: Long = System.nanoTime(),
 ) {
-    enum class Kind { FEEDBACK, DROP_READY, DROP_CLAIMED }
+    enum class Kind { FEEDBACK, DROP_READY, DROP_CLAIMED, INFO }
 }
 
 /**

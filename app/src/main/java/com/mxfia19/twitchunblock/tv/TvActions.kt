@@ -76,6 +76,10 @@ fun TvMenus.hideStream(s: TwitchStream, withCategory: Boolean = true) {
             Hidden.hideCategory(s.gameId, s.game, "")
         }
     }
+    // Ses tags (5 au plus) : masquer tous les directs qui en portent un.
+    for (tag in Hidden.cleanTags(s.tags).filter { it !in Hidden.tags }.take(5)) {
+        actions += TvAction(AppState.t("hide_tag").replace("{t}", tag), removesCard = true) { Hidden.hideTag(tag) }
+    }
     open(s.name, actions)
 }
 

@@ -405,6 +405,19 @@ private fun InfoBar(session: PlaybackSession, nav: Navigator) {
                         },
                     )
                 }
+                // Sous les qualités d'un direct : délai mis par la chaîne, qualité
+                // unique (chaîne sans transcodage), comme le site et l'iPhone.
+                if (session.isLive) {
+                    val delaySec = com.mxfia19.twitchunblock.player.LiveLatency.channelDelay(session.player)
+                    if (delaySec > 0) {
+                        DropdownMenuItem(text = { Text(AppState.t("channel_delay_note").replace("{s}", "$delaySec"), color = TU.muted, fontSize = 12.sp) },
+                                         onClick = {}, enabled = false)
+                    }
+                    if (session.qualities.count { !it.contains("audio", ignoreCase = true) && !it.equals("auto", ignoreCase = true) } == 1) {
+                        DropdownMenuItem(text = { Text(AppState.t("q_source_only"), color = TU.muted, fontSize = 12.sp) },
+                                         onClick = {}, enabled = false)
+                    }
+                }
                 // Source du direct, à choisir (MediaMenus.kt, série 6).
                 LiveSourceMenuItems(session) { quality = false }
             }

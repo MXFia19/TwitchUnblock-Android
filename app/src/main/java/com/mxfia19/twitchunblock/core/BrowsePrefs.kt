@@ -253,7 +253,7 @@ object BrowseRules {
 
     fun shows(s: TwitchStream, followed: Set<String> = emptySet()): Boolean {
         if (s.login.lowercase() in followed || follows(s.login)) return true
-        if (Hidden.hidesChannel(s.login)) return false
+        if (Hidden.hidesChannel(s.login) || Hidden.hasHiddenTag(s)) return false
         return !Hidden.hidesCategory(s.gameId) || FollowedCategories.isFollowed(s.gameId)
     }
 }

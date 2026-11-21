@@ -25,6 +25,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Email
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
@@ -99,11 +100,13 @@ private fun NoticeBanner(notice: InAppNotice, nav: Navigator) {
         InAppNotice.Kind.FEEDBACK -> Icons.Filled.Email
         InAppNotice.Kind.DROP_READY -> Icons.Filled.Star
         InAppNotice.Kind.DROP_CLAIMED -> Icons.Filled.CheckCircle
+        InAppNotice.Kind.INFO -> Icons.Filled.Info
     }
     val tint = when (notice.kind) {
         InAppNotice.Kind.FEEDBACK -> TU.primary
         InAppNotice.Kind.DROP_READY -> androidx.compose.ui.graphics.Color(0xFFA970FF)
         InAppNotice.Kind.DROP_CLAIMED -> TU.success
+        InAppNotice.Kind.INFO -> TU.primary
     }
     val shape = RoundedCornerShape(16.dp)
     var drag = 0f

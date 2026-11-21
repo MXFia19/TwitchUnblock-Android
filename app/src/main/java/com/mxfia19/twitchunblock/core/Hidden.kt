@@ -17,10 +17,47 @@ object Hidden {
     val channels = mutableStateListOf<Channel>()
     val categories = mutableStateListOf<Cat>()
 
+    // Tags masqués (demande fb_mwpac0z4, « vtuber »), comme le site et
+    // l'iPhone : un direct qui en porte un sort du top et des catégories.
+    // Minuscules, sans « # », lettres et chiffres (25 au plus), 100 au plus ;
+    // « hiddenTags » : section « common » de la synchro et sauvegarde.
+    const val MAX_TAGS = 100
+    val tags = mutableStateListOf<String>()
+
     fun init() {
         channels.clear()
         categories.clear()
         merge(parseJson(AppState.prefs.getString("hidden_content", null)))
+        tags.clear()
+        runCatching { JSONArray(AppState.prefs.getString("hidden_tags", "[]")) }.getOrNull()?.let { a ->
+            tags.addAll(cleanTags((0 until a.length()).map { a.optString(it) }))
+        }
+    }
+
+    /** Tag nettoyé comme sur le site : minuscules, sans « # », lettres et
+     *  chiffres seulement (25 au plus), sinon null. */
+    fun cleanTag(s: String): String? {
+        val v = s.trim().trimStart('#').lowercase()
+        return if (v.isNotEmpty() && v.length <= 25 && v.all { it.isLetterOrDigit() }) v else null
+    }
+    fun cleanTags(list: List<String>): List<String> = list.mapNotNull { cleanTag(it) }.distinct().take(MAX_TAGS)
+    /** Le direct porte-t-il un tag masqué ? Twitch les compare sans la casse. */
+    fun hasHiddenTag(s: TwitchStream): Boolean = tags.isNotEmpty() && s.tags.any { it.lowercase() in tags }
+
+    fun replaceTags(list: List<String>) {
+        val clean = cleanTags(list)
+        if (clean == tags.toList()) return
+        tags.clear()
+        tags.addAll(clean)
+        AppState.prefs.edit().putString("hidden_tags", JSONArray(clean).toString()).apply()
+    }
+
+    /** Masque les directs qui portent ce tag (appui long sur une carte). */
+    fun hideTag(tag: String) {
+        val t = cleanTag(tag) ?: return
+        if (t in tags) return
+        replaceTags(listOf(t) + tags)
+        Logger.info("MASQUÉS", "Tag masqué", "#$t")
     }
 
     val isEmpty: Boolean get() = channels.isEmpty() && categories.isEmpty()

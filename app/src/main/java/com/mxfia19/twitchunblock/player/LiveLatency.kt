@@ -87,6 +87,21 @@ object LiveLatency {
         return Status(behind - normal, total, player.playWhenReady)
     }
 
+    /** Délai que la chaîne ajoute elle-même (réglage du streamer, contre le
+     *  stream sniping ; hippxrr, 19/11), comme le site et l'iPhone : retard
+     *  affiché moins distance au bord = âge du bord de la playlist (moins
+     *  d'une à deux secondes sans délai). 10 s au moins, arrondi à 5 s ; 0
+     *  sinon. */
+    fun channelDelay(player: Player): Int {
+        if (!player.isCurrentMediaItemLive) return 0
+        val w = window(player) ?: return 0
+        val dur = w.durationMs
+        if (dur == C.TIME_UNSET || dur <= 0) return 0
+        val total = player.currentLiveOffset.takeIf { it != C.TIME_UNSET && it > 0 } ?: return 0
+        val age = (total - (dur - player.currentPosition)) / 1000.0
+        return if (age >= 10 && age <= 900) (Math.round(age / 5) * 5).toInt() else 0
+    }
+
     private fun window(player: Player): Timeline.Window? {
         val t = player.currentTimeline
         if (t.isEmpty) return null

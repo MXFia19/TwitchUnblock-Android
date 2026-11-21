@@ -263,6 +263,15 @@ fun BrowseStreamItem(stream: TwitchStream, list: Boolean, pinnable: Boolean = fa
                     Hidden.hideCategory(stream.gameId, stream.game, "")
                 })
             }
+            // Ses tags (5 au plus) : masquer tous les directs qui en portent un.
+            if (hideChannel) {
+                for (tag in Hidden.cleanTags(stream.tags).filter { it !in Hidden.tags }.take(5)) {
+                    DropdownMenuItem(text = { Text(AppState.t("hide_tag").replace("{t}", tag)) }, onClick = {
+                        menu = false
+                        Hidden.hideTag(tag)
+                    })
+                }
+            }
         }
     }
 }

@@ -160,6 +160,19 @@ installable à côté de l'autre.
   - Textes : `tools/i18n/android-strings-s7-suggestions.json` (7 langues).
 - **Retours du 19 novembre 2026** : nombre de spectateurs au-delà d'un million écrit « 1.2M » (« 1234.6k »
   avant), comme sur l'iPhone et l'Apple TV.
+- **Retours du 21 novembre 2026** (comme le site et l'iPhone) :
+  - *Tags masqués* : champ dans l'écran des masqués (séparés par des virgules) et « Masquer le tag … » à l'appui
+    long sur une carte (5 tags au plus ; aussi sur la TV). Les directs qui en portent un sortent du top et des
+    catégories ; minuscules, sans « # », 100 au plus ; « hiddenTags » dans la synchro (section « common ») et la
+    sauvegarde.
+  - *Délai ajouté par la chaîne* : retard affiché moins distance au bord (LiveLatency.channelDelay, 10 s au moins,
+    arrondi à 5 s) ; dit une fois par chaîne (bandeau), puis écrit sous les qualités.
+  - *Chaîne sans transcodage* : une ligne sous les qualités dit qu'il n'y a que la Source.
+  - *Source Bulgarie refusée par le réseau* : quand le relais de Sofia ne répond pas, son nom est résolu ; « introuvable »
+    ou 0.0.0.0 alors que Twitch se résout, c'est un filtre DNS (NextDNS, AdGuard, Pi-hole…) : un bandeau le dit une
+    fois par lancement, avec l'adresse à autoriser.
+  - Comptes multiples et session web d'un autre compte refusée : déjà là (Accounts.kt, WebSession.checkAccount).
+  - Textes repris de l'iPhone (`tools/i18n/gen-i18n.mjs`), journal traduit (3 morceaux).
 
 ## Construire
 

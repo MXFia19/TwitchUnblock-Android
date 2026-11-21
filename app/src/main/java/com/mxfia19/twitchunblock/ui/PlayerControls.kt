@@ -147,6 +147,7 @@ private fun LivePills(session: PlaybackSession) {
     val status by produceState<LiveLatency.Status?>(null, player, session.openCount) {
         while (true) {
             value = LiveLatency.status(player)
+            noteChannelDelay(session)
             delay(1_000)
         }
     }
@@ -166,6 +167,23 @@ private fun LivePills(session: PlaybackSession) {
             StatusPill("⏱ " + ((total + 500) / 1000) + " s", Color(0x99000000)) { LiveLatency.goLive(player) }
         }
     }
+}
+
+/** Chaînes dont le délai a déjà été dit pendant ce lancement. */
+private val delayTold = mutableSetOf<String>()
+
+/** Délai mis par la chaîne (LiveLatency.channelDelay) : dit une fois par
+ *  chaîne (bandeau), puis écrit sous les qualités (PlayerScreen). */
+private fun noteChannelDelay(session: PlaybackSession) {
+    val login = session.channelLogin?.lowercase() ?: return
+    if (login in delayTold) return
+    val d = LiveLatency.channelDelay(session.player)
+    if (d <= 0) return
+    delayTold += login
+    Logger.info("PLAYER", "Délai ajouté par la chaîne", "$d s · $login")
+    com.mxfia19.twitchunblock.notify.InAppNotices.show(com.mxfia19.twitchunblock.notify.InAppNotice(
+        com.mxfia19.twitchunblock.notify.InAppNotice.Kind.INFO, AppState.t("channel_delay_title"),
+        AppState.t("channel_delay_body").replace("{s}", "$d")))
 }
 
 /** Retard à côté de « Direct » : « · −45 s », « · −2:05 » ; rien sous 15 s. */

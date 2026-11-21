@@ -159,6 +159,12 @@ fun HideableStreamCard(stream: TwitchStream, withCategory: Boolean = true, onCli
                     Hidden.hideCategory(stream.gameId, stream.game, "")
                 })
             }
+            for (tag in Hidden.cleanTags(stream.tags).filter { it !in Hidden.tags }.take(5)) {
+                DropdownMenuItem(text = { Text(AppState.t("hide_tag").replace("{t}", tag)) }, onClick = {
+                    menu = false
+                    Hidden.hideTag(tag)
+                })
+            }
         }
     }
 }

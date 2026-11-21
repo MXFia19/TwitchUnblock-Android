@@ -278,7 +278,34 @@ fun HiddenScreen(nav: Navigator) {
     Column(Modifier.fillMaxSize()) {
         PageHeader(AppState.t("hidden_title"), nav)
         Text(AppState.t("hidden_sub"), color = TU.muted, fontSize = 13.sp, modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp))
+        HiddenTagsField()
         if (Hidden.isEmpty) MessageBox(AppState.t("hidden_empty")) else HiddenList()
+    }
+}
+
+/** Tags masqués : écrits à la main, séparés par des virgules (comme le site
+ *  et l'iPhone), ou ajoutés par l'appui long sur une carte. Gardés à la
+ *  validation et en quittant l'écran. */
+@Composable
+private fun HiddenTagsField() {
+    val text = remember { mutableStateOf(Hidden.tags.joinToString(", ")) }
+    fun save() {
+        Hidden.replaceTags(text.value.split(',', ' ', '\n'))
+        text.value = Hidden.tags.joinToString(", ")
+    }
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { save() } }
+    Column(Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) {
+        Text(AppState.t("hidden_tags"), color = TU.text, fontSize = 15.sp)
+        androidx.compose.material3.OutlinedTextField(
+            value = text.value,
+            onValueChange = { text.value = it },
+            singleLine = true,
+            placeholder = { Text("vtuber, asmr") },
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(imeAction = androidx.compose.ui.text.input.ImeAction.Done),
+            keyboardActions = androidx.compose.foundation.text.KeyboardActions(onDone = { save() }),
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(AppState.t("hidden_tags_sub"), color = TU.muted, fontSize = 12.sp)
     }
 }
 

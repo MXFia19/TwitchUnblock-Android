@@ -142,6 +142,10 @@ object SettingsSync {
             write = { v -> (v as? JSONArray)?.let { com.mxfia19.twitchunblock.chat.EmoteLists.replaceFavorites(it.strings()) } },
             isDefault = { com.mxfia19.twitchunblock.chat.EmoteLists.favorites.isEmpty() },
             unionMax = com.mxfia19.twitchunblock.chat.EmoteLists.MAX_FAVORITES, unionKeepsEnd = true))
+        // Tags masqués (top, catégories), même nom que le site et l'iPhone.
+        register(Entry("common", "hiddenTags", read = { JSONArray(Hidden.tags.toList()) },
+            write = { v -> (v as? JSONArray)?.let { Hidden.replaceTags(it.strings()) } },
+            isDefault = { Hidden.tags.isEmpty() }, late = true, unionMax = Hidden.MAX_TAGS))
         // Vitesse des VODs : facteur de 0,25 à 2, comme le site et l'iPhone.
         register(Entry("common", "vodSpeed", read = { PlayerPrefs.vodSpeed.value / 100.0 },
             write = { v -> (v as? Number)?.toDouble()?.takeIf { it in 0.25..2.0 }?.let { PlayerPrefs.vodSpeed.set(Math.round(it * 100).toInt()) } },

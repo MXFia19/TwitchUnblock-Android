@@ -181,9 +181,35 @@ object LiveApi {
      *  Bulgarie (ses liens passent par lui), les segments restant en direct.
      *  Même réponse que /api/get-live du Worker ; 404 quand Twitch ne répond
      *  pas de là-bas : Twitch officiel, qui suit, prend le relais. */
+    /** Relais de Sofia sans réponse : son nom est-il refusé par le réseau ?
+     *  sslip.io répond toujours son adresse ; un filtre DNS (NextDNS, AdGuard,
+     *  Pi-hole… : listes « DNS dynamique ») répond « introuvable » ou
+     *  0.0.0.0. Vérifié seulement si Twitch, lui, se résout (sinon c'est
+     *  l'appareil qui est hors ligne). Dit une fois par lancement, comme
+     *  l'iPhone. */
+    @Volatile private var bgBlockTold = false
+    private suspend fun noteBulgariaBlocked() {
+        if (bgBlockTold) return
+        val host = android.net.Uri.parse(Config.BULGARIA_RELAY).host ?: return
+        val blocked = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+            fun resolves(h: String) = try {
+                java.net.InetAddress.getAllByName(h).any { !it.isAnyLocalAddress && !it.isLoopbackAddress }
+            } catch (e: Exception) { false }
+            resolves("usher.ttvnw.net") && !resolves(host)
+        }
+        if (!blocked || bgBlockTold) return
+        bgBlockTold = true
+        Logger.warn("LIVE", "Relais Bulgarie refusé par le réseau (filtre DNS ?)", host)
+        kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Main) {
+            com.mxfia19.twitchunblock.notify.InAppNotices.show(com.mxfia19.twitchunblock.notify.InAppNotice(
+                com.mxfia19.twitchunblock.notify.InAppNotice.Kind.INFO, AppState.t("bg_blocked_title"), AppState.t("bg_blocked_body")))
+        }
+    }
+
     private suspend fun bulgaria(login: String): Master {
         Logger.info("LIVE", "Tentative relais Bulgarie…", Config.BULGARIA_RELAY)
         val r = Http.get("${Config.BULGARIA_RELAY}/api/get-live?name=$login", timeout = 8)
+        if (r == null) noteBulgariaBlocked()
         if (r == null || r.code != 200) {
             Logger.warn("LIVE", "Relais Bulgarie sans direct (${r?.code ?: "réseau"})", "source suivante…")
             return Master()

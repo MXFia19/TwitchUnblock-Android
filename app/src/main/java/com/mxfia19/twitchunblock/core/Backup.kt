@@ -137,6 +137,7 @@ object Backup {
             .put("customSource", StreamPrefs.customSource.value.ifEmpty { null } ?: JSONObject.NULL)
             .put("hiddenEmotes", JSONArray(emotes.hidden))
             .put("favoriteEmotes", JSONArray(emotes.favorites))
+            .put("hiddenTags", JSONArray(Hidden.tags.toList()))
             .put("timeFormat", chat.timeFormat.value)
             .put("pinned", JSONArray(BrowsePrefs.pinned.value))
             .put("pinnedByViewers", BrowsePrefs.pinnedByViewers.value)
@@ -399,6 +400,8 @@ object Backup {
         }
         s.arr("hiddenEmotes")?.strings()?.let { emotes.replaceHidden(it); ok("hiddenEmotes") }
         s.arr("favoriteEmotes")?.strings()?.let { emotes.replaceFavorites(it); ok("favoriteEmotes") }
+        // Tags masqués (nom du site) : nettoyés comme ici.
+        s.arr("hiddenTags")?.strings()?.let { Hidden.replaceTags(it); ok("hiddenTags") }
         str("timeFormat") { it in listOf("auto", "12", "24") }?.let { chat.timeFormat.set(it) }
         bool("pinnedByViewers") { BrowsePrefs.pinnedByViewers.set(it) }
         bool("homeList") { BrowsePrefs.homeList.set(it) }
