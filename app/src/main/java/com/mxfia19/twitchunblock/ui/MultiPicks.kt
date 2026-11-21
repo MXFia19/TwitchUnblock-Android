@@ -78,8 +78,9 @@ data class MultiEntry(
 object MultiPicks {
     const val MAX = 4
     private const val KEY = "multi_live"
-    /** Site : lien d'une mosaïque (« ?multi=chaîne,v:<id>~<s> »). */
-    private const val SITE = "https://twitchunblock.vercel.app"
+    /** Site : lien d'une mosaïque (« ?multi=chaîne,v:<id>~<s> »). Sur
+     *  Cloudflare Pages depuis le 21/11/2026 (compte Vercel en pause). */
+    private const val SITE = "https://twitchunblock-web.pages.dev"
 
     val entries = mutableStateListOf<MultiEntry>()
 
