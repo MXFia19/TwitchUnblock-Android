@@ -1,22 +1,55 @@
-# TwitchUnblock pour Android et Android TV
+<div align="center">
 
-Version Android de [TwitchUnblock](https://github.com/MXFia19/TwitchUnblock) : regarder les directs, les VODs
-et les clips de Twitch, avec le chat, sur téléphone, tablette et Android TV — une seule app.
+<img src="assets/icons/purple.png" width="112" alt="TwitchUnblock icon">
 
-> **En cours de développement.** Le portage se fait par séries ; voir l'état ci-dessous.
+# TwitchUnblock for Android
 
-## Installer
+**Twitch lives, VODs and clips without a subscription, with the real chat.**<br>
+One app for phones, tablets and Android TV.
 
-1. Télécharge le dernier `TwitchUnblock-….apk` dans [Releases](https://github.com/MXFia19/TwitchUnblock-Android/releases).
-2. Ouvre-le et autorise l'installation depuis cette source si Android le demande.
+<a href="https://github.com/MXFia19/TwitchUnblock-Android/releases"><img src="https://img.shields.io/badge/Download-APK-3DDC84?style=for-the-badge&logo=android&logoColor=white" alt="Download the APK"></a>
 
-**Android TV / Google TV / Fire TV** : installe l'app *Downloader*, entre l'adresse de l'APK (lien du fichier dans
-Releases), puis installe-le. L'app apparaît dans la liste des apps de la TV.
+[![Android 7.0+](https://img.shields.io/badge/Android-7.0%2B-3DDC84?logo=android&logoColor=white)](#-install)
+[![Android TV](https://img.shields.io/badge/Android%20TV-yes-3DDC84?logo=android&logoColor=white)](#-install)
+[![Discord](https://img.shields.io/badge/Discord-join%20the%20community-5865F2?logo=discord&logoColor=white)](https://discord.gg/cEsMRdxsVq)
+[![License: MIT](https://img.shields.io/badge/license-MIT-2ea44f)](LICENSE)
 
-Les versions **TU Test** (pré-versions `test-N`) sont les builds de la branche de test : une app à part,
-installable à côté de l'autre.
+[iPhone & iPad app](https://github.com/MXFia19/TwitchUnblock) · [Website](https://twitchunblock-web.pages.dev) · [Discord](https://discord.gg/cEsMRdxsVq)
 
-## État du portage
+</div>
+
+> [!NOTE]
+> **Work in progress.** The app is ported from the [iPhone app](https://github.com/MXFia19/TwitchUnblock)
+> one batch of features at a time ([port status](#-details-in-french) below, in French).
+> Bug reports on Discord help a lot.
+
+## ✨ Features
+
+- 📺 **Lives and VODs without a subscription**, from the Bulgaria relay (test) or official Twitch.
+- 💬 **The real chat:** Twitch, BTTV, FFZ and 7TV emotes, badges, polls, predictions, hype trains and raids.
+- 🎬 **Picture in picture, background playback, sleep timer, multi-live and downloads.**
+- 🎁 **With your Twitch account:** channel points, drops, follows and live notifications.
+- 📡 **Android TV:** the same app, made for the remote.
+- 🌍 **7 languages**, the same as the iPhone app.
+
+## 📲 Install
+
+1. Download the latest `TwitchUnblock-….apk` from [Releases](https://github.com/MXFia19/TwitchUnblock-Android/releases).
+2. Open it, and allow installs from this source if Android asks.
+
+**Android TV, Google TV, Fire TV:** install the *Downloader* app, type in the address of the APK (its link in Releases), then install it.
+
+**TU Test** (`test-N` pre-releases): test builds, a separate app that installs next to the normal one.
+
+## 🛠️ Build
+
+Kotlin, Jetpack Compose and Media3. The GitHub CI builds every APK; to build locally, use Android Studio or
+`gradle :app:assembleRelease`. Texts, icons and the signing key: see the [details](#-details-in-french) below.
+
+## 📚 Details (in French)
+
+<details>
+<summary><b>État du portage</b> · what is ported, batch by batch</summary>
 
 - **Série 1** (en cours) : directs (source **Bulgarie** en test — le relais TwitchUnblock d'un VPS à
   Sofia prend le jeton, la liste maîtresse et les playlists de la vidéo depuis la Bulgarie, par son IPv6,
@@ -182,7 +215,10 @@ installable à côté de l'autre.
   (« 1027 ») : Workers.kt passe déjà au secours jusqu'à minuit UTC. Au passage, le comptage ne demande plus à
   chaque signal si le Worker compte Android (GET /api/ping) : une fois par adresse, comme l'Apple TV.
 
-## Construire
+</details>
+
+<details>
+<summary><b>Construire</b> · build, texts and icons</summary>
 
 Le projet (Kotlin, Jetpack Compose, Media3) se construit avec la CI GitHub (`.github/workflows/build.yml`) :
 JDK 17, Gradle 8.9, Android SDK 34. En local : Android Studio, ou `gradle :app:assembleRelease`. Les icônes
@@ -196,7 +232,10 @@ node tools/i18n/gen-i18n.mjs ../TwitchUnblock
 
 (textes propres à Android : `tools/i18n/android-strings.json`, et un `android-strings-<partie>.json` par partie de l'app).
 
-## Clé de signature
+</details>
+
+<details>
+<summary><b>Clé de signature</b> · the signing key used by the CI</summary>
 
 Sans clé, chaque build est signé avec une clé de débogage différente : il faut désinstaller l'app avant chaque
 mise à jour. Pour signer toujours avec la même clé, crée-la une fois (et garde-en une copie : sans elle, plus
@@ -210,6 +249,8 @@ puis ajoute ces secrets au dépôt (Settings → Secrets and variables → Actio
 `ANDROID_KEYSTORE_B64` (le fichier en base64), `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS`
 (`twitchunblock`), `ANDROID_KEY_PASSWORD`.
 
-## Licence
+</details>
 
-MIT, comme l'app iPhone.
+---
+
+<sub>Not affiliated with Twitch. MIT license, like the iPhone app.</sub>
