@@ -92,8 +92,9 @@ fun ChatExtraSettings() {
         Logger.info("CHAT", "Tailles du chat", "valeurs par défaut")
     }
 
-    // ChatEmotesUi.kt et ChatBars.kt
+    // ChatEmotesUi.kt, ChatIdentityUi.kt et ChatBars.kt
     HiddenEmotesRow()
+    ChatIdentityRow()
     UsernameColorRow()
 }
 
