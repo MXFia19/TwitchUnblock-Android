@@ -43,6 +43,12 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -461,8 +467,12 @@ private fun InfoCard(session: PlaybackSession, nav: Navigator) {
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 SelectionContainer {
-                    Text(session.title.ifEmpty { session.channelName ?: "" }, color = TU.text, fontSize = 17.sp,
-                         fontWeight = FontWeight.SemiBold)
+                    // Les @pseudo du titre ouvrent leur chaîne (carte de
+                    // deputize7538, 22/11), comme sur l'iPhone et le site.
+                    Text(titleWithMentions(session.title.ifEmpty { session.channelName ?: "" }) { mention ->
+                        close()
+                        nav.push(Screen.Channel(mention))
+                    }, color = TU.text, fontSize = 17.sp, fontWeight = FontWeight.SemiBold)
                 }
                 for (r in rows) Text(r, color = TU.text, fontSize = 15.sp)
             }
@@ -480,6 +490,24 @@ private fun InfoCard(session: PlaybackSession, nav: Navigator) {
         titleContentColor = TU.text,
         textContentColor = TU.muted,
     )
+}
+
+/** @pseudo d'un titre : un blanc ou une ponctuation avant le @ (pas d'adresse
+ *  e-mail), 3 à 25 signes comme un pseudo Twitch. */
+private val TITLE_MENTION = Regex("(?<![\\w@])@([A-Za-z0-9_]{3,25})\\b")
+
+/** Titre avec ses @pseudo en liens vers leur chaîne (`onMention` : le pseudo,
+ *  en minuscules). */
+private fun titleWithMentions(text: String, onMention: (String) -> Unit): AnnotatedString = buildAnnotatedString {
+    val styles = TextLinkStyles(SpanStyle(color = TU.primary))
+    var last = 0
+    for (m in TITLE_MENTION.findAll(text)) {
+        append(text.substring(last, m.range.first))
+        val login = m.groupValues[1].lowercase()
+        withLink(LinkAnnotation.Clickable("mention:$login", styles) { onMention(login) }) { append(m.value) }
+        last = m.range.last + 1
+    }
+    append(text.substring(last))
 }
 
 /** « Aller à une heure » d'une archive : l'heure réelle d'un moment de la

@@ -133,13 +133,30 @@ object FollowedCategories {
                else list.sortedByDescending { it.viewers ?: -1 }
     }
 
-    /** Relit les catégories du compte (session web) et l'audience de toutes. */
+    /** Relit les catégories du compte (session web, sinon publiques par son
+     *  pseudo) et l'audience de toutes. */
     suspend fun refresh(force: Boolean = false) {
         val token = WebSession.token
         val now = System.currentTimeMillis()
         if (token == null || !WebSession.active) {
-            twitch = emptyList()
-            twitchFor = null
+            // Sans session web : celles du compte quand même, publiques, lues
+            // par son pseudo (avant : seulement l'appareil). Comme l'iPhone et le site.
+            val login = AppState.user?.login?.lowercase()?.takeIf { it.isNotEmpty() }
+            val key = login?.let { "login:$it" }
+            if (login == null) {
+                twitch = emptyList()
+                twitchFor = null
+            } else if (force || twitchFor != key || now - twitchAt > 600_000) {
+                loadPublic(login)?.let { list ->
+                    // Autre compte, ou session web arrivée, pendant la lecture.
+                    if (AppState.user?.login?.lowercase() == login && !WebSession.active) {
+                        twitch = list
+                        twitchFor = key
+                        twitchAt = now
+                        list.forEach { c -> c.viewers?.let { viewers[c.id] = it } }
+                    }
+                }
+            }
         } else if (force || twitchFor != token || now - twitchAt > 600_000) {
             loadTwitch(token)?.let { list ->
                 // Session changée pendant la lecture : ce n'est plus la sienne.
@@ -170,6 +187,23 @@ object FollowedCategories {
         val nodes = r.data?.obj("currentUser")?.obj("followedGames")?.arr("nodes")
         if (nodes == null) {
             Logger.warn("CATEGORIES", "Catégories suivies sur Twitch indisponibles", if (r.code == 0) "réseau" else "HTTP ${r.code}")
+            return null
+        }
+        return nodes.objects().mapNotNull { n ->
+            val id = n.str("id")?.takeIf { validId(it) } ?: return@mapNotNull null
+            Category(id, n.str("displayName") ?: "", n.str("boxArtURL") ?: "", n.int("viewersCount"))
+        }
+    }
+
+    /** Catégories suivies par un compte, sans session : publiques, lues par
+     *  son pseudo (GQL `user(login:)`). null si indisponible. */
+    private suspend fun loadPublic(login: String): List<Category>? {
+        if (login.length > 25 || !login.all { it in 'a'..'z' || it in '0'..'9' || it == '_' }) return null
+        val q = "query { user(login: \"$login\") { followedGames(first: 100, type: ALL) { nodes { id displayName " +
+            "boxArtURL(width: 285, height: 380) viewersCount } } } }"
+        val nodes = Gql.request(q)?.obj("user")?.obj("followedGames")?.arr("nodes")
+        if (nodes == null) {
+            Logger.warn("CATEGORIES", "Catégories suivies sur Twitch indisponibles", "public")
             return null
         }
         return nodes.objects().mapNotNull { n ->
