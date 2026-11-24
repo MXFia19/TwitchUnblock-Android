@@ -100,7 +100,9 @@ Kotlin, Jetpack Compose and Media3. The GitHub CI builds every APK; to build loc
     pour le temps réel, appui long pour ±1 s) ; modes du salon au-dessus du champ, règles à accepter, refus de
     Twitch expliqués ; en paysage, chat en colonne, posé sur l'image (gauche, droite, coin) ou replié, largeur à la
     poignée ; zone d'envoi masquable ; tailles (espace, badges, emotes, 12/24 h) avec aperçu ; couleur du pseudo ; annonces des modérateurs
-    encadrées de leur couleur ; le chat des VODs suit aussi les tailles du chat, l'heure y est la position dans la VOD.
+    encadrées de leur couleur ; le chat des VODs suit aussi les tailles du chat, l'heure y est la position dans la VOD ;
+    identité dans le chat (Réglages → Chat, session web) : le badge montré à côté de son nom, sur Twitch aussi — le
+    global, et celui de la chaîne en lecture (abonnement, bits…), qui le remplace sur cette chaîne.
   - *Navigation* : chaînes épinglées en tête des suivies (appui long, menu ⋮ de la chaîne) ; lives en liste ou en
     grille avec la durée du direct ; « Continuer à regarder » (appui long : reprendre, retirer) ; retour en haut en
     touchant l'onglet affiché ; catégories suivies (♡ sur leur page, rangée de l'accueil avec celles du compte
