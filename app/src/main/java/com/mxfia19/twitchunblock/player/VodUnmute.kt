@@ -104,6 +104,28 @@ object VodUnmute {
      *  relu toutes les quelques secondes, ne refait pas ses HEAD. */
     private val probed = HashMap<String, Boolean>()
     private val summaries = HashMap<String, String>()
+    /** Dossiers de VOD (« hôte/dossier ») dont les originaux ne sont plus crus :
+     *  un segment y a été refusé (403) — original sondé « servi » puis effacé,
+     *  ou sondé sur un cache du CDN. La playlist gardée le redonnait à chaque
+     *  relance. Réécrites sans les originaux jusqu'au prochain lancement. Comme l'iPhone. */
+    private val distrusted = HashSet<String>()
+
+    /** Segment de VOD refusé (PlaybackSession) : plus d'originaux pour ce
+     *  dossier, playlists sondées et sondes oubliées — la relance qui suit
+     *  relit une playlist sans eux. */
+    fun distrust(url: String) {
+        val key = keyOf(url) ?: return
+        synchronized(lock) {
+            if (!distrusted.add(key)) return
+            cache.keys.removeAll { !it.startsWith("muted|") && keyOf(it) == key }
+            probed.keys.removeAll { keyOf(it) == key }
+        }
+    }
+
+    private fun isDistrusted(uri: Uri): Boolean {
+        val key = keyOf(uri.toString()) ?: return false
+        return synchronized(lock) { key in distrusted }
+    }
 
     /** Dossier d'une VOD sur le CDN (« hôte/dossier »), le même pour toutes ses qualités. */
     fun keyOf(url: String): String? {
@@ -124,7 +146,7 @@ object VodUnmute {
         val part = DownloadPart.parse(uri.fragment)
         if (part == null && !text.contains("muted.")) return text
         if (!text.contains("#EXTINF")) return text
-        val probe = (part?.restore ?: enabledNow()) && recentEnough(uri)
+        val probe = (part?.restore ?: enabledNow()) && recentEnough(uri) && !isDistrusted(uri)
         val key = (if (probe) "" else "muted|") + uri.toString()
         val hit = synchronized(lock) { cache[key] }
         if (hit != null) {

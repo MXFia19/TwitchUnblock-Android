@@ -543,9 +543,16 @@ class PlaybackSession(private val context: Context, parent: CoroutineScope, priv
         }
     }
 
+    @androidx.annotation.OptIn(androidx.media3.common.util.UnstableApi::class)
     private fun onError(error: PlaybackException) {
         errors++
         Logger.warn("PLAYER", "Erreur de lecture", "${error.errorCodeName} (${errors})")
+        // Segment de VOD refusé (403) : souvent l'original d'un passage coupé,
+        // sondé « servi » puis effacé. Sans ça, chaque relance relisait la même
+        // playlist gardée et retombait dessus. Plus d'originaux pour cette VOD :
+        // la relance ci-dessous relit une playlist sans eux.
+        val http = error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
+        if (!isLive && http != null && http.responseCode == 403) VodUnmute.distrust(http.dataSpec.uri.toString())
         if (error.errorCode == PlaybackException.ERROR_CODE_BEHIND_LIVE_WINDOW || errors <= 3) {
             // Direct trop loin derrière, ou coupure passagère : on reprend.
             retryJob?.cancel()
