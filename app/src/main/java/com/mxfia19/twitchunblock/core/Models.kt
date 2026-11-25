@@ -34,7 +34,22 @@ data class Vod(
      *  (série 7) ; vide quand la liste ne le demande pas. */
     val gameId: String = "",
     val gameName: String = "",
-)
+    /** Tous ses jeux : le principal, puis ceux des chapitres (changements de
+     *  jeu en cours de stream), sans doublon ; vide quand la liste ne les
+     *  demande pas (allGames se rabat alors sur le jeu principal). */
+    val games: List<VodGame> = emptyList(),
+) {
+    /** Ses jeux, principal compris (fb_mwvs798g : le filtre ne voyait que le
+     *  jeu du début de la VOD). */
+    val allGames: List<VodGame>
+        get() = games.ifEmpty { if (gameId.isNotEmpty()) listOf(VodGame(gameId, gameName.ifEmpty { gameId })) else emptyList() }
+
+    /** La VOD contient ce jeu, au début ou en cours de route. */
+    fun hasGame(id: String): Boolean = allGames.any { it.id == id }
+}
+
+/** Jeu joué dans une VOD (principal ou chapitre). */
+data class VodGame(val id: String, val name: String)
 
 data class Clip(
     val slug: String,

@@ -121,12 +121,25 @@ object BrowseApi {
         val game = gameId?.takeIf { it.isNotEmpty() && it.length <= 20 && it.all { c -> c.isDigit() } }
         if (gameId != null && game == null) return VideosPage(emptyList(), null, null, null, false)
         val filter = if (game != null) ", options: { gameIDs: [\"$game\"] }" else ""
-        val q = "query(\$l: String!, \$after: Cursor) { user(login: \$l) { profileImageURL(width: 150) " +
+        // Chapitres (`moments`, comme le site et l'iPhone) : les jeux joués en
+        // cours de stream, pour le filtre sur place et la liste des jeux
+        // (fb_mwvs798g). options.gameIDs, lui, les voit déjà (sondé le 25/11).
+        val chapters = " moments(first: 25, momentRequestType: VIDEO_CHAPTER_MARKERS) { edges { node { details " +
+            "{ ... on GameChangeMomentDetails { game { id displayName } } } } } }"
+        fun query(withChapters: Boolean) = "query(\$l: String!, \$after: Cursor) { user(login: \$l) { profileImageURL(width: 150) " +
             "videos(first: 100, type: ARCHIVE, sort: TIME, after: \$after$filter) { edges { cursor node { id title " +
-            "previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds viewCount game { id displayName } } } " +
-            "pageInfo { hasNextPage } } } }"
-        val page = Gql.listPage(q, Gql.vars("l" to login.lowercase()), after)
+            "previewThumbnailURL(height: 180, width: 320) publishedAt lengthSeconds viewCount game { id displayName }" +
+            (if (withChapters) chapters else "") + " } } pageInfo { hasNextPage } } } }"
+        var page = Gql.listPage(query(true), Gql.vars("l" to login.lowercase()), after)
             ?: return VideosPage(emptyList(), null, "network", after, false)
+        // Chapitres refusés un jour par Twitch : la liste sans eux plutôt que rien.
+        if (!page.second && page.first?.obj("user") == null) {
+            val plain = Gql.listPage(query(false), Gql.vars("l" to login.lowercase()), after)
+            if (plain != null && plain.first?.obj("user") != null) {
+                Logger.warn("VIDEOS", "Chapitres des VODs refusés : liste sans eux", login)
+                page = plain
+            }
+        }
         if (page.second) return VideosPage(emptyList(), null, null, null, true)
         val user = page.first?.obj("user") ?: return VideosPage(emptyList(), null, "not_found", null, false)
         val videos = user.obj("videos")
@@ -134,9 +147,18 @@ object BrowseApi {
             val n = e.obj("node") ?: return@mapNotNull null
             val id = n.str("id") ?: return@mapNotNull null
             val g = n.obj("game")
+            // Jeu principal, puis ceux des chapitres, dans l'ordre, sans doublon.
+            val games = LinkedHashMap<String, String>()
+            val chapterGames = n.obj("moments")?.arr("edges")?.objects().orEmpty()
+                .map { it.obj("node")?.obj("details")?.obj("game") }
+            for (x in listOf(g) + chapterGames) {
+                val gid = x?.str("id")?.ifEmpty { null } ?: continue
+                if (gid !in games) games[gid] = x?.str("displayName")?.ifEmpty { null } ?: gid
+            }
             Vod(id, n.str("title") ?: "", n.str("previewThumbnailURL") ?: "", n.str("publishedAt") ?: "",
                 n.int("lengthSeconds") ?: 0, n.int("viewCount") ?: 0,
-                gameId = g?.str("id") ?: "", gameName = g?.str("displayName") ?: "")
+                gameId = g?.str("id") ?: "", gameName = g?.str("displayName") ?: "",
+                games = games.map { VodGame(it.key, it.value) })
         } ?: emptyList()
         return VideosPage(list, user.str("profileImageURL"), null, Gql.nextCursor(videos), false)
     }

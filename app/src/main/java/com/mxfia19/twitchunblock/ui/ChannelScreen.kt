@@ -233,20 +233,25 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
         private set
     private var gameJob: Job? = null
 
-    /** Jeux des VODs chargées, le plus fréquent d'abord : (id, nom). Le jeu
-     *  choisi y reste, même absent des VODs chargées (après Actualiser). */
+    /** Jeux des VODs chargées (chapitres compris : une VOD compte une fois
+     *  par jeu joué), le plus fréquent d'abord : (id, nom). Le jeu choisi y
+     *  reste, même absent des VODs chargées (après Actualiser). */
     fun games(): List<Pair<String, String>> {
         val counts = LinkedHashMap<String, Int>()
         val names = HashMap<String, String>()
         for (v in videos) {
-            if (v.gameId.isEmpty()) continue
-            counts[v.gameId] = (counts[v.gameId] ?: 0) + 1
-            if (v.gameName.isNotEmpty()) names[v.gameId] = v.gameName
+            for (g in v.allGames) {
+                counts[g.id] = (counts[g.id] ?: 0) + 1
+                if (g.name.isNotEmpty() && g.id !in names) names[g.id] = g.name
+            }
         }
         val chosen = gameFilter
         if (chosen != null) {
             if (chosen !in counts) counts[chosen] = 0
-            if (chosen !in names) gameVideos.firstOrNull { it.gameName.isNotEmpty() }?.let { names[chosen] = it.gameName }
+            if (chosen !in names) {
+                gameVideos.firstNotNullOfOrNull { v -> v.allGames.firstOrNull { it.id == chosen }?.name?.ifEmpty { null } }
+                    ?.let { names[chosen] = it }
+            }
         }
         return counts.entries
             .sortedWith(compareByDescending<Map.Entry<String, Int>> { it.value }.thenBy { (names[it.key] ?: "").lowercase() })
@@ -264,9 +269,10 @@ class ChannelModel(val login: String, private val scope: CoroutineScope) {
         gameRefused = false
         gameLoading = false
         if (id == null) return
-        // Toutes les VODs déjà là : rien à redemander.
+        // Toutes les VODs déjà là : rien à redemander (jeu joué au début ou en
+        // cours de stream, comme le filtre de Twitch).
         if (videos.isNotEmpty() && videosNext == null && !videosRefused) {
-            gameVideos.addAll(videos.filter { it.gameId == id })
+            gameVideos.addAll(videos.filter { it.hasGame(id) })
             return
         }
         loadGamePage(id)
